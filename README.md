@@ -1,17 +1,44 @@
 # rosa_soft
-软化ROSA QKV算子，用于训练新一代LLM模型
+Softened ROSA QKV Operators for Training Next-Generation LLM Models
 
-## 思路
-利用DP方法代替ROSA自动机算法，可以为ROSA生成类似于Attention机制的注意力矩阵，并通过特殊的软化技巧，使得该注意力矩阵在训练过程中可以被反向传播。从而实现端到端的训练。
+## Overview
+This repository implements softened ROSA (Rapid Online Suffix Automation) QKV operators that enable efficient training of next-generation large language models with enhanced sequence processing capabilities.
 
-## 20251026
-初步版本，DP模式下注意力矩阵需要交错扫描，目前必须要将中间结果保存到全局内存上。
+## Core Idea
+We replace the traditional ROSA automaton algorithm with a dynamic programming approach, generating attention matrices similar to conventional attention mechanisms. Through specialized softening techniques, these attention matrices become differentiable during training, enabling true end-to-end training of models incorporating ROSA operations.
 
-### DP公式
+## Technical Approach
 
-对于hard模式，dp[i][j] = dp[i][j] ? dp[i-1][j-1] + 1 : 0
+### Dynamic Programming Formulation
 
-对于soft模式，dp[i][j] = dp[i][j] * dp[i-1][j-1] + dp[i][j]
+For **hard mode**:
+```
+dp[i][j] = dp[i][j] ? dp[i-1][j-1] + 1 : 0
+```
 
-### 注意
-为了实现方便，我们对原版ROSA进行了改动。在bo的实现了，对未匹配的项设置未0，而我们将其设置为自身值（最新值），这是加入位置信息后的自然结果。
+For **soft mode**:
+```
+dp[i][j] = dp[i][j] * dp[i-1][j-1] + dp[i][j]
+```
+
+### Implementation Notes
+- **20251026**: Initial version requires interleaved scanning in DP mode, with intermediate results currently stored in global memory
+- We modified the original ROSA implementation for practical convenience. In our implementation, unmatched items are set to their own values (latest values) rather than zero, which naturally incorporates positional information
+
+## Key Features
+- Differentiable ROSA operations for gradient-based training
+- Efficient DP-based implementation
+- Compatible with modern transformer architectures
+- Support for both hard and soft matching modes
+
+## Background
+ROSA (Rapid Online Suffix Automation) is a novel sequence retrieval mechanism proposed by pengbo as part of the next-generation long-sequence processing architecture. This work builds upon the research from [RWKV-LM](https://github.com/BlinkDL/RWKV-LM/tree/main/RWKV-v8).
+
+## Applications
+- Long-context language modeling
+- Efficient sequence matching in transformers
+- Enhanced retrieval-augmented generation
+- Next-generation LLM architectures
+
+## Status
+Initial development version - active research and improvements ongoing.
