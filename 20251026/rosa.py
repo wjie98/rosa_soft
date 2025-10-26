@@ -305,7 +305,7 @@ class ROSA_QKV_LAYER(nn.Module):
         self.wk = nn.Linear(dims, dims, bias=bias)
         self.wv = nn.Linear(dims, dims, bias=bias)
         self.wo = nn.Parameter(torch.zeros(dims, self.head_dims)) # (H, V, C)
-        self.register_buffer("tau", torch.tensor([tau], dtype=torch.float32), persistent=False)
+        self.tau = tau
 
     def forward(self, x: Tensor) -> Tensor:
         B, T, _ = x.size()
@@ -314,8 +314,7 @@ class ROSA_QKV_LAYER(nn.Module):
         iv = self.wv.forward(x).view(B, T, self.num_heads, self.head_dims) # (B, T, H, C)
         xv = self.wo.view(self.num_heads, self.head_dims, self.head_dims)
 
-        tau = self.get_buffer("tau")
-        xo = rosa_qkv_ops(iq, ik, iv, xv, tau=tau) # (B, T, H, C)
+        xo = rosa_qkv_ops(iq, ik, iv, xv, tau=self.tau) # (B, T, H, C)
         return xo.reshape(B, T, -1)
 
 
@@ -332,3 +331,10 @@ if __name__ == "__main__":
         soft = rosa_qkv_ops(iq, ik, iv, xv, tau)
         p = (soft == hard).count_nonzero() / soft.numel()
         print(f"tau={tau}: \t{p:.2%}")
+    
+    net = ROSA_QKV_LAYER(64, 8).cuda()
+    x = torch.randn(B, T, 64).cuda().requires_grad_()
+    net(x).sum().backward()
+    print(x.grad.size())
+
+
