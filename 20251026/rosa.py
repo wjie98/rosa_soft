@@ -201,14 +201,17 @@ def _rosa_qkv_core(iq_sm: Tensor, ik_sm: Tensor, iv_sm: Tensor, xv: Tensor, tau:
 
 def rosa_qkv_ops(iq: Tensor, ik: Tensor, iv: Tensor, xv: Tensor, tau: float = 0.0):
     if tau <= 0.0:
-        iq_sm = F.one_hot(iq.argmax(dim=-1), iq.size(-1)).type_as(iq) # (B, T, H, V)
-        ik_sm = F.one_hot(ik.argmax(dim=-1), ik.size(-1)).type_as(iq) # (B, T, H, V)
-        iv_sm = F.one_hot(iv.argmax(dim=-1), iv.size(-1)).type_as(iq) # (B, T, H, V)
+        iq_sm = F.one_hot(iq.argmax(dim=-1), iq.size(-1)).to(torch.float32) # (B, T, H, V)
+        ik_sm = F.one_hot(ik.argmax(dim=-1), ik.size(-1)).to(torch.float32) # (B, T, H, V)
+        iv_sm = F.one_hot(iv.argmax(dim=-1), iv.size(-1)).to(torch.float32) # (B, T, H, V)
     else:
-        iq_sm = torch.softmax(iq / tau, dim=-1) # (B, T, H, V)
-        ik_sm = torch.softmax(ik / tau, dim=-1) # (B, T, H, V)
-        iv_sm = torch.softmax(iv / tau, dim=-1) # (B, T, H, V)
-    return _rosa_qkv_core(iq_sm, ik_sm, iv_sm, xv, tau=tau) # (B, T, H, C)
+        iq_sm = torch.softmax(iq / tau, dim=-1).to(torch.float32) # (B, T, H, V)
+        ik_sm = torch.softmax(ik / tau, dim=-1).to(torch.float32) # (B, T, H, V)
+        iv_sm = torch.softmax(iv / tau, dim=-1).to(torch.float32) # (B, T, H, V)
+    
+    xv = xv.to(torch.float32)
+    xo = _rosa_qkv_core(iq_sm, ik_sm, iv_sm, xv, tau=tau) # (B, T, H, C)
+    return xo.type_as(xv)
 
 
 class ROSA_SEQ(nn.Module):
@@ -332,8 +335,8 @@ if __name__ == "__main__":
         p = (soft == hard).count_nonzero() / soft.numel()
         print(f"tau={tau}: \t{p:.2%}")
     
-    net = ROSA_QKV_LAYER(64, 8).cuda()
-    x = torch.randn(B, T, 64).cuda().requires_grad_()
+    net = ROSA_QKV_LAYER(64, 8).cuda().bfloat16()
+    x = torch.randn(B, T, 64).cuda().bfloat16().requires_grad_()
     net(x).sum().backward()
     print(x.grad.size())
 
