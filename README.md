@@ -18,10 +18,16 @@ dp[i][j] = dp[i][j] ? dp[i-1][j-1] + 1 : 0
 
 For **soft mode**:
 ```
-dp[i][j] = dp[i][j] * dp[i-1][j-1] + dp[i][j]
+# Previous version
+dp_new = dp_old * a[i][j] + a[i][j]
+
+# Current version (more parallelizable)
+t = cumsum(a)
+dp = t - cummax(t * (1 - a))
 ```
 
 ### Implementation Notes
+- **20251030**: Adopted a new, more relaxed softening formula based on cumsum and cummax primitives. This transforms the scan computation from a strictly associative recursion into a more flexible, rearrangeable form. This change is crucial as it provides significant optimization space for future fused kernel implementations.
 - **20251026**: Initial version requires interleaved scanning in DP mode, with intermediate results currently stored in global memory
 - We modified the original ROSA implementation for practical convenience. In our implementation, unmatched items are set to their own values (latest values) rather than zero, which naturally incorporates positional information
 
