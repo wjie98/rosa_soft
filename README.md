@@ -19,7 +19,7 @@ dp[i][j] = dp[i][j] ? dp[i-1][j-1] + 1 : 0
 For **soft mode**:
 ```
 # Previous version
-dp_new = dp_old * a[i][j] + a[i][j]
+dp[i][j] = dp[i-1][j-1] * a[i][j] + a[i][j]
 
 # Current version (more parallelizable)
 t = cumsum(a)
