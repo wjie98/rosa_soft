@@ -27,6 +27,7 @@ dp = t - cummax(t * (1 - a))
 ```
 
 ### Implementation Notes
+- **20251102**: Uploaded a C++ version of the global perturbation differential estimation ROSA gradient method, serving as a standard implementation for comparison with future improvements.
 - **20251030**: Adopted a new, more relaxed softening formula based on cumsum and cummax primitives. This transforms the scan computation from a strictly associative recursion into a more flexible, rearrangeable form. This change is crucial as it provides significant optimization space for future fused kernel implementations.
 - **20251026**: Initial version requires interleaved scanning in DP mode, with intermediate results currently stored in global memory
 - We modified the original ROSA implementation for practical convenience. In our implementation, unmatched items are set to their own values (latest values) rather than zero, which naturally incorporates positional information
