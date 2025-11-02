@@ -60,7 +60,7 @@ def _rosa_qkv_attn_soft(q: Tensor, k: Tensor, v: Tensor, bits_mode: bool, tau: T
         k = torch.tanh(k / tau)
         v = torch.sigmoid(v / tau)
 
-        x = q @ k.transpose(-1, -2) - (C - 1)
+        x = q @ k.transpose(-1, -2) - (C - 1) * (1 - tau)
         x = torch.sigmoid(x / tau)
     else:
         q = torch.softmax(q / tau, dim=-1)
