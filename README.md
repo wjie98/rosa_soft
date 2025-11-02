@@ -27,6 +27,11 @@ dp = t - cummax(t * (1 - a))
 ```
 
 ### Implementation Notes
+- **20251103**: Refactored the core ROSA QKV implementation to closely align with the reference logic from Peng Bo's version. This major update introduces several key behavioral changes:
+    - **Matching Logic**: The query `q[t]` now exclusively matches against historical keys `k[i]` where `i < t`. Upon finding the longest match, the operator returns the *subsequent* value `v[i+1]`.
+    - **Default Value on No Match**: If no match is found in the history, the operator now returns `0`. This is a significant change from the previous behavior where it would return the current value `v[t]`.
+    - **Discrete Representation Modes**: The implementation now formally supports two methods for creating discrete tokens from input vectors: `bits_mode=True` for a bitwise representation and `bits_mode=False` for a standard one-hot (`argmax`) representation.
+    - **Performance Consideration**: This alignment introduces more computational steps. To achieve maximum efficiency, it is now highly recommended to use `torch.compile` on the `rosa_qkv_ops` function or the `RosaAttention` module.
 - **20251102**: Uploaded a C++ version of the global perturbation differential estimation ROSA gradient method, serving as a standard implementation for comparison with future improvements.
 - **20251030**: Adopted a new, more relaxed softening formula based on cumsum and cummax primitives. This transforms the scan computation from a strictly associative recursion into a more flexible, rearrangeable form. This change is crucial as it provides significant optimization space for future fused kernel implementations.
 - **20251026**: Initial version requires interleaved scanning in DP mode, with intermediate results currently stored in global memory
