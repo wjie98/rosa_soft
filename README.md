@@ -27,6 +27,7 @@ dp = t - cummax(t * (1 - a))
 ```
 
 ### Implementation Notes
+- **20251105**: Added `attn_mask` parameter to allow masking of specified tokens.
 - **20251103**: Refactored the core ROSA QKV implementation to closely align with the reference logic from Peng Bo's version. This major update introduces several key behavioral changes:
     - **Matching Logic**: The query `q[t]` now exclusively matches against historical keys `k[i]` where `i < t`. Upon finding the longest match, the operator returns the *subsequent* value `v[i+1]`.
     - **Default Value on No Match**: If no match is found in the history, the operator now returns `0`. This is a significant change from the previous behavior where it would return the current value `v[t]`.
