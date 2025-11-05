@@ -6,6 +6,11 @@ from torch import Tensor
 from typing import *
 
 
+__all__ = [
+    "rosa_qkv_ops",
+    "RapidOnlineSuffixAutomaton",
+]
+
 
 def _rosa_diag_to_cols(x: Tensor) -> Tensor:
     *B, _, T = x.size()
@@ -58,7 +63,7 @@ def _rosa_qkv_attn_hard(q: Tensor, k: Tensor, v: Tensor, bits_mode: bool, attn_m
         r = v.gather(-1, r) * g
     return r
 
-def _rosa_qkv_attn_soft(q: Tensor, k: Tensor, v: Tensor, bits_mode: bool, attn_mask: Tensor | None, tau: Tensor):
+def _rosa_qkv_attn_soft(q: Tensor, k: Tensor, v: Tensor, bits_mode: bool, attn_mask: Tensor | None, tau: Tensor | float):
     B, H, T, C = q.size()
     if bits_mode:
         q = torch.tanh(q / tau)
@@ -103,89 +108,132 @@ def rosa_qkv_ops(
     q: Tensor, k: Tensor, v: Tensor,
     e0: Tensor, e1: Tensor | None = None,
     attn_mask: Tensor | None = None,
-    tau: Tensor | None = None,
+    tau: Tensor | float | None = None,
 ) -> Tensor:
     B, H, T, _ = q.size()
 
-    bits_mode = e1 is not None
-    if bits_mode:
-        _, C = e0.size()
-        assert e0.size(0) == H
-        assert v.size(-1) == C
-        e0 = e0.view(1, H, 1, C)
-        e1 = e1.view(1, H, 1, C)
+    if e1 is None:
+        bits_mode = False
+        _, _, V, C = e0.size()
+        assert e0.size(0) in {1, B}
+        assert e0.size(1) in {1, H}
     else:
-        _, V, C = e0.size()
-        assert e0.size(0) == H
-        assert v.size(-1) == V
-        e0 = e0.view(1, H, V, C)
-
+        bits_mode = True
+        _, _, _, C = e0.size()
+        assert e0.size(0) in {1, B}
+        assert e0.size(1) in {1, H}
+        assert e0.size(2) in {1, T}
+        assert e0.size(3) == v.size(3)
+    
     if tau is None:
         r = _rosa_qkv_attn_hard(q, k, v, bits_mode=bits_mode, attn_mask=attn_mask)
-        if bits_mode:
-            r = r.type_as(e0)
-            o = r * e1 + (1 - r) * e0
-        else:
-            r = r.view(B, H, T, 1).expand(B, H, T, C)
-            o = e0.expand(B, H, V, C).gather(-2, r)
     else:
         r = _rosa_qkv_attn_soft(q, k, v, bits_mode=bits_mode, attn_mask=attn_mask, tau=tau)
-        if bits_mode:
-            r = r.type_as(e0)
-            o = r * e1 + (1 - r) * e0
-        else:
-            o = r.view(B, H, T, V) @ e0
+    
+    if bits_mode:
+        r = r.type_as(e0)
+        o = r * e1 + (1 - r) * e0
+    elif tau is None:
+        r = r.view(B, H, T, 1).expand(B, H, T, C)
+        o = e0.expand(B, H, V, C).gather(-2, r)
+    else:
+        o = r.view(B, H, T, V) @ e0
     return o
 
 
-class RosaAttention(nn.Module):
-    def __init__(self,
-        dims: int,
-        num_heads: int,
-        bits_mode: bool = True,
-        bits_size: int = 8,
-        bias: bool = False,
-        tau: float = 1.0,
-    ) -> None:
-        super().__init__()
-        assert dims % num_heads == 0
+class _RosaState:
+    __slots__ = ("endpos", "length", "suffix_link", "transitions")
 
-        self.num_heads = num_heads
-        self.head_dims = dims // num_heads
-        self.bits_mode = bits_mode
-        self.bits_size = bits_size
+    def __init__(self):
+        self.endpos = -1
+        self.length = 0
+        self.suffix_link: Optional[_RosaState] = None
+        self.transitions: Dict[int, _RosaState] = {}
 
-        if self.bits_mode:
-            self.wq = nn.Linear(dims, self.num_heads * self.bits_size, bias=bias)
-            self.wk = nn.Linear(dims, self.num_heads * self.bits_size, bias=bias)
-            self.wv = nn.Linear(dims, self.num_heads * self.head_dims, bias=bias)
-            self.wo = nn.Linear(self.num_heads * self.head_dims, dims, bias=bias)
 
-            self.e0 = nn.Parameter(torch.full((self.num_heads, self.bits_size), -1e-5))
-            self.e1 = nn.Parameter(torch.full((self.num_heads, self.bits_size), +1e-5))
+class RapidOnlineSuffixAutomaton:
+    def __init__(self):
+        self.query_states: List[int] = []
+        self.key_states: List[int] = []
+        self.value_states: List[int] = []
+
+        self._root: _RosaState = _RosaState()
+        self._last_query: _RosaState = self._root
+        self._last_key: _RosaState = self._root
+    
+    def append(self, query: int, key: int, value: int, default: int = -1) -> int:
+        i = len(self.value_states)
+
+        self.query_states.append(query)
+        self.key_states.append(key)
+        self.value_states.append(value)
+
+        r = _RosaState()
+        r.length = self._last_key.length + 1
+
+        p = self._last_key
+        while (p is not None) and (key not in p.transitions):
+            p.transitions[key] = r
+            p = p.suffix_link
+        
+        if p is None:
+            r.suffix_link = self._root
         else:
-            self.wq = nn.Linear(dims, self.num_heads * self.head_dims, bias=bias)
-            self.wk = nn.Linear(dims, self.num_heads * self.head_dims, bias=bias)
-            self.wv = nn.Linear(dims, self.num_heads * self.head_dims, bias=bias)
-            self.wo = nn.Linear(self.num_heads * self.head_dims, dims, bias=bias)
+            q = p.transitions[key]
 
-            self.e0 = nn.Parameter(torch.zeros(self.num_heads, self.head_dims, self.head_dims))
-            self.e1 = None
-        self.tau = tau
+            if p.length + 1 == q.length:
+                r.suffix_link = q
+            else:
+                u = _RosaState()
+                u.endpos = q.endpos
+                u.length = p.length + 1
+                u.suffix_link = q.suffix_link
+                u.transitions.update(q.transitions)
 
-    def forward(self, x: Tensor, tau: float | None = None) -> Tensor:
-        B, T, _ = x.size()
-        xq = self.wq.forward(x).view(B, T, self.num_heads, -1).permute(0, 2, 1, 3)
-        xk = self.wk.forward(x).view(B, T, self.num_heads, -1).permute(0, 2, 1, 3)
-        xv = self.wv.forward(x).view(B, T, self.num_heads, -1).permute(0, 2, 1, 3)
+                q.suffix_link = u
+                r.suffix_link = u
 
-        tau = self.tau if tau is None else tau
-        tau = torch.full((1,), tau, dtype=x.dtype, device=x.device)
-        xo = rosa_qkv_ops(xq, xk, xv, e0=self.e0, e1=self.e1, tau=tau)
+                while (p is not None) and (p.transitions.get(key) is q):
+                    p.transitions[key] = u
+                    p = p.suffix_link
 
-        xo = xo.permute(0, 2, 1, 3).reshape(B, T, -1)
-        xo = self.wo.forward(xo)
-        return xo
+        j = -1
+        
+        p = self._last_query
+        while (p is not None) and (query not in p.transitions):
+            p = p.suffix_link
+        
+        if p is None:
+            self._last_query = self._root
+        else:
+            self._last_query = p.transitions[query]
+
+            p = self._last_query
+            while p is not None:
+                if p.length > 0 and p.endpos >= 0:
+                    j = p.endpos + 1
+                    break
+                p = p.suffix_link
+        
+        self._last_key = r
+        while (r is not None) and (r.endpos < i):
+            r.endpos = i
+            r = r.suffix_link
+        
+        return self.value_states[j] if j >= 0 else default
+    
+    def extend(
+            self,
+            query_states: List[int],
+            key_states: List[int],
+            value_states: List[int],
+            default: int = -1,
+    ) -> List[int]:
+        outs = []
+        for q, k, v in zip(query_states, key_states, value_states):
+            x = self.append(q, k, v, default)
+            outs.append(x)
+        return outs
 
 
 if __name__ == "__main__":
@@ -262,12 +310,16 @@ if __name__ == "__main__":
             k = torch.randint(0, 2, size=(8,)).tolist()
             v = torch.randint(0, 2, size=(8,)).tolist()
 
+            r = RapidOnlineSuffixAutomaton()
+
             o1 = torch.tensor(samx_qkv_slow(q, k, v))
-            o2 = torch.tensor(test_rosa_qkv_attn_hard(q, k, v, bits_mode=False))
-            o3 = torch.tensor(test_rosa_qkv_attn_hard(q, k, v, bits_mode=True))
+            o2 = torch.tensor(r.extend(q, k, v, 0))
+            o3 = torch.tensor(test_rosa_qkv_attn_hard(q, k, v, bits_mode=False))
+            o4 = torch.tensor(test_rosa_qkv_attn_hard(q, k, v, bits_mode=True))
 
             assert (o1 == o2).all()
             assert (o1 == o3).all()
+            assert (o1 == o4).all()
 
         print("✅ Forward Pass Passed!")
     except AssertionError as e:
@@ -276,10 +328,22 @@ if __name__ == "__main__":
     print()
 
     try:
-        net = RosaAttention(64, 8).cuda().bfloat16()
-        x = torch.randn(B, T, 64).cuda().bfloat16().requires_grad_()
-        net(x).sum().backward()
-        assert not x.grad.isnan().any()
+        q = k = v = torch.randn(1, 8, 128, 64).requires_grad_()
+        e0 = torch.randn(1, 8, 1, 64).requires_grad_()
+        e1 = torch.randn(1, 8, 1, 64).requires_grad_()
+        e2 = torch.randn(1, 8, 64, 32).requires_grad_()
+
+        rosa_qkv_ops(q, k, v, e0, e1, tau=0.1).sum().backward()
+        rosa_qkv_ops(q, k, v, e2, tau=0.1).sum().backward()
+
+        assert not q.grad.isnan().any()
+        assert not k.grad.isnan().any()
+        assert not v.grad.isnan().any()
+
+        assert not e0.grad.isnan().any()
+        assert not e1.grad.isnan().any()
+        assert not e2.grad.isnan().any()
+
         print("✅ Backward Pass Passed!")
     except AssertionError as e:
         print("❌ Backward Pass Failed!")
@@ -292,8 +356,8 @@ if __name__ == "__main__":
     v = torch.randn(B, H, T, C).cuda()
     m = torch.randint(0, 2, (B, 1, T, T)).cuda().bool()
 
-    e0 = torch.randn(H, C).cuda()
-    e1 = torch.randn(H, C).cuda()
+    e0 = torch.full((1, H, 1, C), -1).cuda()
+    e1 = torch.full((1, H, 1, C), +1).cuda()
 
     hard = rosa_qkv_ops(q, k, v, e0, e1, attn_mask=m)
     for tau in [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7]:
@@ -309,7 +373,7 @@ if __name__ == "__main__":
     v = torch.randn(B, H, T, V).cuda()
     m = torch.randint(0, 2, (B, 1, T, T)).cuda().bool()
 
-    e0 = torch.randn(H, V, C).cuda()
+    e0 = torch.randn(1, H, V, C).cuda()
 
     hard = rosa_qkv_ops(q, k, v, e0, attn_mask=m)
     for tau in [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7]:

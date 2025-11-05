@@ -17,11 +17,12 @@ from tokenizers import Tokenizer
 from transformers import AutoTokenizer, AutoConfig, AutoModelForCausalLM
 from transformers import Trainer, TrainingArguments, TrainerCallback, TrainerState, TrainerControl
 
+
 MINIROSA_NAME = "minirosa"
 MINIROSA_ROOT = Path(__file__).resolve().parent.parent / MINIROSA_NAME
 
 sys.path.append(str(MINIROSA_ROOT.parent))
-from minirosa.modeling_minirosa import MiniRosaConfig, MiniRosaForCausalLM, RosaAttention
+from minirosa.model_minirosa import MiniRosaConfig, MiniRosaForCausalLM, RosaAttention
 
 AutoConfig.register(MINIROSA_NAME, MiniRosaConfig)
 AutoModelForCausalLM.register(MiniRosaConfig, MiniRosaForCausalLM)
