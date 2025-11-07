@@ -1,4 +1,4 @@
-# rosa_soft: Softened ROSA Operators and Explorations for Next-Generation LLMs
+# Softened ROSA Operators and Explorations for Next-Generation LLMs
 
 [![Status: Experimental](https://img.shields.io/badge/status-experimental-orange.svg)](https://github.com/your-username/rosa_soft)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

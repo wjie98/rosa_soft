@@ -4,7 +4,7 @@ This directory contains the core, low-level implementations of the softened ROSA
 
 **The latest, most stable, and recommended version of the operator is located in `rosa.py`**.
 
-The numbered subdirectories (`20XXXXXX/`) contain historical snapshots of the implementation, preserved for research and comparison purposes.
+The numbered subdirectories (`2025XXXX/`) contain historical snapshots of the implementation, preserved for research and comparison purposes.
 
 ## Implementation History
 
@@ -23,10 +23,10 @@ Below is a timeline of major changes and refinements made to the operator logic.
     dp[i][j] = dp[i-1][j-1] * a[i][j] + a[i][j]
     ```
     In this formula, `a[i][j]` acts as a "gate". If the match is strong (`a[i][j] ≈ 1`), the formula approximates `dp[i-1][j-1] + 1`, accumulating the match length. If the match is weak (`a[i][j] ≈ 0`), it resets `dp[i][j]` to nearly zero.
-  - **Limitation**: This formulation has a strong **diagonal dependency** (`dp[i][j]` depends on `dp[i-1][j-1]`). On a GPU, this requires a "scan" operation along the diagonals of the attention matrix, which is inherently sequential and slow. This version required storing intermediate results in global memory between kernel launches, creating a significant performance bottleneck.
+  - **Limitation**: This formulation has a strong **diagonal dependency** (`dp[i][j]` depends on `dp[i-1][j-1]`). While parallel scan algorithms (like wavefront parallelism) can be implemented on GPUs for this pattern, the degree of parallelism is fundamentally limited by the number of anti-diagonals. This dependency structure complicates the design of highly efficient, hardware-saturating fused kernels, and early versions required storing intermediate results in global memory between kernel launches, creating a performance bottleneck.
 
 - **20251030: New Softening Formula**
-  - **Concept**: To break the sequential dependency and enable massive parallelism, a new, more relaxed softening formula was adopted. This approach is based on highly parallelizable "prefix scan" primitives.
+  - **Concept**: To improve parallelization potential, a new softening formula was adopted. This approach is based on primitives that are more amenable to massively parallel computation.
   - **Soft Mode Formula**: The new logic is expressed as:
     ```
     # Let `a` be a row/column of the similarity matrix
@@ -39,11 +39,12 @@ Below is a timeline of major changes and refinements made to the operator logic.
     3.  `t * (1 - a)` will be a large value (close to `t`) at reset points and a small value (close to 0) at match points.
     4.  `cummax(t * (1 - a))` finds the running maximum of these reset-point values. This effectively finds the value of the cumulative sum *at the last significant reset point*.
     5.  `t - cummax(...)` subtracts the cumulative sum at the last reset from the current cumulative sum, yielding the **sum since the last reset**.
-  - **Advantage**: This formulation transforms the computation from a strictly associative recursion into a more flexible, rearrangeable form. `cumsum` and `cummax` are standard parallel primitives with highly efficient GPU implementations. This change was crucial as it provides significant optimization space for future fused kernel implementations, moving away from the slow diagonal scan.
+  - **Advantage**: This formulation transforms the computation from a diagonally-dependent scan into a row/column-wise operation composed of standard parallel primitives (`cumsum`, `cummax`). While not necessarily faster in a naive implementation, this structure is **significantly more flexible and rearrangeable**. This change is crucial as it provides much greater optimization space for future fused kernel implementations that can better exploit the GPU's memory hierarchy and parallelism.
 
 - **20251102: C++ Gradient Estimation**
   - A C++ version of a global perturbation differential estimation method for ROSA gradients was added.
   - This serves as a reference implementation for comparing the performance and correctness of future gradient approximation techniques.
+  - **Note**: The QKV implementation in this version was not yet aligned with Peng Bo's reference logic.
 
 - **20251103: Major Refactoring & Alignment**
   - The core QKV implementation was significantly refactored to align more closely with the reference logic from Peng Bo's version. This introduced several key behavioral changes:
@@ -55,3 +56,8 @@ Below is a timeline of major changes and refinements made to the operator logic.
 
 - **20251105: Masking Support**
   - Added the `attn_mask` parameter to the operator, allowing specific tokens in the sequence to be ignored during the matching process.
+
+- **20251107: Python Suffix Automaton & API Refinement**
+  - Added `RapidOnlineSuffixAutomaton`, a pure Python implementation of the suffix automaton logic for reference and testing. For a potentially faster C++ implementation, please refer to the code in the `20251102/` directory.
+  - The input parameter format for the `rosa_qkv_ops` function was adjusted for greater clarity and flexibility, particularly in how embedding vectors are handled.
+  
