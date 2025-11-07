@@ -34,27 +34,29 @@ This approach uses specialized `cumsum` and `cummax` primitives to create a para
 
 > **Code Location**: The core, low-level operator implementations for this track, along with their development history, have been moved to the `rosa_ops/` subdirectory.
 
-### Track 2: A Practical, Attention-like Simplification
+### Track 2: SuffixAttention (SUFA) - A Practical, Attention-like Simplification
 
 We propose a novel perspective: **view ROSA as an extreme form of quantized attention**.
 
 - Standard attention measures similarity via dot products between continuous query/key vectors.
 - ROSA measures similarity via exact historical suffix matching between discrete tokens.
 
-We can relax the strict conditions of ROSA to create a more practical, hardware-friendly mechanism that retains its core spirit. Our proposed simplification involves two key changes:
-1.  **Infinite History → Finite Sliding Window**: Instead of matching against the entire history, we only consider a fixed-size sliding window.
-2.  **Exact Match → Fuzzy Match (Hamming Distance)**: Instead of requiring a perfect suffix match, we use Hamming distance as a similarity metric between quantized query and key vectors.
+Based on this perspective, we introduce **SuffixAttention (SUFA)**, a new mechanism that fundamentally alters the matching process to achieve greater hardware efficiency. SUFA makes two key simplifications:
+1.  **Sequential Match → Direct Similarity**: It completely replaces the complex, sequential **suffix matching** algorithm with a direct, point-wise **Hamming distance calculation** between individual quantized query and key vectors.
+2.  **Infinite History → Finite Range**: To ensure computational feasibility, the search for the best key (the one with the minimum Hamming distance) is constrained to a **finite range** of the recent history, effectively capping the maximum look-back distance.
 
 This approach yields significant benefits:
-- **Training Efficiency**: The softened version of this simplified kernel is highly compatible with the **Flash Attention ecosystem**, allowing for highly optimized training on GPUs.
-- **Inference Efficiency**: During inference, the operation becomes a fast Hamming distance search over a sliding window, which can be aggressively optimized on CPUs or specialized hardware.
+- **Training Efficiency**: The softened version of the SUFA kernel—a highly regular, parallel search—is perfectly suited for optimization within the **Flash Attention ecosystem**.
+- **Inference Efficiency**: During inference, the operation becomes a fast Hamming distance search, which can be aggressively optimized on CPUs or specialized hardware using bit-manipulation instructions.
 
-This new approach offers a compelling bridge between the efficiency of ROSA and the mature tooling of conventional attention mechanisms.
+SUFA offers a compelling bridge between the parameter-free efficiency of ROSA and the mature, highly-optimized tooling of conventional attention mechanisms.
 
 ## Project Structure
 
-- **`minirosa/`**: Contains a new, self-contained mini-model (`model_minirosa.py`) for quickly experimenting with and validating the different ROSA implementations within a standard Transformer architecture.
-- **`rosa_ops/`**: Contains the core, low-level implementations of the softened ROSA QKV operator. See the `rosa_ops/README.md` for a detailed implementation history.
+- **`minirosa/`**: Contains self-contained mini-models for experimenting with our different approaches, both integrated into a Qwen3-based architecture:
+  - `model_minirosa.py`: An example of integrating the **Faithful Softening** ROSA (Track 1) into a dense Transformer model.
+  - `model_minisufa.py`: An example of integrating **SuffixAttention (SUFA)** (Track 2) into a dense Transformer model.
+- **`rosa_ops/`**: Contains the core, low-level implementations of the softened ROSA QKV operator (Track 1). See the `rosa_ops/README.md` for a detailed implementation history.
 
 ## Status & Roadmap
 
