@@ -53,7 +53,6 @@ This new approach offers a compelling bridge between the efficiency of ROSA and 
 
 ## Project Structure
 
-- **`/`**: The main project directory.
 - **`minirosa/`**: Contains a new, self-contained mini-model (`model_minirosa.py`) for quickly experimenting with and validating the different ROSA implementations within a standard Transformer architecture.
 - **`rosa_ops/`**: Contains the core, low-level implementations of the softened ROSA QKV operator. See the `rosa_ops/README.md` for a detailed implementation history.
 
