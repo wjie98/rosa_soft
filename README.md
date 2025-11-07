@@ -1,57 +1,66 @@
-# rosa_soft
-Softened ROSA QKV Operators for Training Next-Generation LLM Models
+# rosa_soft: Softened ROSA Operators and Explorations for Next-Generation LLMs
 
-## Overview
-This repository implements softened ROSA (Rapid Online Suffix Automation) QKV operators that enable efficient training of next-generation large language models with enhanced sequence processing capabilities.
+[![Status: Experimental](https://img.shields.io/badge/status-experimental-orange.svg)](https://github.com/your-username/rosa_soft)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Core Idea
-We replace the traditional ROSA automaton algorithm with a dynamic programming approach, generating attention matrices similar to conventional attention mechanisms. Through specialized softening techniques, these attention matrices become differentiable during training, enabling true end-to-end training of models incorporating ROSA operations.
+This repository explores the implementation and evolution of **ROSA (Rapid Online Suffix Automaton)**, a novel attention-free mechanism for sequence processing. Our work proceeds along two parallel tracks:
 
-## Technical Approach
+1.  **Faithful Softening**: Implementing a differentiable, "softened" version of the original ROSA algorithm, enabling its integration into end-to-end trainable neural networks.
+2.  **Attention-like Simplification**: Proposing a new, practical variant of ROSA based on sliding windows and Hamming distance, which leverages the existing Flash Attention ecosystem for efficient training.
 
-### Dynamic Programming Formulation
+## Background: What is RWKV-8 ROSA?
 
-For **hard mode**:
-```
-dp[i][j] = dp[i][j] ? dp[i-1][j-1] + 1 : 0
-```
+ROSA is a groundbreaking concept proposed by Peng Bo (BlinkDL) as part of the RWKV-8 architecture. It aims to replace the standard attention mechanism with what is described as a "neurosymbolic infinite-range lossless information propagator."
 
-For **soft mode**:
-```
-# Previous version
-dp[i][j] = dp[i-1][j-1] * a[i][j] + a[i][j]
+The core idea is to predict the next token in a sequence based on the longest exact match found in the history. For a given sequence `x`, the output `y_i` is determined by finding the longest suffix of `x` ending at `i-1` that matches a previous substring. If such a match is found at index `j`, the output is the token that followed that match, `x_{j+1}`.
 
-# Current version (more parallelizable)
-t = cumsum(a)
-dp = t - cummax(t * (1 - a))
-```
+This mechanism has several powerful properties:
+- **Parameter-Free**: The core logic has no trainable weights.
+- **No Dot Product / Softmax**: It operates on discrete tokens, eliminating the quadratic complexity of standard attention.
+- **No Float KV Cache**: It only needs to store the history of discrete tokens.
+- **Efficient Inference**: The underlying Suffix Automaton can be processed very quickly on a CPU, in parallel with GPU-based layers.
 
-### Implementation Notes
-- **20251105**: Added `attn_mask` parameter to allow masking of specified tokens.
-- **20251103**: Refactored the core ROSA QKV implementation to closely align with the reference logic from Peng Bo's version. This major update introduces several key behavioral changes:
-    - **Matching Logic**: The query `q[t]` now exclusively matches against historical keys `k[i]` where `i < t`. Upon finding the longest match, the operator returns the *subsequent* value `v[i+1]`.
-    - **Default Value on No Match**: If no match is found in the history, the operator now returns `0`. This is a significant change from the previous behavior where it would return the current value `v[t]`.
-    - **Discrete Representation Modes**: The implementation now formally supports two methods for creating discrete tokens from input vectors: `bits_mode=True` for a bitwise representation and `bits_mode=False` for a standard one-hot (`argmax`) representation.
-    - **Performance Consideration**: This alignment introduces more computational steps. To achieve maximum efficiency, it is now highly recommended to use `torch.compile` on the `rosa_qkv_ops` function or the `RosaAttention` module.
-- **20251102**: Uploaded a C++ version of the global perturbation differential estimation ROSA gradient method, serving as a standard implementation for comparison with future improvements.
-- **20251030**: Adopted a new, more relaxed softening formula based on cumsum and cummax primitives. This transforms the scan computation from a strictly associative recursion into a more flexible, rearrangeable form. This change is crucial as it provides significant optimization space for future fused kernel implementations.
-- **20251026**: Initial version requires interleaved scanning in DP mode, with intermediate results currently stored in global memory
-- We modified the original ROSA implementation for practical convenience. In our implementation, unmatched items are set to their own values (latest values) rather than zero, which naturally incorporates positional information
+This project is inspired by and builds upon the original research found at the [RWKV-LM Repository](https://github.com/BlinkDL/RWKV-LM/tree/main/RWKV-v8).
 
-## Key Features
-- Differentiable ROSA operations for gradient-based training
-- Efficient DP-based implementation
-- Compatible with modern transformer architectures
-- Support for both hard and soft matching modes
+## Project Philosophy & Our Approaches
 
-## Background
-ROSA (Rapid Online Suffix Automation) is a novel sequence retrieval mechanism proposed by pengbo as part of the next-generation long-sequence processing architecture. This work builds upon the research from [RWKV-LM](https://github.com/BlinkDL/RWKV-LM/tree/main/RWKV-v8).
+Our exploration aims to make ROSA and its principles practical for training and integration into modern LLMs.
 
-## Applications
-- Long-context language modeling
-- Efficient sequence matching in transformers
-- Enhanced retrieval-augmented generation
-- Next-generation LLM architectures
+### Track 1: Faithful Softening of ROSA
 
-## Status
-Initial development version - active research and improvements ongoing.
+The primary challenge of the original ROSA is its non-differentiable, discrete nature. Our initial work focuses on creating a "soft" version using dynamic programming that is mathematically equivalent in its hard form but allows for gradient flow during training.
+
+This approach uses specialized `cumsum` and `cummax` primitives to create a parallelizable scan, making the operation differentiable and suitable for end-to-end training.
+
+> **Code Location**: The core, low-level operator implementations for this track, along with their development history, have been moved to the `rosa_ops/` subdirectory.
+
+### Track 2: A Practical, Attention-like Simplification
+
+We propose a novel perspective: **view ROSA as an extreme form of quantized attention**.
+
+- Standard attention measures similarity via dot products between continuous query/key vectors.
+- ROSA measures similarity via exact historical suffix matching between discrete tokens.
+
+We can relax the strict conditions of ROSA to create a more practical, hardware-friendly mechanism that retains its core spirit. Our proposed simplification involves two key changes:
+1.  **Infinite History → Finite Sliding Window**: Instead of matching against the entire history, we only consider a fixed-size sliding window.
+2.  **Exact Match → Fuzzy Match (Hamming Distance)**: Instead of requiring a perfect suffix match, we use Hamming distance as a similarity metric between quantized query and key vectors.
+
+This approach yields significant benefits:
+- **Training Efficiency**: The softened version of this simplified kernel is highly compatible with the **Flash Attention ecosystem**, allowing for highly optimized training on GPUs.
+- **Inference Efficiency**: During inference, the operation becomes a fast Hamming distance search over a sliding window, which can be aggressively optimized on CPUs or specialized hardware.
+
+This new approach offers a compelling bridge between the efficiency of ROSA and the mature tooling of conventional attention mechanisms.
+
+## Project Structure
+
+- **`/`**: The main project directory.
+- **`minirosa/`**: Contains a new, self-contained mini-model (`model_minirosa.py`) for quickly experimenting with and validating the different ROSA implementations within a standard Transformer architecture.
+- **`rosa_ops/`**: Contains the core, low-level implementations of the softened ROSA QKV operator. See the `rosa_ops/README.md` for a detailed implementation history.
+
+## Status & Roadmap
+
+This project is currently in an active, experimental phase.
+
+## Acknowledgments
+
+This work is heavily inspired by the original research and innovations of Peng Bo (BlinkDL) in the RWKV project.
