@@ -6,7 +6,7 @@
 This repository explores the implementation and evolution of **ROSA (Rapid Online Suffix Automaton)**, a novel attention-free mechanism for sequence processing. Our work proceeds along two parallel tracks:
 
 1.  **Faithful Softening**: Implementing a differentiable, "softened" version of the original ROSA algorithm, enabling its integration into end-to-end trainable neural networks.
-2.  **Attention-like Simplification**: Proposing a new, practical variant of ROSA based on sliding windows and Hamming distance, which leverages the existing Flash Attention ecosystem for efficient training.
+2.  **Attention-like Simplification**: Proposing **SuffixAttention (SUFA)**, a new, practical variant that replaces sequential suffix matching with direct Hamming distance comparison over a finite range, leveraging the existing Flash Attention ecosystem for efficient training.
 
 ## Background: What is RWKV-8 ROSA?
 
