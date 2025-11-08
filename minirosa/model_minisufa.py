@@ -258,7 +258,7 @@ class MiniSufaDecoderLayer(Qwen3DecoderLayer):
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
 
-        # Rosa Attention
+        # SUFA Attention
         if self.sufa_attn is not None:
             residual = residual + self.sufa_attn(
                 hidden_states=hidden_states,

@@ -2,14 +2,260 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import re
+import math
 from torch import Tensor
 from typing import *
+
+from transformers.cache_utils import Cache, DynamicCache
+from transformers.utils import logging
+
 
 
 __all__ = [
     "rosa_qkv_ops",
     "RapidOnlineSuffixAutomaton",
+    "RosaAttention",
+    "RosaCache",
 ]
+
+
+logger = logging.get_logger(__name__)
+
+def load_torch_rosa():
+    from torch.utils.cpp_extension import load
+    load(
+        name="torch_rosa",
+        sources=["rosa.cpp"],
+        extra_cflags=["-O3", "-fopenmp"],
+        is_python_module=False,
+        verbose=True,
+    )
+
+load_torch_rosa()
+
+
+def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
+    bsz, n_kvs, seq_len, dim = hidden_states.size()
+    if n_rep == 1:
+        return hidden_states
+    hidden_states = hidden_states[:, :, None, :, :].expand(bsz, n_kvs, n_rep, seq_len, dim)
+    return hidden_states.reshape(bsz, n_kvs * n_rep, seq_len, dim)
+
+
+class RosaAttention(nn.Module):
+    def __init__(self,
+            layer_idx: int,
+            dim: int,
+            num_heads: int,
+            num_kv_heads: int,
+            num_qk_bits: int = 8,
+            num_v_bits: int = 8,
+            bias: bool = False,
+    ):
+        super().__init__()
+
+        assert num_heads % num_kv_heads == 0
+
+        self.layer_idx = layer_idx
+        self.num_heads = num_heads
+        self.num_kv_heads = num_kv_heads
+        self.num_qk_bits = num_qk_bits
+        self.num_v_bits = num_v_bits
+
+        self.n_rep = num_heads // num_kv_heads
+
+        self.q_proj = nn.Linear(dim, num_heads * num_qk_bits, bias=bias)
+        self.k_proj = nn.Linear(dim, num_kv_heads * num_qk_bits, bias=bias)
+        self.v_proj = nn.Linear(dim, num_kv_heads * num_v_bits, bias=bias)
+        self.o_proj = nn.Linear(num_heads * num_v_bits, dim, bias=bias)
+
+        self.v_emb0 = nn.Parameter(torch.full((num_heads * num_v_bits,), -1e-5))
+        self.v_emb1 = nn.Parameter(torch.full((num_heads * num_v_bits,), +1e-5))
+
+        self.register_buffer("tau", torch.ones((1,)), persistent=False)
+    
+    @classmethod
+    def update_tau_(cls, module: nn.Module, tau: float):
+        for m in module.modules():
+            if isinstance(m, cls):
+                m.get_buffer("tau").fill_(tau)
+    
+    @classmethod
+    def patch_attention(
+            cls,
+            model: nn.Module,
+            dim: int,
+            num_heads: int,
+            num_kv_heads: int,
+            num_qk_bits: int = 8,
+            num_v_bits: int = 8,
+            bias: bool = False,
+            module_names: List[str] = ["self_attn", "attn", "attention"],
+    ):
+        layer_container_names = ["layers", "h", "blocks", "block"]
+        layers = None
+        for name in layer_container_names:
+            if hasattr(model, name):
+                layers = getattr(model, name)
+                break
+
+            elif hasattr(model, "model") and hasattr(getattr(model, "model"), name):
+                layers = getattr(getattr(model, "model"), name)
+                break
+        
+        if layers is None:
+            raise ValueError("Could not find decoder layers in the model.")
+
+        attention_modules = []
+        for layer in layers:
+            for name in module_names:
+                if hasattr(layer, name):
+                    attention_modules.append(getattr(layer, name))
+                    break
+            else:
+                logger.warning(f"Could not find an attention module in layer: {layer}")
+        
+        if not attention_modules:
+            raise ValueError("No attention modules found to patch.")
+        
+        logger.info(f"Found {len(attention_modules)} attention modules to patch.")
+
+        attention_class_forward = {}
+        for layer_idx, attn_module in enumerate(attention_modules):
+            rosa_attn = cls(
+                layer_idx = layer_idx,
+                dim=dim,
+                num_heads=num_heads,
+                num_kv_heads=num_kv_heads,
+                num_qk_bits=num_qk_bits,
+                num_v_bits=num_v_bits,
+                bias=bias,
+            )
+
+            setattr(attn_module, "rosa_attn", rosa_attn)
+
+            attn_cls = type(attn_module)
+            attention_class_forward[attn_cls] = attn_cls.forward
+        
+        def wrap_forward(fwd):
+            def forward(self, *args, **kwargs):
+                a, *others = fwd(self, *args, **kwargs)
+                b = self.rosa_attn(*args, **kwargs)
+                return a + b, *others
+            return forward
+                    
+        for attn_cls, attn_forward in attention_class_forward.items():
+            attn_cls.forward = wrap_forward(attn_forward)
+
+        logger.info("Successfully patched all attention modules.")
+
+        return model
+    
+    @classmethod
+    def freeze_base_model_and_enable_patch_params(cls, model: nn.Module):
+        for name, p in model.named_parameters():
+            if re.search(r"\.rosa_attn\.", name):
+                p.requires_grad_(True)
+            else:
+                p.requires_grad_(False)
+        return model
+    
+    @classmethod
+    def state_dict_for_patch(cls, model: nn.Module) -> Dict[str, Any]:
+        state = {}
+        for name, p in model.state_dict().items():
+            if re.search(r"\.rosa_attn\.", name):
+                state[name] = p
+        return state
+
+    def forward(
+            self,
+            hidden_states: Tensor,
+            attention_mask = None,
+            past_key_values = None,
+            **kwargs,
+    ):
+        bsz, seq_len, _ = hidden_states.size()
+
+        query_states: Tensor = self.q_proj(hidden_states).view(bsz, seq_len, -1, self.num_qk_bits)
+        key_states: Tensor = self.k_proj(hidden_states).view(bsz, seq_len, -1, self.num_qk_bits)
+        value_states: Tensor = self.v_proj(hidden_states).view(bsz, seq_len, -1, self.num_v_bits)
+
+        query_states = query_states.transpose(1, 2)
+        key_states = repeat_kv(key_states.transpose(1, 2), self.n_rep)
+        value_states = repeat_kv(value_states.transpose(1, 2), self.n_rep)
+
+        if past_key_values is not None:
+            if not hasattr(past_key_values, "rosa_cache"):
+                setattr(past_key_values, "rosa_cache", RosaCache())
+
+            cache: RosaCache = getattr(past_key_values, "rosa_cache")
+            hidden_states = cache.update(query_states, key_states, value_states, self.layer_idx)
+
+            v_emb0 = self.v_emb0.view(1, -1, 1, self.num_v_bits)
+            v_emb1 = self.v_emb1.view(1, -1, 1, self.num_v_bits)
+            output = v_emb0 * (1 - hidden_states) + v_emb1 * hidden_states
+        else:
+            tau = self.get_buffer("tau")
+
+            attn_mask = None
+            if attention_mask is not None:
+                attn_mask = attention_mask[:, :, :, :key_states.size(-2)]
+            
+            v_emb0 = self.v_emb0.view(1, -1, 1, self.num_v_bits)
+            v_emb1 = self.v_emb1.view(1, -1, 1, self.num_v_bits)
+            output = rosa_qkv_ops(
+                query_states, key_states,
+                value_states, v_emb0, v_emb1,
+                attn_mask=attn_mask, tau=tau,
+            )
+            
+        output = output.transpose(1, 2).reshape(bsz, seq_len, -1)
+        output = self.o_proj(output)
+        return output
+
+
+class RosaCache:
+    def __init__(self):
+        self.layers: Dict[int, Dict[int, Tensor]] = {}
+    
+    def __del__(self):
+        if torch is None:
+            return
+        for _, cache in self.layers.items():
+            for _, ctx in cache.items():
+                torch.ops.torch_rosa.rosa_sam_free(ctx)
+    
+    def update(self,
+            query_states: Tensor,
+            key_states: Tensor,
+            value_states: Tensor,
+            layer_idx: int,
+    ):
+        if layer_idx not in self.layers:
+            self.layers[layer_idx] = {}
+        
+        rq = torch.arange(query_states.size(-1), device=query_states.device)
+        rk = torch.arange(key_states.size(-1), device=key_states.device)
+        rv = torch.arange(value_states.size(-1), device=value_states.device)
+
+        bq = ((query_states > 0).long() << rq).sum(dim=-1).cpu()
+        bk = ((key_states > 0).long() << rk).sum(dim=-1).cpu()
+        bv = ((value_states > 0).long() << rv).sum(dim=-1).cpu()
+
+        cache = self.layers[layer_idx]
+
+        bo = torch.zeros_like(bq)
+        for b, (q, k, v) in enumerate(zip(bq, bk, bv)):
+            if b not in cache:
+                cache[b] = torch.zeros(q.size(0), dtype=torch.long, device="cpu")
+                torch.ops.torch_rosa.rosa_sam_init(cache[b])
+            
+            bo[b] = torch.ops.torch_rosa.rosa_sam_update(cache[b], q, k, v, 0)
+        
+        output = (bo.to(query_states.device).unsqueeze_(-1) >> rv) & 1
+        return output.type_as(query_states)
 
 
 def _rosa_diag_to_cols(x: Tensor) -> Tensor:
@@ -237,149 +483,24 @@ class RapidOnlineSuffixAutomaton:
 
 
 if __name__ == "__main__":
-    B, T, H, C, V = 4, 8, 2, 4, 5
+    from transformers.models.qwen3.configuration_qwen3 import Qwen3Config
+    from transformers.models.qwen3.modeling_qwen3 import Qwen3ForCausalLM
 
-    def samx_qkv_slow(qqq, kkk, vvv): # slow, only for reference
-        """from https://github.com/BlinkDL/RWKV-LM/blob/main/RWKV-v8/251024_rosaQKV_run.py
-        """
-        n=len(qqq); y=[-1]*n; s=2*n+1; t=[None]*s; f=[-1]*s; m=[0]*s; r=[-1]*s; t[0]={}; g=0; u=1; w=h=0; assert n==len(kkk)==len(vvv)
-        for i,(q,k) in enumerate(zip(qqq,kkk)):
-            p,x=w,h
-            while p!=-1 and q not in t[p]: x=m[p] if x>m[p] else x; p=f[p]
-            p,x=(t[p][q],x+1) if p!=-1 else (0,0); v=p
-            while f[v]!=-1 and m[f[v]]>=x: v=f[v]
-            while v!=-1 and (m[v]<=0 or r[v]<0): v=f[v]
-            y[i]=vvv[r[v]+1] if v!=-1 else -1; w,h=p,x; j=u; u+=1; t[j]={}; m[j]=m[g]+1; p=g
-            while p!=-1 and k not in t[p]: t[p][k]=j; p=f[p]
-            if p==-1: f[j]=0
-            else:
-                d=t[p][k]
-                if m[p]+1==m[d]: f[j]=d
-                else:
-                    b=u; u+=1; t[b]=t[d].copy(); m[b]=m[p]+1; f[b]=f[d]; r[b]=r[d]; f[d]=f[j]=b
-                    while p!=-1 and t[p][k]==d: t[p][k]=b; p=f[p]
-            v=g=j
-            while v!=-1 and r[v]<i: r[v]=i; v=f[v]
-        return [max(0,y) for y in y] # use "0" for both "no-match" and matched "0"
-
-    def test_rosa_qkv_attn_hard(q, k, v, bits_mode = False):
-        if bits_mode:
-            q = torch.tensor(q).long().view(1, 1, -1, 1) >> torch.arange(16)
-            k = torch.tensor(k).long().view(1, 1, -1, 1) >> torch.arange(16)
-            v = torch.tensor(v).long().view(1, 1, -1, 1) >> torch.arange(16)
-
-            q = q & 1
-            k = k & 1
-            v = v & 1
-
-            q = F.pad(q, (0, 0, 0, 10), value=0)
-            k = F.pad(k, (0, 0, 0, 10), value=0)
-            v = F.pad(v, (0, 0, 0, 10), value=0)
-
-            m = torch.ones(q.size(2))
-            m[-10:] = 0
-            m = m.bool().view(1, 1, 1, -1)
-
-            x = _rosa_qkv_attn_hard(q, k, v, bits_mode=True, attn_mask=m)[..., :-10, :]
-            x = x << torch.arange(16)
-            x = x.sum(dim=-1)
-        else:
-            q = torch.tensor(q).long().view(1, 1, -1)
-            k = torch.tensor(k).long().view(1, 1, -1)
-            v = torch.tensor(v).long().view(1, 1, -1)
-            
-            q = F.one_hot(q, 16)
-            k = F.one_hot(k, 16)
-            v = F.one_hot(v, 16)
-
-            q = F.pad(q, (0, 0, 0, 10), value=0)
-            k = F.pad(k, (0, 0, 0, 10), value=0)
-            v = F.pad(v, (0, 0, 0, 10), value=0)
-
-            m = torch.ones(q.size(2))
-            m[-10:] = 0
-            m = m.bool().view(1, 1, 1, -1)
-
-            x = _rosa_qkv_attn_hard(q, k, v, bits_mode=False, attn_mask=m)[..., :-10]
-
-        return x.flatten().tolist()
+    config = Qwen3Config(num_hidden_layers=2, hidden_size=512, intermediate_size=1024)
+    config.use_cache = False
     
-    try:    
-        for _ in range(10):
-            q = torch.randint(0, 2, size=(8,)).tolist()
-            k = torch.randint(0, 2, size=(8,)).tolist()
-            v = torch.randint(0, 2, size=(8,)).tolist()
+    model = Qwen3ForCausalLM(config)
+    model = RosaAttention.patch_attention(
+        model,
+        dim=config.hidden_size,
+        num_heads=config.num_attention_heads,
+        num_kv_heads=config.num_key_value_heads,
+    )
 
-            r = RapidOnlineSuffixAutomaton()
+    model = RosaAttention.freeze_base_model_and_enable_patch_params(model)
+    for name, _ in RosaAttention.state_dict_for_patch(model).items():
+        print(name)
 
-            o1 = torch.tensor(samx_qkv_slow(q, k, v))
-            o2 = torch.tensor(r.extend(q, k, v, 0))
-            o3 = torch.tensor(test_rosa_qkv_attn_hard(q, k, v, bits_mode=False))
-            o4 = torch.tensor(test_rosa_qkv_attn_hard(q, k, v, bits_mode=True))
-
-            assert (o1 == o2).all()
-            assert (o1 == o3).all()
-            assert (o1 == o4).all()
-
-        print("✅ Forward Pass Passed!")
-    except AssertionError as e:
-        print("❌ Forward Pass Failed!")
-        print(e)
-    print()
-
-    try:
-        q = k = v = torch.randn(1, 8, 128, 64).requires_grad_()
-        e0 = torch.randn(1, 8, 1, 64).requires_grad_()
-        e1 = torch.randn(1, 8, 1, 64).requires_grad_()
-        e2 = torch.randn(1, 8, 64, 32).requires_grad_()
-
-        rosa_qkv_ops(q, k, v, e0, e1, tau=0.1).sum().backward()
-        rosa_qkv_ops(q, k, v, e2, tau=0.1).sum().backward()
-
-        assert not q.grad.isnan().any()
-        assert not k.grad.isnan().any()
-        assert not v.grad.isnan().any()
-
-        assert not e0.grad.isnan().any()
-        assert not e1.grad.isnan().any()
-        assert not e2.grad.isnan().any()
-
-        print("✅ Backward Pass Passed!")
-    except AssertionError as e:
-        print("❌ Backward Pass Failed!")
-        print(e)
-    print()
-    
-    print("bits_mode = True")
-    q = torch.randn(B, H, T, C).cuda()
-    k = torch.randn(B, H, T, C).cuda()
-    v = torch.randn(B, H, T, C).cuda()
-    m = torch.randint(0, 2, (B, 1, T, T)).cuda().bool()
-
-    e0 = torch.full((1, H, 1, C), -1).cuda()
-    e1 = torch.full((1, H, 1, C), +1).cuda()
-
-    hard = rosa_qkv_ops(q, k, v, e0, e1, attn_mask=m)
-    for tau in [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7]:
-        _tau = torch.full((1,), tau, dtype=q.dtype, device=q.device)
-        soft = rosa_qkv_ops(q, k, v, e0, e1, tau=_tau, attn_mask=m)
-        p = (soft == hard).count_nonzero() / soft.numel()
-        print(f"tau={tau}: \t{p:.2%}")
-    print()
-    
-    print("bits_mode = False")
-    q = torch.randn(B, H, T, C).cuda()
-    k = torch.randn(B, H, T, C).cuda()
-    v = torch.randn(B, H, T, V).cuda()
-    m = torch.randint(0, 2, (B, 1, T, T)).cuda().bool()
-
-    e0 = torch.randn(1, H, V, C).cuda()
-
-    hard = rosa_qkv_ops(q, k, v, e0, attn_mask=m)
-    for tau in [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7]:
-        _tau = torch.full((1,), tau, dtype=q.dtype, device=q.device)
-        soft = rosa_qkv_ops(q, k, v, e0, tau=_tau, attn_mask=m)
-        p = (soft == hard).count_nonzero() / soft.numel()
-        print(f"tau={tau}: \t{p:.2%}")
-    print()
-
+    x = torch.randint(0, 2, (3, 10))
+    y = model(x)
+    print(y)
