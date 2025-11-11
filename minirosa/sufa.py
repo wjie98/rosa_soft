@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import re
+import torch._dynamo as dynamo
+
 import math
 from torch import Tensor
 from typing import *
@@ -106,13 +107,14 @@ class SuffixAttention(RosaBase):
         query_states = query_states.unfold(-2, self.window_size, 1).transpose(-2, -1).reshape(bsz, -1, seq_len, qk_dim)
         key_states = key_states.unfold(-2, self.window_size, 1).transpose(-2, -1).reshape(bsz, -1, seq_len, qk_dim)
 
-        scale = 1.0 / math.sqrt(qk_dim) / tau.item()
-        attn_bias = self._attn_bias(hidden_states, attention_mask) / tau
-        
-        output = F.scaled_dot_product_attention(
-            query_states, key_states, value_states, scale=scale,
-            attn_mask=attn_bias, enable_gqa=True,
-        )
+        with dynamo.config.patch(capture_scalar_outputs=True):
+            scale = 1.0 / math.sqrt(qk_dim) / tau.item()
+            attn_bias = self._attn_bias(hidden_states, attention_mask) / tau
+            
+            output = F.scaled_dot_product_attention(
+                query_states, key_states, value_states, scale=scale,
+                attn_mask=attn_bias, enable_gqa=True,
+            )
 
         output = output.transpose(1, 2).reshape(bsz, seq_len, -1)
         output = output * self.v_emb1 + (1 - output) * self.v_emb0
