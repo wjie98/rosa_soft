@@ -195,13 +195,13 @@ def main(args):
     )
     logger.info(f"Global batch size: {global_batch_size}")
 
-    train_steps = (
+    num_train_steps = (
         len(train_dataloader)
         // accelerator.num_processes
         * num_train_epochs
         // gradient_accumulation_steps
     )
-    logger.info(f"Training steps: {train_steps}")
+    logger.info(f"Training steps: {num_train_steps}")
     
     logger.info("Trainable parameters:")
     trainable_named_parameters = {name: p for name, p in student_model.named_parameters() if p.requires_grad}
@@ -220,7 +220,7 @@ def main(args):
         name="cosine",
         optimizer=optimizer,
         num_warmup_steps=args.warmup_steps,
-        num_training_steps=train_steps,
+        num_training_steps=num_train_steps * accelerator.num_processes, # the real number of steps
     )
 
     student_model, optimizer, train_dataloader, eval_dataloader, scheduler = accelerator.prepare(
@@ -250,7 +250,7 @@ def main(args):
             accelerator.load_state(checkpoint_path)
             accelerator.print(f"Resumed from checkpoint. Current state: {state_tracker}")
 
-    progress_bar = tqdm(total=train_steps, desc="Training", disable=not accelerator.is_local_main_process)
+    progress_bar = tqdm(total=num_train_steps, desc="Training", disable=not accelerator.is_local_main_process)
     progress_bar.update(state_tracker.completed_steps)
 
     for _ in range(state_tracker.starting_epoch, num_train_epochs):
@@ -284,7 +284,7 @@ def main(args):
 
                 current_tau = calculate_tau_decay(
                     step=state_tracker.completed_steps,
-                    total_steps=train_steps,
+                    total_steps=num_train_steps,
                 )
                 RosaBase.update_tau_(student_model, current_tau)
 
@@ -305,7 +305,13 @@ def main(args):
                     accelerator.save_state(checkpoint_path)
             
             del student_outputs, teacher_outputs, loss
+            
+            if state_tracker.completed_steps >= num_train_steps:
+                break
         
+        if state_tracker.completed_steps >= num_train_steps:
+            break
+
         state_tracker.starting_epoch += 1
     
     checkpoint_path = output_path / f"checkpoint_{state_tracker.completed_steps}"
