@@ -25,6 +25,7 @@ from minirosa import (
     SuffixAttention,
     calculate_distillation_loss,
     calculate_tau_decay,
+    setup_tf32, verify_tf32_status,
 )
 
 import logging
@@ -35,6 +36,10 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+setup_tf32()
+verify_tf32_status()
+
 
 def load_student_model(args):
     sliding_window = args.sliding_window
@@ -154,10 +159,10 @@ def main(args):
     )
 
     accelerator.init_trackers(
-        project_name="rosa_soft",
+        project_name=args.project_name,
         config=args.__dict__,
         init_kwargs={
-            "swanlab": {"experiment_name": f"{args.adapter_type}_attn"},
+            "swanlab": {"experiment_name": args.experiment_name},
         }
     )
     
@@ -228,7 +233,7 @@ def main(args):
     accelerator.register_for_checkpointing(state_tracker)
 
     output_path = Path(args.output_path).expanduser().resolve()
-    if args.resume_from_checkpoint:
+    if args.resume_from_checkpoint and output_path.exists():
         checkpoint_path = None
         resume_from_steps = 0
         for sub in output_path.iterdir():
@@ -252,8 +257,7 @@ def main(args):
         for _, batch in enumerate(train_dataloader):
             if accelerator.sync_gradients and (state_tracker.completed_steps % eval_every_steps == 0):
                 eval_outputs = evaluate_model(args, student_model, eval_dataloader, accelerator)
-                if accelerator.is_local_main_process:
-                    accelerator.log(eval_outputs, step=state_tracker.completed_steps)
+                accelerator.log(eval_outputs, step=state_tracker.completed_steps)
             
             student_model.train()
             with accelerator.accumulate(student_model):
@@ -286,12 +290,11 @@ def main(args):
 
                 if state_tracker.completed_steps % log_every_steps == 0:
                     avg_loss = accelerator.gather(loss).mean().item()
-                    if accelerator.is_local_main_process:
-                        accelerator.log({
-                            "train/loss": avg_loss,
-                            "train/learning_rate": scheduler.get_last_lr()[0],
-                            "train/tau": current_tau,
-                        }, step=state_tracker.completed_steps)
+                    accelerator.log({
+                        "train/loss": avg_loss,
+                        "train/learning_rate": scheduler.get_last_lr()[0],
+                        "train/tau": current_tau,
+                    }, step=state_tracker.completed_steps)
 
                 state_tracker.completed_steps += 1
                 progress_bar.update(1)
