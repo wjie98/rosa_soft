@@ -84,8 +84,8 @@ class SuffixAttention(RosaBase):
         key_states = torch.tanh(key_states / tau).transpose(1, 2)
         value_states = torch.sigmoid(value_states / tau).transpose(1, 2)
 
-        key_states = self.repeat_kv(key_states, self.n_rep)
-        value_states = self.repeat_kv(value_states, self.n_rep)
+        # key_states = self.repeat_kv(key_states, self.n_rep)
+        # value_states = self.repeat_kv(value_states, self.n_rep)
 
         if past_key_values is not None:
             if not hasattr(past_key_values, "sufa_cache"):
