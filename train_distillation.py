@@ -72,6 +72,8 @@ def load_student_model(args):
         hidden_size=config.hidden_size,
         num_heads=config.num_attention_heads,
         num_key_value_heads=config.num_key_value_heads,
+        num_query_key_bits=8,
+        num_value_bits=config.head_dim,
     )
 
     adapter_class.apply_adapter_to_modules_(model, config=rosa_config)
@@ -141,7 +143,7 @@ class StateTracker:
 def main(args):
     from tqdm.auto import tqdm
 
-    num_train_epochs = args.num_train_epochs
+    train_epochs = args.train_epochs
     log_every_steps = args.log_every_steps
     save_every_steps = args.save_every_steps
     eval_every_steps = args.eval_every_steps
@@ -152,6 +154,8 @@ def main(args):
 
     distill_alpha = args.distill_alpha
     distill_temperature = args.distill_temperature
+
+    adapter_temperature = args.adapter_temperature
 
     accelerator = Accelerator(
         gradient_accumulation_steps=gradient_accumulation_steps,
@@ -195,10 +199,10 @@ def main(args):
     )
     logger.info(f"Global batch size: {global_batch_size}")
 
-    num_train_steps = (
+    num_train_steps = int(
         len(train_dataloader)
         // accelerator.num_processes
-        * num_train_epochs
+        * train_epochs
         // gradient_accumulation_steps
     )
     logger.info(f"Training steps: {num_train_steps}")
@@ -253,7 +257,7 @@ def main(args):
     progress_bar = tqdm(total=num_train_steps, desc="Training", disable=not accelerator.is_local_main_process)
     progress_bar.update(state_tracker.completed_steps)
 
-    for _ in range(state_tracker.starting_epoch, num_train_epochs):
+    for _ in range(state_tracker.starting_epoch, math.ceil(train_epochs)):
         for _, batch in enumerate(train_dataloader):
             if accelerator.sync_gradients and (state_tracker.completed_steps % eval_every_steps == 0):
                 eval_outputs = evaluate_model(args, student_model, eval_dataloader, accelerator)
@@ -285,6 +289,7 @@ def main(args):
                 current_tau = calculate_tau_decay(
                     step=state_tracker.completed_steps,
                     total_steps=num_train_steps,
+                    final_tau=adapter_temperature,
                 )
                 RosaBase.update_tau_(student_model, current_tau)
 
@@ -334,6 +339,7 @@ if __name__ == "__main__":
     # model args
     parser.add_argument("--adapter_type", type=str, default="rosa", help="Type of ROSA adapter [rosa, sufa]", choices=["rosa", "sufa"])
     parser.add_argument("--sliding_window", type=int, default=128, help="Sliding window size for the student model.")
+    parser.add_argument("--adapter_temperature", type=float, default=1e-3, help="Final temperature for adapter.")
 
     # logging and saving
     parser.add_argument("--log_every_steps", type=int, default=10, help="Number of steps between logging.")
@@ -345,10 +351,10 @@ if __name__ == "__main__":
     parser.add_argument("--per_device_eval_batch_size", type=int, default=8, help="Batch size per GPU for evaluation.")
 
     # optimizer args
-    parser.add_argument("--num_train_epochs", type=int, default=1, help="Total number of training epochs.")
+    parser.add_argument("--train_epochs", type=float, default=1.0, help="Total number of training epochs.")
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="Initial learning rate.")
     parser.add_argument("--warmup_steps", type=int, default=2000, help="Warmup steps for learning rate scheduler.")
-    parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay for optimizer.")
+    parser.add_argument("--weight_decay", type=float, default=0.1, help="Weight decay for optimizer.")
 
     # distillation args
     parser.add_argument("--distill_alpha", type=float, default=1.0, help="Alpha for distillation.")
