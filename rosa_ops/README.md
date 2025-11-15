@@ -60,4 +60,7 @@ Below is a timeline of major changes and refinements made to the operator logic.
 - **20251107: Python Suffix Automaton & API Refinement**
   - Added `RapidOnlineSuffixAutomaton`, a pure Python implementation of the suffix automaton logic for reference and testing. For a potentially faster C++ implementation, please refer to the code in the `20251102/` directory.
   - The input parameter format for the `rosa_qkv_ops` function was adjusted for greater clarity and flexibility, particularly in how embedding vectors are handled.
-  
+
+- **20251116: Refactored with STE to Fix Model Hacking Issue**
+
+- The previous `sigmoid` + temperature `tau` scheme had a vulnerability where the model could learn to output small-magnitude logits to bypass the discretization pressure from annealing. The new version adopts the Straight-Through Estimator (STE), which enforces a strictly discrete forward pass while using a surrogate gradient for the backward pass, fundamentally solving this issue.
