@@ -2,7 +2,7 @@
 
 This directory contains the core, low-level implementations of the softened ROSA QKV operator.
 
-**The latest, most stable, and recommended version of the operator is located in `rosa.py`**.
+**The latest, most stable, and recommended version of the operator is located in `20251118`**.
 
 The numbered subdirectories (`2025XXXX/`) contain historical snapshots of the implementation, preserved for research and comparison purposes.
 
