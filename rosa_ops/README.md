@@ -2,7 +2,7 @@
 
 This directory contains the core, low-level implementations of the softened ROSA QKV operator.
 
-**The latest, most stable, and recommended version of the operator is located in `20251118`**.
+**The latest, most stable, and recommended version of the operator is located in `20251121`**.
 
 The numbered subdirectories (`2025XXXX/`) contain historical snapshots of the implementation, preserved for research and comparison purposes.
 
@@ -69,3 +69,6 @@ Below is a timeline of major changes and refinements made to the operator logic.
 
 - **20251118: CPU Offloading for Hard Forward Pass**
   - The discrete "hard" forward pass can now be offloaded to the CPU for execution via a custom C++ operator, controlled by the `host_ops=True` flag. This allows for better hardware utilization by running the hard pass on the CPU in parallel with the soft proxy computation on the GPU. This can lead to a significant performance improvement, especially when the GPU is the primary bottleneck.
+
+- **20251121: Fine-tuned Proxy Function**
+  - The SUFA proxy now supports disabling positional information injection and uses a standard causal mask to activate underlying optimizations.

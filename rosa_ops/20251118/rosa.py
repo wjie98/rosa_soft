@@ -21,7 +21,7 @@ __all__ = [
 
 def rosa_bits_ops(
         query: Tensor, key: Tensor, value: Tensor, attn_mask: Optional[Tensor] = None,
-        alpha: Union[Tensor, float] = 1.0, proxy: Literal["rosa", "sufa"] = "rosa",
+        alpha: Union[Tensor, float] = 1.0, proxy: Literal["rosa", "sufa"] = "sufa",
         bits_tau: Union[Tensor, float] = 1.0, attn_tau: Union[Tensor, float] = 1.0,
         host_ops: bool = False, training: bool = False, sufa_head_dim: int = 128,
 ):
@@ -43,8 +43,9 @@ def rosa_bits_ops(
             - `alpha = 1.0`: The forward pass output is purely from the hard, discrete op.
             This should be annealed from 0 to 1 during training.
         proxy (Literal["rosa", "sufa"]): The type of soft proxy to use for gradient
-            computation. 'rosa' uses a custom dynamic programming approach, while
-            'sufa' uses a standard scaled dot-product attention as the proxy.
+            computation. 'rosa' uses a custom dynamic programming approach to
+            soft-simulate the ROSA matching algorithm. 'sufa' uses Suffix Attention
+            (a standard scaled dot-product attention) as the proxy.
         bits_tau (Union[Tensor, float]): Temperature for converting query/key/value logits
             into continuous bit representations (e.g., via tanh or sigmoid). A smaller
             tau makes the bits "harder".
@@ -134,7 +135,7 @@ def rosa_bits_host_ops_d2h(query: Tensor, key: Tensor, value: Tensor, attn_mask:
     
     bsz, num_heads, seq_len, num_qk_bits = query.size()
     bsz, num_kv_heads, seq_len, num_qk_bits = key.size()
-    bsz, num_kv_heads, seq_len, num_v_bits = key.size()
+    bsz, num_kv_heads, seq_len, num_v_bits = value.size()
 
     r = torch.arange(0, num_qk_bits, device=query.device)
     xq = ((query > 0).long() << r).sum(dim=-1).view(bsz, num_heads, seq_len)
@@ -164,7 +165,7 @@ def rosa_bits_host_ops_h2d(query: Tensor, key: Tensor, value: Tensor, xq: Tensor
 
     bsz, num_heads, seq_len, num_qk_bits = query.size()
     bsz, num_kv_heads, seq_len, num_qk_bits = key.size()
-    bsz, num_kv_heads, seq_len, num_v_bits = key.size()
+    bsz, num_kv_heads, seq_len, num_v_bits = value.size()
 
     n_rep = num_heads // num_kv_heads
     if n_rep > 1:
@@ -212,7 +213,7 @@ def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
 def rosa_bits_hard_ops(query: Tensor, key: Tensor, value: Tensor, attn_mask: Optional[Tensor] = None) -> Tensor:
     bsz, num_heads, seq_len, num_qk_bits = query.size()
     bsz, num_kv_heads, seq_len, num_qk_bits = key.size()
-    bsz, num_kv_heads, seq_len, num_v_bits = key.size()
+    bsz, num_kv_heads, seq_len, num_v_bits = value.size()
 
     n_rep = num_heads // num_kv_heads
 
@@ -258,7 +259,7 @@ def rosa_bits_soft_ops(
 ):
     bsz, num_heads, seq_len, num_qk_bits = query.size()
     bsz, num_kv_heads, seq_len, num_qk_bits = key.size()
-    bsz, num_kv_heads, seq_len, num_v_bits = key.size()
+    bsz, num_kv_heads, seq_len, num_v_bits = value.size()
 
     n_rep = num_heads // num_kv_heads
 
@@ -331,7 +332,7 @@ def sufa_bits_soft_ops(
 ):
     bsz, num_heads, seq_len, num_qk_bits = query.size()
     bsz, num_kv_heads, seq_len, num_qk_bits = key.size()
-    bsz, num_kv_heads, seq_len, num_v_bits = key.size()
+    bsz, num_kv_heads, seq_len, num_v_bits = value.size()
 
     n_rep = num_heads // num_kv_heads
     enable_gqa = n_rep > 1
@@ -347,6 +348,7 @@ def sufa_bits_soft_ops(
 
     xq = F.pad(xq, (0, 0, win_qk_size - 1, 0), value=0.0).unfold(-2, win_qk_size, 1).transpose(-1, -2).reshape(bsz, -1, seq_len, head_dim)
     xk = F.pad(xk, (0, 0, win_qk_size - 1, 0), value=0.0).unfold(-2, win_qk_size, 1).transpose(-1, -2).reshape(bsz, -1, seq_len, head_dim)
+    xv = F.pad(xv, (0, 0, -1, 1), value=0.0) # predict next token
 
     attn_bias = sufa_attn_bias(query, attention_mask=attn_mask) / attn_tau
     with dynamo.config.patch(capture_scalar_outputs=True):
