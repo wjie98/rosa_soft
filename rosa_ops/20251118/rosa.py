@@ -30,13 +30,13 @@ def rosa_bits_ops(
 
     This function computes a differentiable, attention-like mechanism based on the
     longest common suffix match between query and key sequences. The inputs are
-    expected to be binarized tensors (or tensors of logits that will be binarized).
-    The operation is designed to be efficient on parallel hardware like GPUs.
+    expected to be tensors of logits that will be binarized). The operation is designed
+    to be efficient on parallel hardware like GPUs.
 
     Args:
-        query (Tensor): The query tensor of shape (B, H, T, D_qk). Can be logits.
-        key (Tensor): The key tensor of shape (B, H_kv, T, D_qk). Can be logits.
-        value (Tensor): The value tensor of shape (B, H_kv, T, D_v). Can be logits.
+        query (Tensor): The query tensor of shape (B, H, T, D_qk).
+        key (Tensor): The key tensor of shape (B, H_kv, T, D_qk).
+        value (Tensor): The value tensor of shape (B, H_kv, T, D_v).
         attn_mask (Optional[Tensor]): An optional boolean attention mask.
         alpha (Union[Tensor, float]): The interpolation coefficient for the STE.
             - `alpha = 0.0`: The output is purely from the soft, differentiable proxy.
