@@ -4,8 +4,14 @@ import torch.nn.functional as F
 import math
 import torch._dynamo as dynamo
 
+from pathlib import Path
+from functools import lru_cache
+
 from torch import Tensor
 from typing import Dict, List, Tuple, Optional, Union, Literal, cast
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 __all__ = [
@@ -16,7 +22,8 @@ __all__ = [
 def rosa_bits_ops(
         query: Tensor, key: Tensor, value: Tensor, attn_mask: Optional[Tensor] = None,
         alpha: Union[Tensor, float] = 1.0, proxy: Literal["rosa", "sufa"] = "rosa",
-        bits_tau: Union[Tensor, float] = 1.0, attn_tau: Union[Tensor, float] = 1.0, sufa_head_dim: int = 128,
+        bits_tau: Union[Tensor, float] = 1.0, attn_tau: Union[Tensor, float] = 1.0,
+        host_ops: bool = False, training: bool = False, sufa_head_dim: int = 128,
 ):
     """
     Performs the Rapid Online Suffix Automaton (ROSA) attention-like operation.
@@ -43,6 +50,10 @@ def rosa_bits_ops(
             tau makes the bits "harder".
         attn_tau (Union[Tensor, float]): Temperature for the softmax in the soft attention
             calculation. A smaller tau makes the attention distribution sharper.
+        host_ops (bool): If True, the 'hard' part of the operation is offloaded to the CPU
+            for potentially faster execution. This requires a custom C++ extension.
+        training (bool): If True, enables the training path which uses a soft proxy for
+            gradients via a Straight-Through Estimator (STE).
         sufa_head_dim (int): The head dimension to use for the 'sufa' proxy's
             scaled dot-product attention.
 
@@ -52,22 +63,141 @@ def rosa_bits_ops(
                 backward pass determined solely by the soft op.
     """
 
-    if proxy == "rosa":
-        x_hard = rosa_bits_hard_ops(query, key, value, attn_mask=attn_mask)
-        x_soft = rosa_bits_soft_ops(
-            query, key, value, attn_mask=attn_mask,
-            bits_tau=bits_tau, attn_tau=attn_tau,
-        )
-    elif proxy == "sufa":
-        x_hard = rosa_bits_hard_ops(query, key, value, attn_mask=attn_mask)
-        x_soft = sufa_bits_soft_ops(
-            query, key, value, attn_mask=attn_mask,
-            bits_tau=bits_tau, attn_tau=attn_tau, head_dim=sufa_head_dim,
-        )
-    else:
-        raise ValueError(f"Unknown proxy type: {proxy}")
+    if host_ops:
+        load_torch_rosa()
+        xq, xk, xv = rosa_bits_host_ops_d2h(query, key, value, attn_mask=attn_mask)
+
+    if training:
+        if proxy == "rosa":
+            x_soft = rosa_bits_soft_ops(
+                query, key, value, attn_mask=attn_mask,
+                bits_tau=bits_tau, attn_tau=attn_tau,
+            )
+        elif proxy == "sufa":
+            x_soft = sufa_bits_soft_ops(
+                query, key, value, attn_mask=attn_mask,
+                bits_tau=bits_tau, attn_tau=attn_tau, head_dim=sufa_head_dim,
+            )
+        else:
+            raise ValueError(f"Unknown proxy type: {proxy}")
     
-    return x_soft + (x_hard - x_soft).detach() * alpha
+    if host_ops:
+        x_hard = rosa_bits_host_ops_h2d(query, key, value, xq, xk, xv)
+    else:
+        x_hard = rosa_bits_hard_ops(query, key, value, attn_mask=attn_mask)
+    
+    if training:
+        return x_soft + (x_hard - x_soft).detach() * alpha
+    else:
+        return x_hard
+
+
+@lru_cache(maxsize=None)
+def load_torch_rosa():
+    """
+    JIT compiles and loads the 'torch_rosa' C++ extension.
+    
+    Thanks to the @lru_cache decorator, the compilation and loading process
+    will only run once per Python session, no matter how many times this
+    function is called.
+    """
+    logger.info("--- Compiling and loading torch_rosa C++ extension (this should happen only once) ---")
+
+    rosa_cpp = Path(__file__).resolve().with_name("rosa.cpp")
+
+    if not rosa_cpp.is_file():
+        raise FileNotFoundError(
+            f"The C++ source file was not found at the expected location: {rosa_cpp}"
+        )
+    
+    from torch.utils.cpp_extension import load
+
+    load(
+        name="torch_rosa",
+        sources=[str(rosa_cpp)],
+        extra_cflags=["-O3", "-fopenmp"],
+        is_python_module=False,
+        verbose=True,
+    )
+    logger.info("--- torch_rosa C++ extension successfully loaded. ---")
+
+ROSA_HOST_STREAM = torch.cuda.Stream() if torch.cuda.is_available() else None
+
+@torch.no_grad()
+def rosa_bits_host_ops_d2h(query: Tensor, key: Tensor, value: Tensor, attn_mask: Optional[Tensor] = None):
+    global ROSA_HOST_STREAM
+
+    if attn_mask is not None and not getattr(rosa_bits_host_ops_d2h, "_warning_shown", False):
+        logger.warning("The 'attn_mask' argument is provided but will be ignored in this bit-packing operation. "
+                       "This warning will not be shown again.")
+        rosa_bits_host_ops_d2h._warning_shown = True
+    
+    bsz, num_heads, seq_len, num_qk_bits = query.size()
+    bsz, num_kv_heads, seq_len, num_qk_bits = key.size()
+    bsz, num_kv_heads, seq_len, num_v_bits = key.size()
+
+    r = torch.arange(0, num_qk_bits, device=query.device)
+    xq = ((query > 0).long() << r).sum(dim=-1).view(bsz, num_heads, seq_len)
+    xk = ((key > 0).long() << r).sum(dim=-1).view(bsz, num_kv_heads, seq_len)
+
+    r = torch.arange(0, num_v_bits, device=query.device)
+    xv = ((value > 0).long() << r).sum(dim=-1).view(bsz, num_kv_heads, seq_len)
+
+    if num_qk_bits <= 8 and num_v_bits <= 8:
+        xq = xq.to(torch.uint8)
+        xk = xk.to(torch.uint8)
+        xv = xv.to(torch.uint8)
+    
+    if ROSA_HOST_STREAM is not None:
+        ROSA_HOST_STREAM.wait_stream(torch.cuda.current_stream())
+
+    with torch.cuda.stream(ROSA_HOST_STREAM):
+        xq = xq.to("cpu", non_blocking=True)
+        xk = xk.to("cpu", non_blocking=True)
+        xv = xv.to("cpu", non_blocking=True)
+    
+    return xq, xk, xv
+
+@torch.no_grad()
+def rosa_bits_host_ops_h2d(query: Tensor, key: Tensor, value: Tensor, xq: Tensor, xk: Tensor, xv: Tensor):
+    global ROSA_HOST_STREAM
+
+    bsz, num_heads, seq_len, num_qk_bits = query.size()
+    bsz, num_kv_heads, seq_len, num_qk_bits = key.size()
+    bsz, num_kv_heads, seq_len, num_v_bits = key.size()
+
+    n_rep = num_heads // num_kv_heads
+    if n_rep > 1:
+        xk = xk.view(bsz, num_kv_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
+        xv = xv.view(bsz, num_kv_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
+    
+    xq = xq.reshape(-1, seq_len)
+    xk = xk.reshape(-1, seq_len)
+    xv = xv.reshape(-1, seq_len)
+
+    ctx = torch.zeros(bsz * num_heads, dtype=torch.long, device="cpu")
+    try:
+        if num_qk_bits <= 8 and num_v_bits <= 8:
+            torch.ops.torch_rosa.rosa_sam_8bits_init(ctx)
+            xo = torch.ops.torch_rosa.rosa_sam_8bits_update(ctx, xq, xk, xv, 0)
+        else:
+            torch.ops.torch_rosa.rosa_sam_init(ctx)
+            xo = torch.ops.torch_rosa.rosa_sam_update(ctx, xq, xk, xv, 0)
+    finally:
+        if num_qk_bits <= 8 and num_v_bits <= 8:
+            torch.ops.torch_rosa.rosa_sam_8bits_free(ctx)
+        else:
+            torch.ops.torch_rosa.rosa_sam_free(ctx)
+    
+    with torch.cuda.stream(ROSA_HOST_STREAM):
+        xo = xo.to(query.device, non_blocking=True)
+    
+    if ROSA_HOST_STREAM is not None:
+        torch.cuda.current_stream().wait_stream(ROSA_HOST_STREAM)
+    
+    r = torch.arange(0, num_v_bits, device=query.device)
+    xo = (xo.long().view(bsz, num_heads, seq_len, 1) >> r) & 1
+    return xo.type_as(value)
 
 
 def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
@@ -369,6 +499,8 @@ class RapidOnlineSuffixAutomaton:
 if __name__ == "__main__":
     B, T, H, C, V = 4, 8, 2, 4, 5
 
+    load_torch_rosa()
+
     def test_rosa_qkv_attn_hard(q, k, v):
         q = torch.tensor(q).long().view(1, 1, -1, 1) >> torch.arange(16)
         k = torch.tensor(k).long().view(1, 1, -1, 1) >> torch.arange(16)
@@ -401,6 +533,23 @@ if __name__ == "__main__":
 
         return x.flatten().tolist()
     
+    def test_rosa_qkv_attn_host(q, k, v):
+        q = torch.tensor(q).long().view(1, 1, -1, 1) >> torch.arange(16)
+        k = torch.tensor(k).long().view(1, 1, -1, 1) >> torch.arange(16)
+        v = torch.tensor(v).long().view(1, 1, -1, 1) >> torch.arange(16)
+
+        q = (q & 1).float() - 0.5
+        k = (k & 1).float() - 0.5
+        v = (v & 1).float() - 0.5
+
+        xq, xk, xv = rosa_bits_host_ops_d2h(q, k, v)
+        x = rosa_bits_host_ops_h2d(q, k, v, xq, xk, xv)
+
+        x = (x > 0).long() << torch.arange(16)
+        x = x.sum(dim=-1)
+
+        return x.flatten().tolist()
+    
     try:    
         for _ in range(10):
             q = torch.randint(0, 2, size=(8,)).tolist()
@@ -412,9 +561,11 @@ if __name__ == "__main__":
             o1 = torch.tensor(r.extend(q, k, v, 0))
             o2 = torch.tensor(test_rosa_qkv_attn_hard(q, k, v))
             o3 = torch.tensor(test_rosa_qkv_attn_soft(q, k, v))
+            o4 = torch.tensor(test_rosa_qkv_attn_host(q, k, v))
 
             assert (o1 == o2).all()
             assert (o1 == o3).all()
+            assert (o1 == o4).all()
 
         print("✅ Forward Pass Passed!")
     except AssertionError as e:
@@ -425,8 +576,8 @@ if __name__ == "__main__":
     try:
         q = k = v = torch.randn(1, 8, 128, 64).requires_grad_()
 
-        rosa_bits_ops(q, k, v, proxy="rosa").sum().backward()
-        rosa_bits_ops(q, k, v, proxy="sufa").sum().backward()
+        rosa_bits_ops(q, k, v, proxy="rosa", training=True).sum().backward()
+        rosa_bits_ops(q, k, v, proxy="sufa", training=True).sum().backward()
 
         assert not q.grad.isnan().any()
         assert not k.grad.isnan().any()

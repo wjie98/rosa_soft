@@ -22,10 +22,10 @@ from minirosa import (
     RosaBase,
     RosaConfig,
     RosaAttention,
-    SuffixAttention,
     calculate_distillation_loss,
     calculate_tau_decay,
     setup_tf32, verify_tf32_status,
+    log_environment_info,
 )
 
 import logging
@@ -57,26 +57,25 @@ def load_student_model(args):
     logger.info("Loading student model...")
     model = AutoModelForCausalLM.from_pretrained(args.model_path, config=config, dtype=torch.bfloat16)
 
-    if args.adapter_type == "rosa":
-        logger.info("Applying RosaAttention adapter to the student model.")
-        adapter_class = RosaAttention
+    adapter_class = RosaAttention
+    logger.info("Applying RosaAttention adapter to the student model.")
 
-    elif args.adapter_type == "sufa":
-        logger.info("Applying SuffixAttention adapter to the student model.")
-        adapter_class = SuffixAttention
+    num_query_key_bits = 8
+    num_value_bits = 8
 
-    else:
-        raise ValueError(f"Unknown adapter type: {args.adapter_type}")
-    
-    rosa_config = RosaConfig(
+    num_heads = config.hidden_size // num_query_key_bits
+    num_key_value_heads = num_heads
+
+    adapter_config = RosaConfig(
         hidden_size=config.hidden_size,
-        num_heads=config.num_attention_heads,
-        num_key_value_heads=config.num_key_value_heads,
-        num_query_key_bits=8,
-        num_value_bits=config.head_dim,
+        num_heads=num_heads,
+        num_key_value_heads=num_key_value_heads,
+        num_query_key_bits=num_query_key_bits,
+        num_value_bits=num_value_bits,
+        proxy_type=args.adapter_proxy,
     )
 
-    adapter_class.apply_adapter_to_modules_(model, config=rosa_config)
+    adapter_class.apply_adapter_to_modules_(model, config=adapter_config)
     
     logger.info("Setting trainable parameters for the adapter.")
     adapter_class.apply_trainable_parameters_(model)
@@ -155,8 +154,6 @@ def main(args):
     distill_alpha = args.distill_alpha
     distill_temperature = args.distill_temperature
 
-    adapter_temperature = args.adapter_temperature
-
     accelerator = Accelerator(
         gradient_accumulation_steps=gradient_accumulation_steps,
         log_with="swanlab",
@@ -169,9 +166,15 @@ def main(args):
             "swanlab": {"experiment_name": args.experiment_name},
         }
     )
+
+    log_environment_info()
     
     with accelerator.main_process_first():
-        teacher_model = load_teacher_model(args)
+        if distill_alpha > 0.0:
+            logger.info("Loading teacher model...")
+            teacher_model = load_teacher_model(args)
+        else:
+            teacher_model = None
     
     with accelerator.main_process_first():
         student_model = load_student_model(args)
@@ -190,6 +193,7 @@ def main(args):
     eval_dataloader = DataLoader(
         datasets["test"],
         batch_size=per_device_eval_batch_size,
+        # shuffle=True,
     )
 
     global_batch_size = (
@@ -231,7 +235,8 @@ def main(args):
         student_model, optimizer, train_dataloader, eval_dataloader, scheduler
     )
     
-    teacher_model = teacher_model.to(accelerator.device)
+    if teacher_model is not None:
+        teacher_model = teacher_model.to(accelerator.device)
 
     state_tracker = StateTracker()
     accelerator.register_for_checkpointing(state_tracker)
@@ -263,21 +268,27 @@ def main(args):
                 eval_outputs = evaluate_model(args, student_model, eval_dataloader, accelerator)
                 accelerator.log(eval_outputs, step=state_tracker.completed_steps)
             
+            if teacher_model is not None:
+                with torch.no_grad():
+                    teacher_logits = teacher_model(**batch).logits
+            else:
+                teacher_logits = None
+            
             student_model.train()
             with accelerator.accumulate(student_model):
-                with torch.no_grad():
-                    teacher_outputs = teacher_model(**batch)
                 student_outputs = student_model(**batch)
                 
                 loss = calculate_distillation_loss(
                     loss_ce=student_outputs.loss,
                     student_logits=student_outputs.logits,
-                    teacher_logits=teacher_outputs.logits,
+                    teacher_logits=teacher_logits,
                     alpha=distill_alpha,
                     temperature=distill_temperature,
                 )
 
                 accelerator.backward(loss)
+
+                assert not loss.isnan().any(), "Loss is NaN!"
 
             if accelerator.sync_gradients:
                 accelerator.clip_grad_norm_(trainable_named_parameters.values(), max_norm = 1.0)
@@ -286,19 +297,19 @@ def main(args):
                 scheduler.step()
                 optimizer.zero_grad()
 
-                current_tau = calculate_tau_decay(
-                    step=state_tracker.completed_steps,
-                    total_steps=num_train_steps,
-                    final_tau=adapter_temperature,
+                alpha = 1.0 - calculate_tau_decay(
+                    step=state_tracker.completed_steps, total_steps=num_train_steps,
+                    initial_tau=1.0, final_tau=0.0, decay_type="cosine",
                 )
-                RosaBase.update_tau_(student_model, current_tau)
+
+                RosaBase.set_rosa_ops_alpha(student_model, alpha=alpha)
 
                 if state_tracker.completed_steps % log_every_steps == 0:
                     avg_loss = accelerator.gather(loss).mean().item()
                     accelerator.log({
                         "train/loss": avg_loss,
                         "train/learning_rate": scheduler.get_last_lr()[0],
-                        "train/tau": current_tau,
+                        "train/alpha": alpha,
                     }, step=state_tracker.completed_steps)
 
                 state_tracker.completed_steps += 1
@@ -309,7 +320,7 @@ def main(args):
                     checkpoint_path.mkdir(parents=True, exist_ok=True)
                     accelerator.save_state(checkpoint_path)
             
-            del student_outputs, teacher_outputs, loss
+            del student_outputs, teacher_logits, loss
             
             if state_tracker.completed_steps >= num_train_steps:
                 break
@@ -337,9 +348,8 @@ if __name__ == "__main__":
     parser.add_argument("--experiment_name", type=str, default="rosa_distillation", help="Name of the experiment.")
 
     # model args
-    parser.add_argument("--adapter_type", type=str, default="rosa", help="Type of ROSA adapter [rosa, sufa]", choices=["rosa", "sufa"])
+    parser.add_argument("--adapter_proxy", type=str, default="rosa", help="Proxy of ROSA adapter.", choices=["rosa", "sufa"])
     parser.add_argument("--sliding_window", type=int, default=128, help="Sliding window size for the student model.")
-    parser.add_argument("--adapter_temperature", type=float, default=1e-3, help="Final temperature for adapter.")
 
     # logging and saving
     parser.add_argument("--log_every_steps", type=int, default=10, help="Number of steps between logging.")
@@ -357,7 +367,7 @@ if __name__ == "__main__":
     parser.add_argument("--weight_decay", type=float, default=0.1, help="Weight decay for optimizer.")
 
     # distillation args
-    parser.add_argument("--distill_alpha", type=float, default=1.0, help="Alpha for distillation.")
+    parser.add_argument("--distill_alpha", type=float, default=0.0, help="Alpha for distillation.")
     parser.add_argument("--distill_temperature", type=float, default=1.0, help="Temperature for distillation.")
 
     # training args

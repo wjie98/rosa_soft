@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import os
 import math
 import torch._dynamo as dynamo
 
@@ -10,6 +9,7 @@ from torch import Tensor
 from typing import *
 
 from pathlib import Path
+from functools import lru_cache
 
 import logging
 logger = logging.getLogger(__name__)
@@ -18,21 +18,6 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "RosaAttention",
 ]
-
-
-def load_torch_rosa():
-    from torch.utils.cpp_extension import load
-    rosa_cpp = Path(__file__).resolve().with_name("rosa.cpp")
-    load(
-        name="torch_rosa",
-        sources=[str(rosa_cpp)],
-        extra_cflags=["-O3", "-fopenmp"],
-        is_python_module=False,
-        verbose=True,
-    )
-
-if os.getenv("TORCH_ROSA_CPP", "0") == "1":
-    load_torch_rosa()
 
 
 from .base import RosaConfig, RosaBase
@@ -84,6 +69,7 @@ class RosaAttention(RosaBase):
                 query_states, key_states, value_states, attn_mask=attention_mask,
                 alpha=self.get_rosa_ops_alpha(), proxy=self.proxy_type,
                 bits_tau=self.bits_tau, attn_tau=self.attn_tau,
+                host_ops=True, training=self.training,
             )
         else:
             raise NotImplementedError("RosaAttention with past_key_values is not implemented yet.")
@@ -138,7 +124,8 @@ class RosaCache:
 def rosa_bits_ops(
         query: Tensor, key: Tensor, value: Tensor, attn_mask: Optional[Tensor] = None,
         alpha: Union[Tensor, float] = 1.0, proxy: Literal["rosa", "sufa"] = "rosa",
-        bits_tau: Union[Tensor, float] = 1.0, attn_tau: Union[Tensor, float] = 1.0, sufa_head_dim: int = 128,
+        bits_tau: Union[Tensor, float] = 1.0, attn_tau: Union[Tensor, float] = 1.0,
+        host_ops: bool = False, training: bool = False, sufa_head_dim: int = 128,
 ):
     """
     Performs the Rapid Online Suffix Automaton (ROSA) attention-like operation.
@@ -165,6 +152,10 @@ def rosa_bits_ops(
             tau makes the bits "harder".
         attn_tau (Union[Tensor, float]): Temperature for the softmax in the soft attention
             calculation. A smaller tau makes the attention distribution sharper.
+        host_ops (bool): If True, the 'hard' part of the operation is offloaded to the CPU
+            for potentially faster execution. This requires a custom C++ extension.
+        training (bool): If True, enables the training path which uses a soft proxy for
+            gradients via a Straight-Through Estimator (STE).
         sufa_head_dim (int): The head dimension to use for the 'sufa' proxy's
             scaled dot-product attention.
 
@@ -174,22 +165,141 @@ def rosa_bits_ops(
                 backward pass determined solely by the soft op.
     """
 
-    if proxy == "rosa":
-        x_hard = rosa_bits_hard_ops(query, key, value, attn_mask=attn_mask)
-        x_soft = rosa_bits_soft_ops(
-            query, key, value, attn_mask=attn_mask,
-            bits_tau=bits_tau, attn_tau=attn_tau,
-        )
-    elif proxy == "sufa":
-        x_hard = rosa_bits_hard_ops(query, key, value, attn_mask=attn_mask)
-        x_soft = sufa_bits_soft_ops(
-            query, key, value, attn_mask=attn_mask,
-            bits_tau=bits_tau, attn_tau=attn_tau, head_dim=sufa_head_dim,
-        )
-    else:
-        raise ValueError(f"Unknown proxy type: {proxy}")
+    if host_ops:
+        load_torch_rosa()
+        xq, xk, xv = rosa_bits_host_ops_d2h(query, key, value, attn_mask=attn_mask)
+
+    if training:
+        if proxy == "rosa":
+            x_soft = rosa_bits_soft_ops(
+                query, key, value, attn_mask=attn_mask,
+                bits_tau=bits_tau, attn_tau=attn_tau,
+            )
+        elif proxy == "sufa":
+            x_soft = sufa_bits_soft_ops(
+                query, key, value, attn_mask=attn_mask,
+                bits_tau=bits_tau, attn_tau=attn_tau, head_dim=sufa_head_dim,
+            )
+        else:
+            raise ValueError(f"Unknown proxy type: {proxy}")
     
-    return x_soft + (x_hard - x_soft).detach() * alpha
+    if host_ops:
+        x_hard = rosa_bits_host_ops_h2d(query, key, value, xq, xk, xv)
+    else:
+        x_hard = rosa_bits_hard_ops(query, key, value, attn_mask=attn_mask)
+    
+    if training:
+        return x_soft + (x_hard - x_soft).detach() * alpha
+    else:
+        return x_hard
+
+
+@lru_cache(maxsize=None)
+def load_torch_rosa():
+    """
+    JIT compiles and loads the 'torch_rosa' C++ extension.
+    
+    Thanks to the @lru_cache decorator, the compilation and loading process
+    will only run once per Python session, no matter how many times this
+    function is called.
+    """
+    logger.info("--- Compiling and loading torch_rosa C++ extension (this should happen only once) ---")
+
+    rosa_cpp = Path(__file__).resolve().with_name("rosa.cpp")
+
+    if not rosa_cpp.is_file():
+        raise FileNotFoundError(
+            f"The C++ source file was not found at the expected location: {rosa_cpp}"
+        )
+    
+    from torch.utils.cpp_extension import load
+
+    load(
+        name="torch_rosa",
+        sources=[str(rosa_cpp)],
+        extra_cflags=["-O3", "-fopenmp"],
+        is_python_module=False,
+        verbose=True,
+    )
+    logger.info("--- torch_rosa C++ extension successfully loaded. ---")
+
+ROSA_HOST_STREAM = torch.cuda.Stream() if torch.cuda.is_available() else None
+
+@torch.no_grad()
+def rosa_bits_host_ops_d2h(query: Tensor, key: Tensor, value: Tensor, attn_mask: Optional[Tensor] = None):
+    global ROSA_HOST_STREAM
+
+    if attn_mask is not None and not getattr(rosa_bits_host_ops_d2h, "_warning_shown", False):
+        logger.warning("The 'attn_mask' argument is provided but will be ignored in this bit-packing operation. "
+                       "This warning will not be shown again.")
+        rosa_bits_host_ops_d2h._warning_shown = True
+    
+    bsz, num_heads, seq_len, num_qk_bits = query.size()
+    bsz, num_kv_heads, seq_len, num_qk_bits = key.size()
+    bsz, num_kv_heads, seq_len, num_v_bits = key.size()
+
+    r = torch.arange(0, num_qk_bits, device=query.device)
+    xq = ((query > 0).long() << r).sum(dim=-1).view(bsz, num_heads, seq_len)
+    xk = ((key > 0).long() << r).sum(dim=-1).view(bsz, num_kv_heads, seq_len)
+
+    r = torch.arange(0, num_v_bits, device=query.device)
+    xv = ((value > 0).long() << r).sum(dim=-1).view(bsz, num_kv_heads, seq_len)
+
+    if num_qk_bits <= 8 and num_v_bits <= 8:
+        xq = xq.to(torch.uint8)
+        xk = xk.to(torch.uint8)
+        xv = xv.to(torch.uint8)
+    
+    if ROSA_HOST_STREAM is not None:
+        ROSA_HOST_STREAM.wait_stream(torch.cuda.current_stream())
+
+    with torch.cuda.stream(ROSA_HOST_STREAM):
+        xq = xq.to("cpu", non_blocking=True)
+        xk = xk.to("cpu", non_blocking=True)
+        xv = xv.to("cpu", non_blocking=True)
+    
+    return xq, xk, xv
+
+@torch.no_grad()
+def rosa_bits_host_ops_h2d(query: Tensor, key: Tensor, value: Tensor, xq: Tensor, xk: Tensor, xv: Tensor):
+    global ROSA_HOST_STREAM
+
+    bsz, num_heads, seq_len, num_qk_bits = query.size()
+    bsz, num_kv_heads, seq_len, num_qk_bits = key.size()
+    bsz, num_kv_heads, seq_len, num_v_bits = key.size()
+
+    n_rep = num_heads // num_kv_heads
+    if n_rep > 1:
+        xk = xk.view(bsz, num_kv_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
+        xv = xv.view(bsz, num_kv_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
+    
+    xq = xq.reshape(-1, seq_len)
+    xk = xk.reshape(-1, seq_len)
+    xv = xv.reshape(-1, seq_len)
+
+    ctx = torch.zeros(bsz * num_heads, dtype=torch.long, device="cpu")
+    try:
+        if num_qk_bits <= 8 and num_v_bits <= 8:
+            torch.ops.torch_rosa.rosa_sam_8bits_init(ctx)
+            xo = torch.ops.torch_rosa.rosa_sam_8bits_update(ctx, xq, xk, xv, 0)
+        else:
+            torch.ops.torch_rosa.rosa_sam_init(ctx)
+            xo = torch.ops.torch_rosa.rosa_sam_update(ctx, xq, xk, xv, 0)
+    finally:
+        if num_qk_bits <= 8 and num_v_bits <= 8:
+            torch.ops.torch_rosa.rosa_sam_8bits_free(ctx)
+        else:
+            torch.ops.torch_rosa.rosa_sam_free(ctx)
+    
+    with torch.cuda.stream(ROSA_HOST_STREAM):
+        xo = xo.to(query.device, non_blocking=True)
+    
+    if ROSA_HOST_STREAM is not None:
+        torch.cuda.current_stream().wait_stream(ROSA_HOST_STREAM)
+    
+    r = torch.arange(0, num_v_bits, device=query.device)
+    xo = (xo.long().view(bsz, num_heads, seq_len, 1) >> r) & 1
+    return xo.type_as(value)
 
 
 def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
@@ -349,141 +459,3 @@ def sufa_bits_soft_ops(
         )
     
     return output
-
-
-class _RosaState:
-    __slots__ = ("endpos", "length", "suffix_link", "transitions")
-
-    def __init__(self):
-        self.endpos = -1
-        self.length = 0
-        self.suffix_link: Optional[_RosaState] = None
-        self.transitions: Dict[int, _RosaState] = {}
-
-
-class RapidOnlineSuffixAutomaton:
-    """
-    Implements a classic Suffix Automaton for online sequence processing.
-
-    This class builds a suffix automaton character by character (or token by token)
-    to efficiently track all substrings of a given key sequence. It is extended here
-    to also handle a query sequence, enabling it to find the longest suffix of the
-    current query that is also a substring of the keys processed so far.
-    """
-
-    def __init__(self):
-        self.query_states: List[int] = []
-        self.key_states: List[int] = []
-        self.value_states: List[int] = []
-
-        self._root: _RosaState = _RosaState()
-        self._last_query: _RosaState = self._root
-        self._last_key: _RosaState = self._root
-    
-    def append(self, query: int, key: int, value: int, default: int = -1) -> int:
-        """
-        Appends a new (query, key, value) triplet and computes the output value.
-
-        This method performs two main actions in one step:
-        1.  Extends the automaton with the new `key` token, updating the internal
-            state structure according to the standard suffix automaton algorithm.
-        2.  Traverses the automaton with the new `query` token to find the longest
-            suffix of the query history that exists in the key history.
-
-        Args:
-            query (int): The current query token.
-            key (int): The current key token to extend the automaton with.
-            value (int): The current value token, associated with the key.
-            default (int): The default value to return if no match is found.
-
-        Returns:
-            int: The value from a previous timestep corresponding to the end of the
-                 longest matched suffix. If no non-empty suffix matches, returns `default`.
-        """
-
-        i = len(self.value_states)
-
-        self.query_states.append(query)
-        self.key_states.append(key)
-        self.value_states.append(value)
-
-        r = _RosaState()
-        r.length = self._last_key.length + 1
-
-        p = self._last_key
-        while (p is not None) and (key not in p.transitions):
-            p.transitions[key] = r
-            p = p.suffix_link
-        
-        if p is None:
-            r.suffix_link = self._root
-        else:
-            q = p.transitions[key]
-
-            if p.length + 1 == q.length:
-                r.suffix_link = q
-            else:
-                u = _RosaState()
-                u.endpos = q.endpos
-                u.length = p.length + 1
-                u.suffix_link = q.suffix_link
-                u.transitions.update(q.transitions)
-
-                q.suffix_link = u
-                r.suffix_link = u
-
-                while (p is not None) and (p.transitions.get(key) is q):
-                    p.transitions[key] = u
-                    p = p.suffix_link
-
-        j = -1
-        
-        p = self._last_query
-        while (p is not None) and (query not in p.transitions):
-            p = p.suffix_link
-        
-        if p is None:
-            self._last_query = self._root
-        else:
-            self._last_query = p.transitions[query]
-
-            p = self._last_query
-            while p is not None:
-                if p.length > 0 and p.endpos >= 0:
-                    j = p.endpos + 1
-                    break
-                p = p.suffix_link
-        
-        self._last_key = r
-        while (r is not None) and (r.endpos < i):
-            r.endpos = i
-            r = r.suffix_link
-        
-        return self.value_states[j] if j >= 0 else default
-    
-    def extend(
-            self,
-            query_states: List[int],
-            key_states: List[int],
-            value_states: List[int],
-            default: int = -1,
-    ) -> List[int]:
-        """
-        Processes entire sequences by calling `append` iteratively.
-
-        Args:
-            query_states (List[int]): The full sequence of query tokens.
-            key_states (List[int]): The full sequence of key tokens.
-            value_states (List[int]): The full sequence of value tokens.
-            default (int): The default value to use for non-matches.
-
-        Returns:
-            List[int]: A list containing the output value for each timestep.
-        """
-
-        outs = []
-        for q, k, v in zip(query_states, key_states, value_states):
-            x = self.append(q, k, v, default)
-            outs.append(x)
-        return outs
-    

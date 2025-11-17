@@ -66,3 +66,6 @@ Below is a timeline of major changes and refinements made to the operator logic.
 
 - **20251117: Refactored the core learning mechanism to a more holistic Straight-Through Estimator (STE) framework**
   - This update introduces an **Interpolation Annealing** strategy, controlled by a schedulable `alpha` coefficient, to smoothly transition from a fully continuous soft proxy to the discrete hard operation during training. This approach ensures the gradient is always derived from the smooth proxy, significantly improving training stability and addressing smoothness issues in the loss landscape while converging to a deterministic forward pass.
+
+- **20251118: CPU Offloading for Hard Forward Pass**
+  - The discrete "hard" forward pass can now be offloaded to the CPU for execution via a custom C++ operator, controlled by the `host_ops=True` flag. This allows for better hardware utilization by running the hard pass on the CPU in parallel with the soft proxy computation on the GPU. This can lead to a significant performance improvement, especially when the GPU is the primary bottleneck.
