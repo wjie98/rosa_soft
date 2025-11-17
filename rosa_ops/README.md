@@ -62,5 +62,7 @@ Below is a timeline of major changes and refinements made to the operator logic.
   - The input parameter format for the `rosa_qkv_ops` function was adjusted for greater clarity and flexibility, particularly in how embedding vectors are handled.
 
 - **20251116: Refactored with STE to Fix Model Hacking Issue**
+  - The previous `sigmoid` + temperature `tau` scheme had a vulnerability where the model could learn to output small-magnitude logits to bypass the discretization pressure from annealing. The new version adopts the Straight-Through Estimator (STE), which enforces a strictly discrete forward pass while using a surrogate gradient for the backward pass, fundamentally solving this issue.
 
-- The previous `sigmoid` + temperature `tau` scheme had a vulnerability where the model could learn to output small-magnitude logits to bypass the discretization pressure from annealing. The new version adopts the Straight-Through Estimator (STE), which enforces a strictly discrete forward pass while using a surrogate gradient for the backward pass, fundamentally solving this issue.
+- **20251117: Refactored the core learning mechanism to a more holistic Straight-Through Estimator (STE) framework**
+  - This update introduces an **Interpolation Annealing** strategy, controlled by a schedulable `alpha` coefficient, to smoothly transition from a fully continuous soft proxy to the discrete hard operation during training. This approach ensures the gradient is always derived from the smooth proxy, significantly improving training stability and addressing smoothness issues in the loss landscape while converging to a deterministic forward pass.

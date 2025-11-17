@@ -32,8 +32,9 @@ class RosaConfig:
             num_query_key_bits: int = 8,
             num_value_bits: int = 8,
             bias: bool = False,
-            max_attention_head_size: int = 256,
-            **kwargs
+            bits_tau: float = 1.0,
+            attn_tau: float = 1.0,
+            proxy_type: Literal["rosa", "sufa"] = "rosa",
     ) -> None:
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -41,7 +42,9 @@ class RosaConfig:
         self.num_query_key_bits = num_query_key_bits
         self.num_value_bits = num_value_bits
         self.bias = bias
-        self.max_attention_head_size = max_attention_head_size
+        self.bits_tau = bits_tau
+        self.attn_tau = attn_tau
+        self.proxy_type = proxy_type
 
 
 class RosaBase(nn.Module):
@@ -51,7 +54,7 @@ class RosaBase(nn.Module):
         assert config.num_heads % config.num_key_value_heads == 0
         self.config = config
 
-        self.register_buffer("tau", torch.ones((1,)), persistent=False)
+        self.register_buffer("rosa_ops_alpha", torch.ones((1,)), persistent=False)
     
     @staticmethod
     def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
@@ -61,14 +64,35 @@ class RosaBase(nn.Module):
         hidden_states = hidden_states[:, :, None, :, :].expand(bsz, n_kvs, n_rep, seq_len, dim)
         return hidden_states.reshape(bsz, n_kvs * n_rep, seq_len, dim)
     
+    def get_rosa_ops_alpha(self) -> Tensor:
+        return self.get_buffer("rosa_ops_alpha").clamp(0.0, 1.0)
+    
     @classmethod
-    def update_tau_(cls, module: nn.Module, tau: float):
+    def set_rosa_ops_alpha(cls, module: nn.Module, alpha: float = 1.0):
         for m in module.modules():
             if isinstance(m, cls):
-                m.get_buffer("tau").fill_(tau)
+                m.get_buffer("rosa_ops_alpha").fill_(alpha)
     
     @classmethod
     def apply_adapter_to_modules_(
+        cls,
+        module: nn.Module,
+        config: RosaConfig,
+        target_modules: str = r".*self_attn",
+        autocast_dtype: bool = True,
+    ):
+        adapter_name = getattr(cls, "adapter_name", "rosa_attn")
+        adapter_factory = lambda i, m: cls(config, layer_idx=i)
+        cls._apply_adapter_to_modules_impl(
+            module=module,
+            adapter_factory=adapter_factory,
+            adapter_name=adapter_name,
+            target_modules=target_modules,
+            autocast_dtype=autocast_dtype,
+        )
+    
+    @classmethod
+    def _apply_adapter_to_modules_impl(
         cls,
         module: nn.Module,
         adapter_factory: Callable[[int, nn.Module], nn.Module],
@@ -129,7 +153,7 @@ class RosaBase(nn.Module):
                 p.requires_grad_(True)
 
 
-def calculate_tau_decay(step: int, total_steps: int, initial_tau: float = 1.0, final_tau: float = 1e-5, decay_type: str = "cosine"):
+def calculate_tau_decay(step: int, total_steps: int, initial_tau: float = 1.0, final_tau: float = 0.0, decay_type: str = "cosine"):
     progress = step / total_steps
     if decay_type == "linear":
         tau =  initial_tau - progress * (initial_tau - final_tau)
@@ -165,4 +189,3 @@ def calculate_distillation_loss(
         return loss_distill
     else:
         return alpha * loss_distill + (1 - alpha) * loss_ce
-
