@@ -1,5 +1,4 @@
 #include <map>
-#include <tuple>
 #include <vector>
 #include <cstdint>
 #include <cstddef>
@@ -30,12 +29,13 @@ extern "C" {
 
 template<typename K, typename V, typename P>
 struct rosa_state_t {
-    P endpos;
     P length;
+    P last_endpos;
+    P next_endpos;
     P suffix_link;
     std::map<K, P> transitions;
 
-    rosa_state_t() : endpos(-1), length(0), suffix_link(-1) {}
+    rosa_state_t() : last_endpos(-1), next_endpos(-1), length(0), suffix_link(-1) {}
 };
 
 template<typename K, typename V, typename P>
@@ -53,10 +53,7 @@ public:
         update_key_value_(k, v);
 
         i = update_query_(q, last_q_);
-        auto ret = i != -1 ? values_[i + 1] : u;
-
-        update_endpos_();
-        return ret;
+        return i != -1 ? values_[i + 1] : u;
     }
 
     void clear() {
@@ -70,7 +67,7 @@ private:
     P update_key_value_(K k, K v) {
         if (states_.empty()) states_.emplace_back();
 
-        // P i = values_.size();
+        P i = values_.size();
         values_.emplace_back(v);
 
         P r = states_.size();
@@ -114,22 +111,21 @@ private:
         }
 
         last_k_ = r;
+
+        while (r != -1 && states_[r].next_endpos < i) {
+            states_[r].last_endpos = states_[r].next_endpos;
+            states_[r].next_endpos = i;
+            r = states_[r].suffix_link;
+        }
+        
         return r;
     }
 
-    P update_endpos_() {
-        P i = values_.size() - 1;
-        P r = last_k_;
-        while (r != -1 && states_[r].endpos < i) {
-            states_[r].endpos = i;
-            r = states_[r].suffix_link;
-        }
-        return i;
-    }
-
     P update_query_(K q, P& s) {
+        P i = values_.size() - 1;
         P j = -1;
-        P r = last_q_;
+
+        P r = s;
         while (r != -1 && !states_[r].transitions.count(q)) {
             r = states_[r].suffix_link;
         }
@@ -139,9 +135,14 @@ private:
         } else {
             r = s = states_[r].transitions[q];
             while (r != -1) {
-                if (states_[r].length > 0 && states_[r].endpos >= 0) {
-                    j = states_[r].endpos;
-                    break;
+                if (states_[r].length > 0) {
+                    if (0 <= states_[r].next_endpos && states_[r].next_endpos < i) {
+                        j = states_[r].next_endpos;
+                        break;
+                    } else if (0 <= states_[r].last_endpos && states_[r].last_endpos < i) {
+                        j = states_[r].last_endpos;
+                        break;
+                    }
                 }
                 r = states_[r].suffix_link;
             }

@@ -1,14 +1,62 @@
 import torch
 
-from rosa_cpp import RosaContext
+from rosa_cpp.ops import rosa_sam_k64v64_init, rosa_sam_k64v64_free, rosa_sam_k64v64_update
+
+
+def samx_qkv_slow(qqq, kkk, vvv): # slow, only for reference
+    """from https://github.com/BlinkDL/RWKV-LM/blob/main/RWKV-v8/251024_rosaQKV_run.py
+    """
+    n=len(qqq); y=[-1]*n; s=2*n+1; t=[None]*s; f=[-1]*s; m=[0]*s; r=[-1]*s; t[0]={}; g=0; u=1; w=h=0; assert n==len(kkk)==len(vvv)
+    for i,(q,k) in enumerate(zip(qqq,kkk)):
+        p,x=w,h
+        while p!=-1 and q not in t[p]: x=m[p] if x>m[p] else x; p=f[p]
+        p,x=(t[p][q],x+1) if p!=-1 else (0,0); v=p
+        while f[v]!=-1 and m[f[v]]>=x: v=f[v]
+        while v!=-1 and (m[v]<=0 or r[v]<0): v=f[v]
+        y[i]=vvv[r[v]+1] if v!=-1 else -1; w,h=p,x; j=u; u+=1; t[j]={}; m[j]=m[g]+1; p=g
+        while p!=-1 and k not in t[p]: t[p][k]=j; p=f[p]
+        if p==-1: f[j]=0
+        else:
+            d=t[p][k]
+            if m[p]+1==m[d]: f[j]=d
+            else:
+                b=u; u+=1; t[b]=t[d].copy(); m[b]=m[p]+1; f[b]=f[d]; r[b]=r[d]; f[d]=f[j]=b
+                while p!=-1 and t[p][k]==d: t[p][k]=b; p=f[p]
+        v=g=j
+        while v!=-1 and r[v]<i: r[v]=i; v=f[v]
+    return [max(0,y) for y in y] # use "0" for both "no-match" and matched "0"
 
 
 if __name__ == "__main__":
-    query = torch.randn(3, 8, 100, 8).cuda()
-    key = torch.randn(3, 2, 100, 8).cuda()
-    value = torch.randn(3, 2, 100, 64).cuda()
+    B, T, H, C, V = 4, 8, 2, 4, 5
 
-    rosa = RosaContext()
-    output = rosa.update(query, key, value)
-    print(output.shape)
-    
+    try:    
+        for _ in range(10):
+            q = torch.randint(0, 2, size=(8,)).tolist()
+            k = torch.randint(0, 2, size=(8,)).tolist()
+            v = torch.randint(0, 2, size=(8,)).tolist()
+
+            o1 = torch.tensor(samx_qkv_slow(q, k, v))
+
+            ctx = torch.zeros(1, dtype=torch.long)
+            rosa_sam_k64v64_init(ctx)
+            o2 = rosa_sam_k64v64_update(
+                ctx,
+                torch.tensor([q]),
+                torch.tensor([k]),
+                torch.tensor([v]),
+                0,
+            )[0]
+            rosa_sam_k64v64_free(ctx)
+
+            print(o1)
+            print(o2)
+            print()
+            
+            assert (o1 == o2).all()
+
+        print("✅ Forward Pass Passed!")
+    except AssertionError as e:
+        print("❌ Forward Pass Failed!")
+        print(e)
+    print()
