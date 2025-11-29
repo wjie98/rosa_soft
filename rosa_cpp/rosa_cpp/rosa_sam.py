@@ -17,7 +17,6 @@ __all__ = [
 class RosaContext:
     def __init__(self):
         self.ctx = None
-        self.ops = None
         self.device = None
         self.output_dtype = None
 
@@ -37,26 +36,10 @@ class RosaContext:
         assert num_v_bits <= 64, f"Unsupported bit width for value: {num_v_bits}."
 
         if self.ctx is None:
-            if num_k_bits <= 8:
-                if num_v_bits <= 8:
-                    self.ops = (rosa_sam_k8v8_init, rosa_sam_k8v8_free, rosa_sam_k8v8_update)
-                    self.ops_dtype = (torch.uint8, torch.uint8)
-                    self.dev_dtype = (torch.uint8, torch.uint8)
-                elif num_v_bits <= 64:
-                    self.ops = (rosa_sam_k8v64_init, rosa_sam_k8v64_free, rosa_sam_k8v64_update)
-                    self.ops_dtype = (torch.uint8, torch.int64)
-                    self.dev_dtype = (torch.uint8, torch.int64)
-            elif num_k_bits <= 64:
-                if num_v_bits <= 64:
-                    self.ops = (rosa_sam_k64v64_init, rosa_sam_k64v64_free, rosa_sam_k64v64_update)
-                    self.ops_dtype = (torch.int64, torch.int64)
-            
-            init_ops, _, _ = self.ops
-
             self.n_ctx = bsz * num_q_heads
             self.n_rep = num_q_heads // num_k_heads
 
-            self.ctx = init_ops(torch.zeros(self.n_ctx, dtype=torch.long, device="cpu"))
+            self.ctx = rosa_sam_init(torch.zeros(self.n_ctx, dtype=torch.long, device="cpu"))
 
             self.num_q_bits = num_q_bits
             self.num_k_bits = num_k_bits
@@ -72,9 +55,7 @@ class RosaContext:
     def __del__(self):
         if self.ctx is not None:
             try:
-                if self.ops is not None:
-                    _, free_ops, _ = self.ops
-                    free_ops(self.ctx)
+                rosa_sam_free(self.ctx)
             except (AttributeError, TypeError):
                 pass
             finally:
@@ -121,19 +102,16 @@ class RosaContext:
         if self.n_rep > 1:
             xk = xk.view(bsz, num_k_heads, 1, seq_len).repeat(1, 1, self.n_rep, 1).view(bsz, num_q_heads, seq_len)
             xv = xv.view(bsz, num_v_heads, 1, seq_len).repeat(1, 1, self.n_rep, 1).view(bsz, num_q_heads, seq_len)
-        
-        _, _, update_ops = self.ops
 
         xq = xq.view(-1, seq_len)
         xk = xk.view(-1, seq_len)
         xv = xv.view(-1, seq_len)
 
-        ops_k_dtype, ops_v_dtype = self.ops_dtype
-        xo = update_ops(
+        xo = rosa_sam_update(
             self.ctx,
-            xq.to(ops_k_dtype),
-            xk.to(ops_k_dtype),
-            xv.to(ops_v_dtype),
+            xq.long(),
+            xk.long(),
+            xv.long(),
             mismatch,
         ).to(xv.dtype)
 

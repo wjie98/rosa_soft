@@ -30,12 +30,11 @@ extern "C" {
 template<typename K, typename V, typename P>
 struct rosa_state_t {
     P length;
-    P last_endpos;
-    P next_endpos;
+    P endpos;
     P suffix_link;
     std::map<K, P> transitions;
 
-    rosa_state_t() : last_endpos(-1), next_endpos(-1), length(0), suffix_link(-1) {}
+    rosa_state_t() : endpos(-1), length(0), suffix_link(-1) {}
 };
 
 template<typename K, typename V, typename P>
@@ -45,22 +44,9 @@ public:
     const std::vector<V>& values() const { return values_; }
 
     V append(K q, K k, V v, V u) {
-        P i = -1;
-        return append(q, k, v, u, i);
-    }
-
-    V append(K q, K k, V v, V u, P& i) {
+        P i = update_query_(q, last_q_);
         update_key_value_(k, v);
-
-        i = update_query_(q, last_q_);
         return i != -1 ? values_[i + 1] : u;
-    }
-
-    void clear() {
-        values_.clear();
-        states_.clear();
-        last_q_ = 0;
-        last_k_ = 0;
     }
 
 private:
@@ -112,9 +98,8 @@ private:
 
         last_k_ = r;
 
-        while (r != -1 && states_[r].next_endpos < i) {
-            states_[r].last_endpos = states_[r].next_endpos;
-            states_[r].next_endpos = i;
+        while (r != -1) {
+            states_[r].endpos = i;
             r = states_[r].suffix_link;
         }
         
@@ -122,7 +107,8 @@ private:
     }
 
     P update_query_(K q, P& s) {
-        P i = values_.size() - 1;
+        if (states_.empty()) states_.emplace_back();
+
         P j = -1;
 
         P r = s;
@@ -135,14 +121,9 @@ private:
         } else {
             r = s = states_[r].transitions[q];
             while (r != -1) {
-                if (states_[r].length > 0) {
-                    if (0 <= states_[r].next_endpos && states_[r].next_endpos < i) {
-                        j = states_[r].next_endpos;
-                        break;
-                    } else if (0 <= states_[r].last_endpos && states_[r].last_endpos < i) {
-                        j = states_[r].last_endpos;
-                        break;
-                    }
+                if (states_[r].length > 0 && states_[r].endpos >= 0) {
+                    j = states_[r].endpos;
+                    break;
                 }
                 r = states_[r].suffix_link;
             }
@@ -207,11 +188,11 @@ torch::Tensor torch_rosa_sam_update(const torch::Tensor& ctx, const torch::Tenso
     int64_t B = q.size(0);
     int64_t N = q.size(1);
 
-    auto out = torch::empty({B, N}, v.options());
-
     auto q_a = q.accessor<K, 2>();
     auto k_a = k.accessor<K, 2>();
     auto v_a = v.accessor<V, 2>();
+
+    auto out = torch::empty({B, N}, v.options());
 
     auto ctx_a = ctx.accessor<int64_t, 1>();
     auto out_a = out.accessor<V, 2>();
@@ -231,31 +212,43 @@ torch::Tensor torch_rosa_sam_update(const torch::Tensor& ctx, const torch::Tenso
     return out;
 }
 
+template<typename K, typename V, typename P>
+torch::Tensor torch_rosa_sam_forward(const torch::Tensor& q, const torch::Tensor& k, const torch::Tensor& v, int64_t u) {
+    int64_t B = q.size(0);
+    int64_t N = q.size(1);
+
+    auto q_a = q.accessor<K, 2>();
+    auto k_a = k.accessor<K, 2>();
+    auto v_a = v.accessor<V, 2>();
+
+    auto out = torch::empty({B, N}, v.options());
+    auto out_a = out.accessor<V, 2>();
+
+    #pragma omp parallel for schedule(dynamic)
+    for (int64_t i = 0; i < B; ++i) {
+        rosa_sam<K, V, P> r;
+        for (int64_t t = 0; t < N; ++t) {
+            out_a[i][t] = r.append(q_a[i][t], k_a[i][t], v_a[i][t], static_cast<V>(u));
+        }
+    }
+
+    return out;
+}
+
 
 TORCH_LIBRARY(rosa_cpp, m) {
-    m.def("rosa_sam_k8v8_init(Tensor ctx) -> Tensor");
-    m.def("rosa_sam_k8v8_free(Tensor ctx) -> Tensor");
-    m.def("rosa_sam_k8v8_update(Tensor ctx, Tensor q, Tensor k, Tensor v, int u) -> Tensor");
+    m.def("rosa_sam_init(Tensor ctx) -> Tensor");
+    m.def("rosa_sam_free(Tensor ctx) -> Tensor");
+    m.def("rosa_sam_update(Tensor ctx, Tensor q, Tensor k, Tensor v, int u) -> Tensor");
 
-    m.def("rosa_sam_k8v64_init(Tensor ctx) -> Tensor");
-    m.def("rosa_sam_k8v64_free(Tensor ctx) -> Tensor");
-    m.def("rosa_sam_k8v64_update(Tensor ctx, Tensor q, Tensor k, Tensor v, int u) -> Tensor");
-
-    m.def("rosa_sam_k64v64_init(Tensor ctx) -> Tensor");
-    m.def("rosa_sam_k64v64_free(Tensor ctx) -> Tensor");
-    m.def("rosa_sam_k64v64_update(Tensor ctx, Tensor q, Tensor k, Tensor v, int u) -> Tensor");
+    m.def("rosa_sam_forward(Tensor q, Tensor k, Tensor v, int u) -> Tensor");
+    m.def("rosa_gss_forward(Tensor q, Tensor k, Tensor v, int u, int num_samples, float tau) -> (Tensor, Tensor, Tensor, Tensor)");
 }
 
 TORCH_LIBRARY_IMPL(rosa_cpp, CPU, m) {
-    m.impl("rosa_sam_k8v8_init", &torch_rosa_sam_init<uint8_t, uint8_t, int64_t>);
-    m.impl("rosa_sam_k8v8_free", &torch_rosa_sam_free<uint8_t, uint8_t, int64_t>);
-    m.impl("rosa_sam_k8v8_update", &torch_rosa_sam_update<uint8_t, uint8_t, int64_t>);
+    m.impl("rosa_sam_init", &torch_rosa_sam_init<int64_t, int64_t, int64_t>);
+    m.impl("rosa_sam_free", &torch_rosa_sam_free<int64_t, int64_t, int64_t>);
+    m.impl("rosa_sam_update", &torch_rosa_sam_update<int64_t, int64_t, int64_t>);
 
-    m.impl("rosa_sam_k8v64_init", &torch_rosa_sam_init<uint8_t, int64_t, int64_t>);
-    m.impl("rosa_sam_k8v64_free", &torch_rosa_sam_free<uint8_t, int64_t, int64_t>);
-    m.impl("rosa_sam_k8v64_update", &torch_rosa_sam_update<uint8_t, int64_t, int64_t>);
-
-    m.impl("rosa_sam_k64v64_init", &torch_rosa_sam_init<int64_t, int64_t, int64_t>);
-    m.impl("rosa_sam_k64v64_free", &torch_rosa_sam_free<int64_t, int64_t, int64_t>);
-    m.impl("rosa_sam_k64v64_update", &torch_rosa_sam_update<int64_t, int64_t, int64_t>);
+    m.impl("rosa_sam_forward", &torch_rosa_sam_forward<int64_t, int64_t, int64_t>);
 }
