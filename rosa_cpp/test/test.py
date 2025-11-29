@@ -1,6 +1,7 @@
 import torch
 
-from rosa_cpp.ops import rosa_sam_k64v64_init, rosa_sam_k64v64_free, rosa_sam_k64v64_update
+from rosa_cpp.ops import rosa_sam_init, rosa_sam_free, rosa_sam_update, rosa_sam_forward, rosa_gss_forward
+from rosa_cpp.rosa_gss import RosaGSSFunction
 
 
 def samx_qkv_slow(qqq, kkk, vvv): # slow, only for reference
@@ -39,24 +40,72 @@ if __name__ == "__main__":
             o1 = torch.tensor(samx_qkv_slow(q, k, v))
 
             ctx = torch.zeros(1, dtype=torch.long)
-            rosa_sam_k64v64_init(ctx)
-            o2 = rosa_sam_k64v64_update(
+            rosa_sam_init(ctx)
+            o2 = rosa_sam_update(
                 ctx,
                 torch.tensor([q]),
                 torch.tensor([k]),
                 torch.tensor([v]),
                 0,
             )[0]
-            rosa_sam_k64v64_free(ctx)
+            rosa_sam_free(ctx)
+
+            o3 = rosa_sam_forward(
+                torch.tensor([q]),
+                torch.tensor([k]),
+                torch.tensor([v]),
+                0,
+            )[0]
+
+            o4, *_ = rosa_gss_forward(
+                torch.tensor([q]),
+                torch.tensor([k]),
+                torch.tensor([v]),
+                0,
+                3, 1.0,
+            )[0]
 
             print(o1)
             print(o2)
+            # print(o3)
+            # print(o4)
             print()
             
             assert (o1 == o2).all()
+            # assert (o1 == o3).all()
+            # assert (o1 == o4).all()
 
         print("✅ Forward Pass Passed!")
     except AssertionError as e:
         print("❌ Forward Pass Failed!")
+        print(e)
+    print()
+
+
+    try:    
+        for _ in range(10):
+            q = torch.randint(0, 2, size=(8, 2)).float().view(1, 1, -1, 2).requires_grad_()
+            k = torch.randint(0, 2, size=(8, 2)).float().view(1, 1, -1, 2).requires_grad_()
+            v = torch.randint(0, 2, size=(8, 2)).float().view(1, 1, -1, 2).requires_grad_()
+
+            o = RosaGSSFunction.apply(q, k, v, 0, 3, 1.0)
+            
+            o.sum().backward()
+
+            # print(q.grad.size())
+            # print(k.grad.size())
+            # print(v.grad.size())
+
+            assert not q.grad.isnan().any()
+            assert not k.grad.isnan().any()
+            assert not v.grad.isnan().any()
+
+            assert not q.grad.isinf().any()
+            assert not k.grad.isinf().any()
+            assert not v.grad.isinf().any()
+
+        print("✅ Backward Pass Passed!")
+    except AssertionError as e:
+        print("❌ Backward Pass Failed!")
         print(e)
     print()
