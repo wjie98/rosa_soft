@@ -9,6 +9,8 @@ __all__ = [
 
     "rosa_sam_forward",
     "rosa_gss_forward",
+
+    "rosa_sam_match_length",
 ]
 
 
@@ -94,3 +96,20 @@ def _(q: Tensor, k: Tensor, v: Tensor, u: int, num_samples: int, tau: float):
     quality = torch.empty((nnz,), dtype=torch.float, device=q.device)
 
     return out, indptr, indices, quality
+
+
+def rosa_sam_match_length(q: Tensor, k: Tensor, v: Tensor) -> Tensor:
+    return torch.ops.rosa_cpp.rosa_sam_match_length(q, k, v)
+
+@torch.library.register_fake("rosa_cpp::rosa_sam_match_length")
+def _(q: Tensor, k: Tensor, v: Tensor):
+    torch._check(q.dim() == 2)
+    torch._check(q.dtype == torch.long)
+
+    torch._check(k.dim() == 2)
+    torch._check(k.dtype == torch.long)
+
+    torch._check(v.dim() == 2)
+    torch._check(v.dtype == torch.long)
+    
+    return torch.empty_like(q, dtype=torch.long)

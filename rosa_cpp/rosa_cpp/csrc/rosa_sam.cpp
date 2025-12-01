@@ -49,6 +49,12 @@ public:
         return i != -1 ? values_[i + 1] : u;
     }
 
+    P match_length(K q, K k, V v) {
+        update_query_(q, last_q_);
+        update_key_value_(k, v);
+        return states_[last_q_].length;
+    }
+
 private:
     P update_key_value_(K k, K v) {
         if (states_.empty()) states_.emplace_back();
@@ -235,6 +241,30 @@ torch::Tensor torch_rosa_sam_forward(const torch::Tensor& q, const torch::Tensor
     return out;
 }
 
+template<typename K, typename V, typename P>
+torch::Tensor torch_rosa_sam_match_length(const torch::Tensor& q, const torch::Tensor& k, const torch::Tensor& v) {
+    int64_t B = q.size(0);
+    int64_t N = q.size(1);
+
+    auto q_a = q.accessor<K, 2>();
+    auto k_a = k.accessor<K, 2>();
+    auto v_a = v.accessor<V, 2>();
+
+    auto options = torch::TensorOptions().dtype(torch::kInt64).device(v.device());
+    auto out = torch::empty({B, N}, options);
+    auto out_a = out.accessor<V, 2>();
+
+    #pragma omp parallel for schedule(dynamic)
+    for (int64_t i = 0; i < B; ++i) {
+        rosa_sam<K, V, P> r;
+        for (int64_t t = 0; t < N; ++t) {
+            out_a[i][t] = r.match_length(q_a[i][t], k_a[i][t], v_a[i][t]);
+        }
+    }
+
+    return out;
+}
+
 
 TORCH_LIBRARY(rosa_cpp, m) {
     m.def("rosa_sam_init(Tensor ctx) -> Tensor");
@@ -243,6 +273,8 @@ TORCH_LIBRARY(rosa_cpp, m) {
 
     m.def("rosa_sam_forward(Tensor q, Tensor k, Tensor v, int u) -> Tensor");
     m.def("rosa_gss_forward(Tensor q, Tensor k, Tensor v, int u, int num_samples, float tau) -> (Tensor, Tensor, Tensor, Tensor)");
+
+    m.def("rosa_sam_match_length(Tensor q, Tensor k, Tensor v) -> Tensor");
 }
 
 TORCH_LIBRARY_IMPL(rosa_cpp, CPU, m) {
@@ -251,4 +283,6 @@ TORCH_LIBRARY_IMPL(rosa_cpp, CPU, m) {
     m.impl("rosa_sam_update", &torch_rosa_sam_update<int64_t, int64_t, int64_t>);
 
     m.impl("rosa_sam_forward", &torch_rosa_sam_forward<int64_t, int64_t, int64_t>);
+
+    m.impl("rosa_sam_match_length", &torch_rosa_sam_match_length<int64_t, int64_t, int64_t>);
 }
