@@ -1,6 +1,6 @@
 import torch
 
-from rosa_cpp.ops import rosa_sam_init, rosa_sam_free, rosa_sam_update, rosa_sam_forward, rosa_gss_forward
+from rosa_cpp.ops import *
 from rosa_cpp.rosa_gss import RosaGSSFunction
 
 
@@ -56,6 +56,13 @@ if __name__ == "__main__":
                 torch.tensor([v]),
                 0,
             )[0]
+
+            # t = rosa_sam_match_length(
+            #     torch.tensor([q]),
+            #     torch.tensor([k]),
+            #     torch.tensor([v]),
+            # )[0]
+            # print(t)
 
             o4, *_ = rosa_gss_forward(
                 torch.tensor([q]),
