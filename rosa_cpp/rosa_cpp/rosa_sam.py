@@ -43,10 +43,20 @@ class RosaContext:
             assert self.num_k_bits == num_k_bits
             assert self.num_v_bits == num_v_bits
     
-    def update(self, query: Tensor, key: Tensor, value: Tensor, mismatch: int = 0) -> Tensor:
+    def update(self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        mismatch: int = 0,
+        inspect: bool = False,
+    ) -> Union[Tensor, Tuple[Tensor, Dict[str, Tensor]]]:
         xq, xk, xv = self.dispatch(query=query, key=key, value=value)
-        output = self.combine(xq=xq, xk=xk, xv=xv, mismatch=mismatch)
-        return output
+        if inspect:
+            output, info = self.inspect(xq=xq, xk=xk, xv=xv, mismatch=mismatch)
+            return output, info
+        else:
+            output = self.combine(xq=xq, xk=xk, xv=xv, mismatch=mismatch)
+            return output
     
     def dispatch(self, query: Tensor, key: Tensor, value: Tensor):
         self._init_sam(query=query, key=key, value=value)
@@ -81,7 +91,35 @@ class RosaContext:
         with self.stream(prev_wait=False):
             xo = xo.to(self.device, non_blocking=True)
         
-        return dequantize(xo, self.num_v_bits).to(self.dtype)
+        xo = dequantize(xo, self.num_v_bits).to(self.dtype)
+        xo = xo.view(bsz, num_q_heads, seq_len, self.num_v_bits)
+        return xo
+    
+    def inspect(self, xq: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0) -> Tuple[Tensor, Dict[str, Tensor]]:
+        bsz, num_q_heads, seq_len = xq.size()
+        bsz, num_k_heads, seq_len = xk.size()
+        bsz, num_v_heads, seq_len = xv.size()
+        
+        n_rep = num_q_heads // num_k_heads
+        if n_rep > 1:
+            xk = xk.view(bsz, num_k_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
+            xv = xv.view(bsz, num_v_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
+
+        xq = xq.reshape(-1, seq_len)
+        xk = xk.reshape(-1, seq_len)
+        xv = xv.reshape(-1, seq_len)
+
+        xo, info = self._sam.inspect(xq, xk, xv, mismatch)
+
+        with self.stream(prev_wait=False):
+            xo = xo.to(self.device, non_blocking=True)
+            info = {key: val.to(self.device, non_blocking=True) for key, val in info.items()}
+        
+        xo = dequantize(xo, self.num_v_bits).to(self.dtype)
+        xo = xo.view(bsz, num_q_heads, seq_len, self.num_v_bits)
+        info = {key: val.view(bsz, num_q_heads, seq_len) for key, val in info.items()}
+        return xo, info
+
 
     @property
     def stream(self):
@@ -140,4 +178,17 @@ class RosaSAM:
         xv = v.to(torch.int64)
         xo = rosa_sam_update(self._objs, xq, xk, xv, u)
         return xo.to(v.dtype)
+    
+    def inspect(self, q: Tensor, k: Tensor, v: Tensor, u: int) -> Tuple[Tensor, Dict[str, Tensor]]:
+        xq = q.to(torch.int64)
+        xk = k.to(torch.int64)
+        xv = v.to(torch.int64)
+        xo, endpos, length = rosa_sam_inspect(self._objs, xq, xk, xv, u)
+        
+        xo = xo.to(v.dtype)
+        info = {
+            "endpos": endpos,
+            "length": length,
+        }
+        return xo, info
     
