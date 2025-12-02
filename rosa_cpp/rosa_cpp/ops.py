@@ -6,11 +6,10 @@ __all__ = [
     "rosa_sam_init",
     "rosa_sam_free",
     "rosa_sam_update",
+    "rosa_sam_inspect",
 
     "rosa_sam_forward",
     "rosa_gss_forward",
-
-    "rosa_sam_probe",
 ]
 
 
@@ -22,6 +21,9 @@ def rosa_sam_free(ctx: Tensor) -> Tensor:
 
 def rosa_sam_update(ctx: Tensor, q: Tensor, k: Tensor, v: Tensor, u: int) -> Tensor:
     return torch.ops.rosa_cpp.rosa_sam_update(ctx, q, k, v, u)
+
+def rosa_sam_inspect(ctx: Tensor, q: Tensor, k: Tensor, v: Tensor, u: int) -> Tuple[Tensor, Tensor, Tensor]:
+    return torch.ops.rosa_cpp.rosa_sam_inspect(ctx, q, k, v, u)
 
 @torch.library.register_fake("rosa_cpp::rosa_sam_init")
 def _(ctx: Tensor):
@@ -51,6 +53,21 @@ def _(ctx: Tensor, q: Tensor, k: Tensor, v: Tensor, u: int):
     
     return torch.empty_like(q, dtype=v.dtype)
 
+@torch.library.register_fake("rosa_cpp::rosa_sam_inspect")
+def _(q: Tensor, k: Tensor, v: Tensor, u: int):
+    torch._check(q.dim() == 2)
+    torch._check(q.dtype == torch.long)
+
+    torch._check(k.dim() == 2)
+    torch._check(k.dtype == torch.long)
+
+    torch._check(v.dim() == 2)
+    torch._check(v.dtype == torch.long)
+    
+    out = torch.empty_like(q, dtype=v.dtype)
+    pos = torch.empty_like(q, dtype=torch.long)
+    len = torch.empty_like(q, dtype=torch.long)
+    return out, pos, len
 
 
 def rosa_sam_forward(q: Tensor, k: Tensor, v: Tensor, u: int) -> Tensor:
@@ -96,22 +113,3 @@ def _(q: Tensor, k: Tensor, v: Tensor, u: int, num_samples: int, tau: float):
     quality = torch.empty((nnz,), dtype=torch.float, device=q.device)
 
     return out, indptr, indices, quality
-
-
-def rosa_sam_probe(q: Tensor, k: Tensor, v: Tensor) -> Tuple[Tensor, Tensor]:
-    return torch.ops.rosa_cpp.rosa_sam_probe(q, k, v)
-
-@torch.library.register_fake("rosa_cpp::rosa_sam_probe")
-def _(q: Tensor, k: Tensor, v: Tensor):
-    torch._check(q.dim() == 2)
-    torch._check(q.dtype == torch.long)
-
-    torch._check(k.dim() == 2)
-    torch._check(k.dtype == torch.long)
-
-    torch._check(v.dim() == 2)
-    torch._check(v.dtype == torch.long)
-    
-    pos = torch.empty_like(q, dtype=torch.long)
-    len = torch.empty_like(q, dtype=torch.long)
-    return pos, len
