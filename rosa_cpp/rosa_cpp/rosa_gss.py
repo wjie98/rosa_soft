@@ -11,6 +11,7 @@ from .utils import quantize, dequantize, normalize
 
 __all__ = [
     "RosaGSSFunction",
+    "rosa_sam_inspect",
 ]
 
 
@@ -162,3 +163,44 @@ class RosaGSSFunction(torch.autograd.Function):
 
         return grad_query, grad_key, grad_value, None, None, None
 
+
+@torch.no_grad()
+def rosa_sam_inspect(
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+) -> Tensor:
+    bsz, num_q_heads, seq_len, num_q_bits = query.size()
+    bsz, num_k_heads, seq_len, num_k_bits = key.size()
+    bsz, num_v_heads, seq_len, num_v_bits = value.size()
+
+    assert num_k_heads == num_v_heads, f"Key and value must have the same number of heads, got {num_k_heads} and {num_v_heads}."
+    assert num_q_bits == num_k_bits, f"Query and key must have the same bit width, got {num_q_bits} and {num_k_bits}."
+    assert num_k_bits <= 64, f"Unsupported bit width for key: {num_k_bits}."
+    assert num_v_bits <= 64, f"Unsupported bit width for value: {num_v_bits}."
+
+    xq = quantize(query)
+    xk = quantize(key)
+    xv = quantize(value)
+
+    xq = xq.to("cpu", non_blocking=True)
+    xk = xk.to("cpu", non_blocking=True)
+    xv = xv.to("cpu", non_blocking=True)
+
+    n_rep = num_q_heads // num_k_heads
+    if n_rep > 1:
+        xk = xk.view(bsz, num_k_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
+        xv = xv.view(bsz, num_v_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
+    
+    xq = xq.reshape(bsz * num_q_heads, seq_len)
+    xk = xk.reshape(bsz * num_q_heads, seq_len)
+    xv = xv.reshape(bsz * num_q_heads, seq_len)
+
+    endpos, length = rosa_sam_probe(xq, xk, xv)
+
+    endpos = endpos.to(query.device, non_blocking=True).view(bsz, num_q_heads, seq_len)
+    length = length.to(query.device, non_blocking=True).view(bsz, num_q_heads, seq_len)
+    return {
+        "endpos": endpos,
+        "length": length,
+    }
