@@ -1,4 +1,5 @@
 #include <map>
+#include <tuple>
 #include <vector>
 #include <cstdint>
 #include <cstddef>
@@ -49,10 +50,12 @@ public:
         return i != -1 ? values_[i + 1] : u;
     }
 
-    P match_length(K q, K k, V v) {
-        update_query_(q, last_q_);
+    P probe(K q, K k, V v, P& len) {
+        P i = update_query_(q, last_q_);
         update_key_value_(k, v);
-        return states_[last_q_].length;
+
+        len = states_[last_q_].length;
+        return i != -1 ? i + 1 : -1;
     }
 
 private:
@@ -242,7 +245,7 @@ torch::Tensor torch_rosa_sam_forward(const torch::Tensor& q, const torch::Tensor
 }
 
 template<typename K, typename V, typename P>
-torch::Tensor torch_rosa_sam_match_length(const torch::Tensor& q, const torch::Tensor& k, const torch::Tensor& v) {
+std::tuple<torch::Tensor, torch::Tensor> torch_rosa_sam_probe(const torch::Tensor& q, const torch::Tensor& k, const torch::Tensor& v) {
     int64_t B = q.size(0);
     int64_t N = q.size(1);
 
@@ -251,18 +254,24 @@ torch::Tensor torch_rosa_sam_match_length(const torch::Tensor& q, const torch::T
     auto v_a = v.accessor<V, 2>();
 
     auto options = torch::TensorOptions().dtype(torch::kInt64).device(v.device());
-    auto out = torch::empty({B, N}, options);
-    auto out_a = out.accessor<V, 2>();
+    
+    auto pos = torch::empty({B, N}, options);
+    auto pos_a = pos.accessor<V, 2>();
+
+    auto len = torch::empty({B, N}, options);
+    auto len_a = len.accessor<V, 2>();
 
     #pragma omp parallel for schedule(dynamic)
     for (int64_t i = 0; i < B; ++i) {
         rosa_sam<K, V, P> r;
         for (int64_t t = 0; t < N; ++t) {
-            out_a[i][t] = r.match_length(q_a[i][t], k_a[i][t], v_a[i][t]);
+            P x = 0;
+            pos_a[i][t] = r.probe(q_a[i][t], k_a[i][t], v_a[i][t], x);
+            len_a[i][t] = x;
         }
     }
 
-    return out;
+    return {pos, len};
 }
 
 
@@ -274,7 +283,7 @@ TORCH_LIBRARY(rosa_cpp, m) {
     m.def("rosa_sam_forward(Tensor q, Tensor k, Tensor v, int u) -> Tensor");
     m.def("rosa_gss_forward(Tensor q, Tensor k, Tensor v, int u, int num_samples, float tau) -> (Tensor, Tensor, Tensor, Tensor)");
 
-    m.def("rosa_sam_match_length(Tensor q, Tensor k, Tensor v) -> Tensor");
+    m.def("rosa_sam_probe(Tensor q, Tensor k, Tensor v) -> (Tensor, Tensor)");
 }
 
 TORCH_LIBRARY_IMPL(rosa_cpp, CPU, m) {
@@ -284,5 +293,5 @@ TORCH_LIBRARY_IMPL(rosa_cpp, CPU, m) {
 
     m.impl("rosa_sam_forward", &torch_rosa_sam_forward<int64_t, int64_t, int64_t>);
 
-    m.impl("rosa_sam_match_length", &torch_rosa_sam_match_length<int64_t, int64_t, int64_t>);
+    m.impl("rosa_sam_probe", &torch_rosa_sam_probe<int64_t, int64_t, int64_t>);
 }
