@@ -24,7 +24,7 @@ struct rosa_gss_config {
     size_t suffix_weight;
     size_t walk_depth;
 
-    rosa_gss_config() : reservoir_cap(32), suffix_weight(2), walk_depth(16) {}
+    rosa_gss_config() : reservoir_cap(16), suffix_weight(2), walk_depth(1) {}
 };
 
 
@@ -152,7 +152,8 @@ private:
         P cur_depth = 0;
         P walk_dist = 0;
 
-        while (r != -1 && (cur_depth < config_.walk_depth || candidates.size() < num_samples)) {
+        // while (r != -1 && (cur_depth < config_.walk_depth || candidates.size() < num_samples)) {
+        while (r != -1 && cur_depth < config_.walk_depth) {
             for (auto it = states_[r].transitions.begin(); it != states_[r].transitions.end(); ++it) {
                 P dist = popcount(q ^ it->first) + walk_dist;
 

@@ -22,10 +22,10 @@ def rosa_gss_ops(
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        mismatch: int,
-        num_samples: int,
-        tau: float,
-        training: bool,
+        mismatch: int = 0,
+        num_samples: int = 8,
+        tau: float = 1.0,
+        training: bool = False,
         async_op: bool = False,
 ) -> Union[Tensor, 'RosaGSSWork']:
     trace_tensor, work = RosaGSSDispatchFunction.apply(
