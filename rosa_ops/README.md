@@ -2,7 +2,12 @@
 
 This directory contains the core, low-level implementations of the softened ROSA QKV operator.
 
-**The latest, most stable, and recommended version of the operator is located in `20251121`**.
+> **🚀 Latest Update**: The newest core operators have been migrated to the local `rosa_cpp` extension.
+>
+> **Installation & Usage**:
+> 1. Install the extension: `pip install --no-build-isolation .`
+> 2. Import the operator: `from rosa_cpp import rosa_gqs_ops`
+
 
 The numbered subdirectories (`2025XXXX/`) contain historical snapshots of the implementation, preserved for research and comparison purposes.
 
@@ -72,3 +77,8 @@ Below is a timeline of major changes and refinements made to the operator logic.
 
 - **20251121: Fine-tuned Proxy Function**
   - The SUFA proxy now supports disabling positional information injection and uses a standard causal mask to activate underlying optimizations.
+
+- **20251204: Query Shaping (ROSA-GQS)**
+  - Replaced dense soft proxies with **ROSA-Guided Query Shaping**, compatible with Flash Attention.
+  - Introduced **Look-ahead Masking** to optimize the gradient horizon and prune hallucinated gradients from noise.
+  - Implemented **Continuous Entropy-Aware Boosting**, which dynamically amplifies queries with high temporal variance during long matches, promoting robust long-context lock-in while suppressing degenerate solutions.

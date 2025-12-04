@@ -42,6 +42,11 @@ While our initial research led us to implement a mathematically faithful "soft R
 1.  **A direct simulation of ROSA (`proxy='rosa'`)**, which uses a softened dynamic programming algorithm to create a differentiable version of the original suffix matching logic.
 2.  **Suffix Attention (`proxy='sufa'`)**, which we have found to be a far superior proxy for generating stable and effective gradients in practice.
 
+3. **ROSA-Guided Query Shaping (RG-QS) [Experimental]**:
+Our next-generation proxy. Instead of a separate soft mechanism, RG-QS uses the **discrete match length** obtained from the hard ROSA pass to dynamically shape the query vectors used in Flash Attention.
+- **Masking**: Prunes "hallucinated" gradients by masking out history beyond the valid match length (plus a look-ahead token).
+- **Entropy Boosting**: dynamically amplifies the magnitude of queries that form long, high-entropy matches.
+
 **SUFA's Basic Principle**: Unlike standard attention which computes similarity between a single query (Q) vector and all key (K) vectors, SUFA's core idea is to better approximate ROSA's suffix matching mechanism. It achieves this by calculating the dot-product similarity between the suffixes of Q and K within a defined range. This "suffix-to-suffix" comparison provides a gradient signal that more directly encourages the model to learn representations where similar sequences have similar endings, which is precisely the behavior required by the discrete ROSA forward pass.
 
 The reasons for preferring SUFA are threefold:
@@ -105,11 +110,16 @@ def rosa_bits_ops(
     """
 ```
 
+## Latest Updates
+
+- **2025-12-04**: Introduced **ROSA-GQS** architecture. Added the experimental **RG-QS (ROSA-Guided Query Shaping)** proxy, which utilizes ROSA match lengths to dynamically mask and boost Flash Attention queries, improving structural alignment and gradient SNR.
+
 ## Project Structure
 
-- **`minirosa/`**: Contains the code for integrating ROSA into existing LLM architectures. It provides a **monkey patch** designed to seamlessly replace standard attention layers in **Hugging Face `transformers` models**.
-- **`rosa_ops/`**: Contains the core, low-level implementations of the trainable ROSA operator. See the `rosa_ops/README.md` for a detailed implementation history.
-- **`train_distillation.py`**: Demonstrates how to apply the monkey patch from `minirosa/` to add a ROSA layer to a **Qwen3-based architecture** and fine-tune it.
+- **`modules/`**: Contains PyTorch model definitions, including base classes and specific architecture integrations (e.g., Qwen3).
+- **`rosa_cpp/`**: The home of the latest, high-performance C++ kernels.
+    - *Usage*: Install via `pip install --no-build-isolation .`, then import via `from rosa_cpp import rosa_gqs_ops`.
+- **`rosa_ops/`**: An archive of historical implementation snapshots, preserving the evolution of the operator logic.
 
 ## Status & Roadmap
 
