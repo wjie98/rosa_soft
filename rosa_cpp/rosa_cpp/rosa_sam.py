@@ -73,6 +73,8 @@ class RosaContext:
         return xq, xk, xv
 
     def combine(self, xq: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0):
+        self.stream.synchronize()
+
         bsz, num_q_heads, seq_len = xq.size()
         bsz, num_k_heads, seq_len = xk.size()
         bsz, num_v_heads, seq_len = xv.size()
@@ -89,13 +91,16 @@ class RosaContext:
         xo = self._sam.update(xq, xk, xv, mismatch)
 
         with self.stream(prev_wait=False):
-            xo = xo.to(self.device, non_blocking=True)
+            # xo = xo.to(self.device, non_blocking=True)
+            xo = xo.to(self.device) # TODO: fix this
         
         xo = dequantize(xo, self.num_v_bits).to(self.dtype)
         xo = xo.view(bsz, num_q_heads, seq_len, self.num_v_bits)
         return xo
     
     def inspect(self, xq: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0) -> Tuple[Tensor, Dict[str, Tensor]]:
+        self.stream.synchronize()
+
         bsz, num_q_heads, seq_len = xq.size()
         bsz, num_k_heads, seq_len = xk.size()
         bsz, num_v_heads, seq_len = xv.size()
@@ -120,7 +125,6 @@ class RosaContext:
         info = {key: val.view(bsz, num_q_heads, seq_len) for key, val in info.items()}
         return xo, info
 
-
     @property
     def stream(self):
         return self._stream()
@@ -137,6 +141,10 @@ class RosaStream:
             self.stream = torch.cuda.Stream()
         else:
             self.stream = None
+    
+    def synchronize(self):
+        if self.stream is not None:
+            self.stream.synchronize()
     
     @contextmanager
     def __call__(

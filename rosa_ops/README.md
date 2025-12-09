@@ -6,7 +6,7 @@ This directory contains the core, low-level implementations of the softened ROSA
 >
 > **Installation & Usage**:
 > 1. Install the extension: `pip install --no-build-isolation .`
-> 2. Import the operator: `from rosa_cpp import rosa_gqs_ops`
+> 2. Import the operator: `from rosa_cpp import rosa_vdd_ops`
 
 
 The numbered subdirectories (`2025XXXX/`) contain historical snapshots of the implementation, preserved for research and comparison purposes.
@@ -82,3 +82,13 @@ Below is a timeline of major changes and refinements made to the operator logic.
   - Replaced dense soft proxies with **ROSA-Guided Query Shaping**, compatible with Flash Attention.
   - Introduced **Look-ahead Masking** to optimize the gradient horizon and prune hallucinated gradients from noise.
   - Implemented **Continuous Entropy-Aware Boosting**, which dynamically amplifies queries with high temporal variance during long matches, promoting robust long-context lock-in while suppressing degenerate solutions.
+
+- **20251209: Value Detach & Decay (VDD) Operator**
+  - **Concept**: Solves the "co-adaptation" trap (V-Dominance) where the model learns a blurry mean Value to satisfy a soft attention proxy, causing Q/K optimization to stagnate and failing to explore long-range dependencies.
+  - **Mechanism**: The `rosa_vdd_ops` operator introduces a specific gradient flow strategy:
+    - **Soft Branch (Search)**: Uses Suffix Attention (SUFA) with **Detached Values**. This strictly forces gradients to optimize $Q$ and $K$ to align geometrically with the correct historical keys, rather than modifying $V$ to fit a suboptimal alignment.
+    - **Hard Branch (Content)**: The $V$ tensor is updated *exclusively* by the precise indices selected by the discrete Hard ROSA pass, ensuring representation sharpness.
+  - **Refinements**:
+    - **Geometric Decay**: Reintroduced a strict decay factor ($\lambda \approx 0.45$) to mathematically align continuous Flash Attention dot products with the hierarchical "Longest Common Suffix" objective.
+    - **Hypercube Optimization**: Shifted from Spherical optimization (`F.normalize`) to Hypercube optimization (Tanh/Clamp). This aligns the soft proxy's geometry with the discrete Hamming space, utilizing "bang-bang" gradients to encourage saturation at hypercube vertices for more effective bit-flipping.
+    
