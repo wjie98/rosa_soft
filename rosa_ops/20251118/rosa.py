@@ -163,6 +163,9 @@ def rosa_bits_host_ops_d2h(query: Tensor, key: Tensor, value: Tensor, attn_mask:
 def rosa_bits_host_ops_h2d(query: Tensor, key: Tensor, value: Tensor, xq: Tensor, xk: Tensor, xv: Tensor):
     global ROSA_HOST_STREAM
 
+    if ROSA_HOST_STREAM is not None:
+        ROSA_HOST_STREAM.synchronize()
+
     bsz, num_heads, seq_len, num_qk_bits = query.size()
     bsz, num_kv_heads, seq_len, num_qk_bits = key.size()
     bsz, num_kv_heads, seq_len, num_v_bits = value.size()

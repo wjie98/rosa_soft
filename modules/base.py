@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from typing import *
 
-from rosa_cpp import RosaContext, rosa_gqs_ops
+from rosa_cpp import RosaContext, rosa_vdd_ops
 
 
 
@@ -57,10 +57,9 @@ class RosaBase(nn.Module):
         value_states = value_states.view(bsz, seq_len, self.rosa_num_kv_heads, self.rosa_num_v_bits).transpose(1, 2)
 
         if past_key_values is None:
-            output = rosa_gqs_ops(
-                query_states, key_states, value_states, 0,
+            output = rosa_vdd_ops(
+                query_states, key_states, value_states,
                 attn_mask=attention_mask,
-                look_ahead=1,
                 head_dim=self.rosa_head_dim,
                 tau=self.rosa_tau,
                 training=self.training,

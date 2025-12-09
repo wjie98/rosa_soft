@@ -30,95 +30,102 @@ The primary challenge of the original ROSA is its inherently discrete and non-di
 Our work is dedicated to solving this problem, allowing ROSA to be integrated as a trainable layer within any modern deep learning architecture.
 ## Our Solution: A Straight-Through Estimator (STE) Framework
 
-Our solution elegantly decouples the forward and backward passes to achieve both correctness and trainability. The entire logic is encapsulated in the `rosa_bits_ops` function.
+Our solution elegantly decouples the forward and backward passes to achieve both correctness and trainability. The entire logic is encapsulated in the `rosa_vdd_ops` function.
 
-- **The Hard Forward Pass**: The forward pass executes the *true, discrete* ROSA logic. This ensures that during training, the model is optimized for the exact computation that will be used at inference time. For maximum performance, this pass can even be offloaded to a highly optimized C++ kernel on the CPU (`host_ops=True`), running in parallel with other GPU operations.
+### 1. Suffix Attention (SUFA) as the Gradient Proxy
 
-- **The Soft Proxy for Gradients**: The backward pass is the key to trainability. Gradients are derived *exclusively* from a continuous, differentiable "soft proxy" function. While the forward pass sees the discrete world, the backward pass provides a smooth landscape for the optimizer to navigate.
+The backward pass relies on **Suffix Attention (SUFA)**. unlike standard attention which calculates similarity based on global semantics, SUFA calculates the dot-product similarity between the **suffixes** of Q and K within a geometric decay window.
 
-### Why Use Suffix Attention (SUFA) as the Proxy?
+**Why SUFA?**
+*   **Goal Alignment**: Both ROSA and SUFA strive to match queries with relevant keys based on suffix similarity. The gradient signal from SUFA—"make similar suffixes have higher dot products"—is exactly the right incentive for the model to learn representations that will form discrete matches in the ROSA forward pass.
+*   **Stable Gradients**: Standard attention provides a well-behaved, dense gradient signal via the softmax function, smoothing the loss landscape.
+*   **Efficiency**: SUFA is implemented using `scaled_dot_product_attention`, leveraging the **Flash Attention** ecosystem for speed.
 
-While our initial research led us to implement a mathematically faithful "soft ROSA," we discovered that an alternative approach often yields better results. For completeness, **we provide both proxy methods:**
-1.  **A direct simulation of ROSA (`proxy='rosa'`)**, which uses a softened dynamic programming algorithm to create a differentiable version of the original suffix matching logic.
-2.  **Suffix Attention (`proxy='sufa'`)**, which we have found to be a far superior proxy for generating stable and effective gradients in practice.
+### 2. Value Detach
 
-3. **ROSA-Guided Query Shaping (RG-QS) [Experimental]**:
-Our next-generation proxy. Instead of a separate soft mechanism, RG-QS uses the **discrete match length** obtained from the hard ROSA pass to dynamically shape the query vectors used in Flash Attention.
-- **Masking**: Prunes "hallucinated" gradients by masking out history beyond the valid match length (plus a look-ahead token).
-- **Entropy Boosting**: dynamically amplifies the magnitude of queries that form long, high-entropy matches.
+A critical innovation in our training recipe is **detaching the Value tensor** in the Soft Proxy branch.
+*   **The Problem**: If `V` is optimized via Soft Attention, it tends to learn the weighted mean of multiple keys to minimize loss, becoming "blurry." This reduces the incentive for `Q` and `K` to find the single *correct* match.
+*   **The Solution**: We detach `V` in the soft branch. The soft branch is used *only* to train `Q` and `K` to find the correct location. The `V` is updated *only* by the Hard ROSA branch (via explicit injection). This forces `Q/K` to align geometrically to find the sharp, correct `V`.
 
-**SUFA's Basic Principle**: Unlike standard attention which computes similarity between a single query (Q) vector and all key (K) vectors, SUFA's core idea is to better approximate ROSA's suffix matching mechanism. It achieves this by calculating the dot-product similarity between the suffixes of Q and K within a defined range. This "suffix-to-suffix" comparison provides a gradient signal that more directly encourages the model to learn representations where similar sequences have similar endings, which is precisely the behavior required by the discrete ROSA forward pass.
+### 3. Geometric Decay
 
-The reasons for preferring SUFA are threefold:
+To bridge the gap between continuous dot products and discrete suffix matching, we apply a **Geometric Decay** to the query and key projections. By setting a decay factor $\lambda < 0.5$ (e.g., 0.45), we enforce a strict hierarchy: matching the most recent token (index 0) contributes more to the score than matching *all* subsequent tokens combined. This mathematically aligns the Flash Attention objective with the "Longest Common Suffix" objective of ROSA.
 
-1.  **Goal Alignment**: Both ROSA and SUFA strive to match queries with relevant keys based on suffix similarity. The gradient signal from SUFA—"make similar suffixes have higher dot products"—is exactly the right incentive for the model to learn representations that will form discrete matches in the ROSA forward pass.
+## Installation & Usage
 
-2.  **Stable & Smooth Gradients**: Standard attention provides a well-behaved, dense gradient signal via the softmax function. SUFA inherits this stability, leading to a much smoother loss landscape and more reliable training compared to the complex and potentially sparse gradients from the softened dynamic programming approach.
+### 1. Installing the C++ Kernel (`rosa_cpp`)
 
-3.  **Computational Efficiency**: The SUFA proxy can be implemented using `scaled_dot_product_attention`, leveraging the highly optimized **Flash Attention ecosystem**. This makes the training backward pass significantly faster and more memory-efficient.
+The high-performance discrete Suffix Automaton logic is implemented in C++. You must compile and install this extension to use the operator.
 
-By using Suffix Attention as the proxy, we get the training stability and speed of a mature architecture while optimizing for the unique, parameter-free inference capabilities of ROSA.
-
-
-## How It Works: The `rosa_bits_ops` Function
-
-Our implementation is centered around a single, flexible function that manages the entire process:
-```python
-def rosa_bits_ops(
-        query: Tensor, key: Tensor, value: Tensor, attn_mask: Optional[Tensor] = None,
-        alpha: Union[Tensor, float] = 1.0, proxy: Literal["rosa", "sufa"] = "sufa",
-        bits_tau: Union[Tensor, float] = 1.0, attn_tau: Union[Tensor, float] = 1.0,
-        host_ops: bool = False, training: bool = False, sufa_head_dim: int = 128,
-):
-    """
-    Performs the Rapid Online Suffix Automaton (ROSA) attention-like operation.
-
-    This function computes a differentiable, attention-like mechanism based on the
-    longest common suffix match between query and key sequences. The inputs are
-    expected to be tensors of logits that will be binarized). The operation is designed
-    to be efficient on parallel hardware like GPUs.
-
-    Args:
-        query (Tensor): The query tensor of shape (B, H, T, D_qk).
-        key (Tensor): The key tensor of shape (B, H_kv, T, D_qk).
-        value (Tensor): The value tensor of shape (B, H_kv, T, D_v).
-        attn_mask (Optional[Tensor]): An optional boolean attention mask.
-        alpha (Union[Tensor, float]): The interpolation coefficient for the STE.
-            - `alpha = 0.0`: The output is purely from the soft, differentiable proxy.
-            - `alpha = 1.0`: The forward pass output is purely from the hard, discrete op.
-            This should be annealed from 0 to 1 during training.
-        proxy (Literal["rosa", "sufa"]): The type of soft proxy to use for gradient
-            computation. 'rosa' uses a custom dynamic programming approach to
-            soft-simulate the ROSA matching algorithm. 'sufa' uses Suffix Attention
-            (a standard scaled dot-product attention) as the proxy.
-        bits_tau (Union[Tensor, float]): Temperature for converting query/key/value logits
-            into continuous bit representations (e.g., via tanh or sigmoid). A smaller
-            tau makes the bits "harder".
-        attn_tau (Union[Tensor, float]): Temperature for the softmax in the soft attention
-            calculation. A smaller tau makes the attention distribution sharper.
-        host_ops (bool): If True, the 'hard' part of the operation is offloaded to the CPU
-            for potentially faster execution. This requires a custom C++ extension.
-        training (bool): If True, enables the training path which uses a soft proxy for
-            gradients via a Straight-Through Estimator (STE).
-        sufa_head_dim (int): The head dimension to use for the 'sufa' proxy's
-            scaled dot-product attention.
-
-    Returns:
-        Tensor: The resulting attention output tensor, with the forward pass
-                determined by the interpolation of hard and soft ops, and the
-                backward pass determined solely by the soft op.
-    """
+```bash
+cd rosa_cpp
+pip install --no-build-isolation .
 ```
 
-## Latest Updates
+### 2. Importing the Operator
 
-- **2025-12-04**: Introduced **ROSA-GQS** architecture. Added the experimental **RG-QS (ROSA-Guided Query Shaping)** proxy, which utilizes ROSA match lengths to dynamically mask and boost Flash Attention queries, improving structural alignment and gradient SNR.
+```python
+from rosa_cpp import rosa_vdd_ops
+```
+
+## API Reference: `rosa_vdd_ops`
+
+The core logic is encapsulated in the `rosa_vdd_ops` function:
+
+```python
+def rosa_vdd_ops(
+        query: Tensor, key: Tensor, value: Tensor, mismatch: int = 0,
+        attn_mask: Optional[Tensor] = None, head_dim: int = 64,
+        decay_factor: float = 0.45, tau: float = 1.0, norm: bool = True,
+        training: bool = False, debug: bool = False,
+):
+    """
+    Performs the ROSA operation using the VDD (Value Detach & Decay) mechanism.
+
+    This operator implements a hybrid discrete-continuous attention mechanism designed to
+    solve the "co-adaptation" problem in training discrete suffix automatons. It combines
+    Hard ROSA (for precise structural retrieval) with Soft SUFA (for semantic search) using
+    a novel gradient flow strategy.
+
+    **Core Mechanism: VDD (Value Detach Decay)**
+    The optimization landscape is decomposed into two decoupled tasks:
+    1.  **Search (Q/K Optimization)**: Handled by a Soft Suffix Attention (SUFA) proxy. Crucially,
+        the `value` tensor is **detached** in this branch. This prevents the model from learning
+        a "blurry mean" value to minimize loss. Instead, gradients force Q and K to align geometrically
+        to find the best existing V.
+    2.  **Content (V Optimization)**: Handled by the Hard ROSA branch. The `value` tensor receives
+        gradients *only* from the precise index selected by the Hard ROSA algorithm. This ensures
+        V remains sharp and structurally aligned.
+
+    Args:
+        query (Tensor): Query tensor (B, H, T, D). Continuous representations.
+        key (Tensor): Key tensor (B, H, T, D). Continuous representations.
+        value (Tensor): Value tensor (B, H, T, D_v).
+        attn_mask (Optional[Tensor]): Standard causal attention mask.
+        head_dim (int): The dimension of the attention heads. Used to determine the window
+            size for the geometric decay projection.
+        decay_factor (float): The geometric decay rate (lambda) for the Suffix Attention proxy.
+            A value < 0.5 (e.g., 0.45) enforces a strict hierarchy where matching the immediate
+            suffix token is weighted higher than matching any number of distant past tokens.
+        tau (float): Temperature scaling for the soft attention scores.
+        norm (bool): If True, uses Spherical Optimization (F.normalize). If False, uses
+            Hypercube Optimization (Clamp/Tanh). Defaults to True for better manifold properties.
+        training (bool): If True, executes the VDD hybrid forward/backward pass. If False,
+            executes only the efficient Hard ROSA inference pass.
+        debug (bool): If True, performs consistency checks between hard and soft outputs.
+
+    Returns:
+        Tensor: The output tensor.
+            - In inference: The exact result from the Discrete Suffix Automaton.
+            - In training: A hybrid tensor where the value comes from Hard ROSA (for V updates)
+              but the gradient direction for Q/K comes from Soft SUFA.
+    """
+```
 
 ## Project Structure
 
 - **`modules/`**: Contains PyTorch model definitions, including base classes and specific architecture integrations (e.g., Qwen3).
 - **`rosa_cpp/`**: The home of the latest, high-performance C++ kernels.
-    - *Usage*: Install via `pip install --no-build-isolation .`, then import via `from rosa_cpp import rosa_gqs_ops`.
 - **`rosa_ops/`**: An archive of historical implementation snapshots, preserving the evolution of the operator logic.
 
 ## Status & Roadmap
