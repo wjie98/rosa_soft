@@ -28,6 +28,10 @@ class RosaBase(nn.Module):
         self.rosa_tau = getattr(config, "rosa_tau", 1.0)
         self.rosa_head_dim = getattr(config, "rosa_head_dim", 64)
 
+        self.rosa_decay_qk = getattr(config, "rosa_decay_qk", 0.45)
+        self.rosa_norm_qkv = getattr(config, "rosa_norm_qkv", False)
+        self.rosa_boost_qk = getattr(config, "rosa_boost_qk", False)
+
         bias = getattr(config, "attention_bias", False)
 
         self.rosa_q_proj = nn.Linear(hidden_size, self.rosa_num_heads * self.rosa_num_qk_bits, bias=bias)
@@ -62,6 +66,9 @@ class RosaBase(nn.Module):
                 attn_mask=attention_mask,
                 head_dim=self.rosa_head_dim,
                 tau=self.rosa_tau,
+                decay_factor=self.rosa_decay_qk,
+                norm=self.rosa_norm_qkv,
+                boost=self.rosa_boost_qk,
                 training=self.training,
             )
         else:

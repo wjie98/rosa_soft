@@ -10,75 +10,34 @@ from .rosa_sam import RosaContext
 
 
 __all__ = [
-    "rosa_vdd_ops",
+    "rosa_vds_ops",
 ]
 
 
-def rosa_vdd_ops(
+def rosa_vds_ops(
         query: Tensor,
         key: Tensor,
         value: Tensor,
         attn_mask: Optional[Tensor] = None,
         head_dim: int = 64,
-        decay_factor: float = 0.45,
+        win_size: int = 128,
         tau: float = 1.0,
         norm: bool = False,
 ):
-    """
-    Performs the ROSA operation using the VDD (Value Detach & Decay) mechanism.
-
-    This operator implements a hybrid discrete-continuous attention mechanism designed to
-    solve the "co-adaptation" problem in training discrete suffix automatons. It combines
-    Hard ROSA (for precise structural retrieval) with Soft SUFA (for semantic search) using
-    a novel gradient flow strategy.
-
-    **Core Mechanism: VDD (Value Detach Decay)**
-    The optimization landscape is decomposed into two decoupled tasks:
-    1.  **Search (Q/K Optimization)**: Handled by a Soft Suffix Attention (SUFA) proxy. Crucially,
-        the `value` tensor is **detached** in this branch. This prevents the model from learning
-        a "blurry mean" value to minimize loss. Instead, gradients force Q and K to align geometrically
-        to find the best existing V.
-    2.  **Content (V Optimization)**: Handled by the Hard ROSA branch. The `value` tensor receives
-        gradients *only* from the precise index selected by the Hard ROSA algorithm. This ensures
-        V remains sharp and structurally aligned.
-
-    Args:
-        query (Tensor): Query tensor (B, H, T, D). Continuous representations.
-        key (Tensor): Key tensor (B, H, T, D). Continuous representations.
-        value (Tensor): Value tensor (B, H, T, D_v).
-        attn_mask (Optional[Tensor]): Standard causal attention mask.
-        head_dim (int): The dimension of the attention heads. Used to determine the window
-            size for the geometric decay projection.
-        decay_factor (float): The geometric decay rate (lambda) for the Suffix Attention proxy.
-            A value < 0.5 (e.g., 0.45) enforces a strict hierarchy where matching the immediate
-            suffix token is weighted higher than matching any number of distant past tokens.
-        tau (float): Temperature scaling for the soft attention scores.
-        norm (bool): If True, uses Spherical Optimization (F.normalize). If False, uses
-            Hypercube Optimization (Clamp/Tanh). Defaults to True for better manifold properties.
-        training (bool): If True, executes the VDD hybrid forward/backward pass. If False,
-            executes only the efficient Hard ROSA inference pass.
-
-    Returns:
-        Tensor: The output tensor.
-            - In inference: The exact result from the Discrete Suffix Automaton.
-            - In training: A hybrid tensor where the value comes from Hard ROSA (for V updates)
-              but the gradient direction for Q/K comes from Soft SUFA.
-    """
-
-    params = ROSA_VDD_Params(
+    params = ROSA_VDS_Params(
         attn_mask=attn_mask,
         head_dim=head_dim,
-        decay_factor=decay_factor,
+        win_size=win_size,
         tau=tau, norm=norm,
     )
-    return ROSA_VDD_Function.apply(query, key, value, params)
+    return ROSA_VDS_Function.apply(query, key, value, params)
 
 
-class ROSA_VDD_Params:
+class ROSA_VDS_Params:
     def __init__(self,
         attn_mask: Optional[Tensor] = None,
         head_dim: int = 64,
-        decay_factor: float = 0.45,
+        win_size: int = 128,
         tau: float = 1.0,
         norm: bool = False,
     ):
@@ -88,16 +47,16 @@ class ROSA_VDD_Params:
             self.attn_mask = None
 
         self.head_dim = head_dim
-        self.decay_factor = decay_factor
+        self.win_size = win_size
         self.tau = tau
         self.norm = norm
         self.eps = 1e-6
         self.info: Dict[str, Tensor] = {}
 
 
-class ROSA_VDD_Function(torch.autograd.Function):
+class ROSA_VDS_Function(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, query: Tensor, key: Tensor, value: Tensor, params: ROSA_VDD_Params):
+    def forward(ctx, query: Tensor, key: Tensor, value: Tensor, params: ROSA_VDS_Params):
         x_hard, info = RosaContext().update(query, key, value, 0, inspect=True)
         params.info.update(info)
 
@@ -112,20 +71,20 @@ class ROSA_VDD_Function(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         query, key, value = cast(Tuple[Tensor, ...], ctx.saved_tensors)
-        params: ROSA_VDD_Params = ctx.saved_params
+        params: ROSA_VDS_Params = ctx.saved_params
 
         with torch.enable_grad():
             query.requires_grad_(True)
             key.requires_grad_(True)
             value.requires_grad_(True)
 
-            x_soft = rosa_value_detach_decay(
+            x_soft = rosa_value_detach_sampling(
                 query, key, value,
                 length=params.info["length"],
                 endpos=params.info["endpos"],
                 attn_mask=params.attn_mask,
                 head_dim=params.head_dim,
-                decay_factor=params.decay_factor,
+                win_size=params.win_size,
                 tau=params.tau,
                 eps=params.eps,
                 norm=params.norm,
@@ -149,20 +108,27 @@ def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
     return hidden_states.reshape(bsz, -1, seq_len, head_dim)
 
 
-def unfold_qk(hidden_states: Tensor, win_size: int, offset: int = 0):
-    hidden_states = F.pad(hidden_states, (0, 0, win_size - 1 + offset, - offset))
-    hidden_states = hidden_states.unfold(-2, win_size, 1).transpose(-2, -1)
-    return hidden_states
+def unfold_qk(xq: Tensor, xk: Tensor, win_size: int, head_dim: int):
+    bsz, num_heads, seq_len, num_bits = xq.size()
 
+    assert head_dim % num_bits == 0, f"head_dim must be divisible by num_bits, got {head_dim} % {num_bits} != 0"
+    tok_size = head_dim // num_bits
 
-def decay_qk(xq: Tensor, xk: Tensor, decay_factor: float):
-    bsz, num_heads, seq_len, win_size, num_bits = xq.size()
-    inds = torch.arange(win_size, device=xq.device)
-    inds = win_size - 1 - inds
-    qk_w_sqrt = torch.pow(decay_factor, inds).sqrt_()
+    if win_size <= tok_size:
+        xq = F.pad(xq, (0, 0, tok_size - 1, 0))
+        xq = xq.unfold(-2, tok_size, 1).transpose(-2, -1)
 
-    xq = xq * qk_w_sqrt.view(-1, 1).type_as(xq)
-    xk = xk * qk_w_sqrt.view(-1, 1).type_as(xk)
+        xk = F.pad(xk, (0, 0, tok_size, -1)) # predict next token
+        xk = xk.unfold(-2, tok_size, 1).transpose(-2, -1)
+    else:
+        cols = torch.randperm(win_size, device=xq.device)[:tok_size].sort().values
+        rows = torch.arange(0, seq_len, device=xk.device)
+        inds_q = (rows[:, None] - cols[None, :]).clamp_min_(0)
+        inds_k = (rows[:, None] - cols[None, :] - 1).clamp_min_(0) # predict next token
+
+        xq = xq.index_select(-2, inds_q.view(-1)).view(bsz, num_heads, seq_len, tok_size, num_bits)
+        xk = xk.index_select(-2, inds_k.view(-1)).view(bsz, num_heads, seq_len, tok_size, num_bits)
+    
     return xq, xk
 
 
@@ -176,12 +142,12 @@ def gather_v(xv: Tensor, endpos: Tensor):
     return xv.gather(-2, inds) * mask # mask out the padding tokens
 
 
-def rosa_value_detach_decay(
+def rosa_value_detach_sampling(
         query: Tensor, key: Tensor, value: Tensor,
         length: Tensor, endpos: Tensor,
         attn_mask: Optional[Tensor] = None,
         head_dim: int = 64,
-        decay_factor: float = 0.45,
+        win_size: int = 128,
         tau: float = 1.0,
         eps: float = 1e-6,
         norm: bool = False,
@@ -210,11 +176,7 @@ def rosa_value_detach_decay(
     xk = repeat_kv(xk, n_rep)
     xv = repeat_kv(xv, n_rep)
 
-    win_size = head_dim // num_qk_bits
-    xq = unfold_qk(xq, win_size=win_size, offset=0)
-    xk = unfold_qk(xk, win_size=win_size, offset=1) # predict next token
-
-    xq, xk = decay_qk(xq, xk, decay_factor=decay_factor)
+    xq, xk = unfold_qk(xq, xk, win_size=win_size, head_dim=head_dim)
 
     xq = xq.reshape(bsz, num_heads, seq_len, head_dim)
     xk = xk.reshape(bsz, num_heads, seq_len, head_dim)
