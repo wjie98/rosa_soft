@@ -20,7 +20,7 @@ def rosa_vds_ops(
         value: Tensor,
         attn_mask: Optional[Tensor] = None,
         head_dim: int = 64,
-        win_size: int = 128,
+        win_size: int = 0,
         tau: float = 1.0,
         norm: bool = False,
 ):
@@ -37,7 +37,7 @@ class ROSA_VDS_Params:
     def __init__(self,
         attn_mask: Optional[Tensor] = None,
         head_dim: int = 64,
-        win_size: int = 128,
+        win_size: int = 0,
         tau: float = 1.0,
         norm: bool = False,
     ):
@@ -147,7 +147,7 @@ def rosa_value_detach_sampling(
         length: Tensor, endpos: Tensor,
         attn_mask: Optional[Tensor] = None,
         head_dim: int = 64,
-        win_size: int = 128,
+        win_size: int = 0,
         tau: float = 1.0,
         eps: float = 1e-6,
         norm: bool = False,
