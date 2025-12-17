@@ -20,7 +20,7 @@ def rosa_lsh_ops(
         value: Tensor,
         attn_mask: Optional[Tensor] = None,
         head_dim: int = 64,
-        win_size: int = 128,
+        win_size: int = 0,
         tau: float = 1.0,
         norm: bool = False,
 ):
@@ -37,7 +37,7 @@ class ROSA_LSH_Params:
     def __init__(self,
         attn_mask: Optional[Tensor] = None,
         head_dim: int = 64,
-        win_size: int = 128,
+        win_size: int = 0,
         tau: float = 1.0,
         norm: bool = False,
     ):
@@ -174,6 +174,17 @@ def unfold_qk(hidden_states: Tensor, win_size: int, offset: int = 0):
     return hidden_states
 
 
+def decay_qk(xq: Tensor, xk: Tensor, decay_factor: float):
+    bsz, num_heads, seq_len, win_size, num_bits = xq.size()
+    inds = torch.arange(win_size, device=xq.device)
+    inds = win_size - 1 - inds
+    qk_w_sqrt = torch.pow(decay_factor, inds).sqrt_()
+
+    xq = xq * qk_w_sqrt.view(-1, 1).type_as(xq)
+    xk = xk * qk_w_sqrt.view(-1, 1).type_as(xk)
+    return xq, xk
+
+
 def gather_v(xv: Tensor, endpos: Tensor):
     bsz, num_heads, seq_len, num_bits = xv.size()
     with torch.no_grad():
@@ -189,7 +200,7 @@ def rosa_value_detach_hashing(
         length: Tensor, endpos: Tensor,
         attn_mask: Optional[Tensor] = None,
         head_dim: int = 64,
-        win_size: int = 128,
+        win_size: int = 0,
         tau: float = 1.0,
         eps: float = 1e-6,
         norm: bool = False,
@@ -227,6 +238,9 @@ def rosa_value_detach_hashing(
     else:
         xq = unfold_qk(xq, win_size=channels, offset=0)
         xk = unfold_qk(xk, win_size=channels, offset=1) # predict next token
+
+        decay_factor = 1.0 - 1.0 / channels
+        xq, xk = decay_qk(xq, xk, decay_factor=decay_factor)
         
     xq = xq.reshape(bsz, num_heads, seq_len, head_dim)
     xk = xk.reshape(bsz, num_heads, seq_len, head_dim)
