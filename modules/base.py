@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from typing import *
 
-from rosa_cpp import RosaContext, rosa_vdd_ops
+from rosa_cpp import RosaContext, rosa_bits_ops
 
 
 
@@ -20,17 +20,19 @@ class RosaBase(nn.Module):
         assert hidden_size % 64 == 0
 
         self.rosa_num_qk_bits = getattr(config, "rosa_num_query_key_bits", 8)
-        self.rosa_num_v_bits = getattr(config, "rosa_num_value_bits", 8)
+        self.rosa_num_v_bits = getattr(config, "rosa_num_value_bits", None)
 
-        self.rosa_num_heads = getattr(config, "rosa_num_heads", hidden_size // 64)
-        self.rosa_num_kv_heads = getattr(config, "rosa_num_key_value_heads", hidden_size // 64)
+        self.rosa_num_heads = getattr(config, "rosa_num_heads", hidden_size // 8)
+        self.rosa_num_kv_heads = getattr(config, "rosa_num_key_value_heads", None)
 
-        self.rosa_tau = getattr(config, "rosa_tau", 1.0)
-        self.rosa_head_dim = getattr(config, "rosa_head_dim", 64)
+        self.rosa_suffix_window = getattr(config, "rosa_suffix_window", 4)
+        self.rosa_suffix_factor = getattr(config, "rosa_suffix_factor", None)
 
-        self.rosa_decay_qk = getattr(config, "rosa_decay_qk", 0.45)
-        self.rosa_norm_qkv = getattr(config, "rosa_norm_qkv", False)
-        self.rosa_boost_qk = getattr(config, "rosa_boost_qk", False)
+        if self.rosa_num_v_bits is None:
+            self.rosa_num_v_bits = self.rosa_num_qk_bits
+
+        if self.rosa_num_kv_heads is None:
+            self.rosa_num_kv_heads = self.rosa_num_heads
 
         bias = getattr(config, "attention_bias", False)
 
@@ -46,6 +48,7 @@ class RosaBase(nn.Module):
     def forward(
         self,
         hidden_states: Tensor,
+        inject_states: Optional[Tensor] = None,
         attention_mask: Optional[Tensor] = None,
         past_key_values = None,
     ) -> Tensor:
@@ -61,15 +64,11 @@ class RosaBase(nn.Module):
         value_states = value_states.view(bsz, seq_len, self.rosa_num_kv_heads, self.rosa_num_v_bits).transpose(1, 2)
 
         if past_key_values is None:
-            output = rosa_vdd_ops(
+            output = rosa_bits_ops(
                 query_states, key_states, value_states,
-                attn_mask=attention_mask,
-                head_dim=self.rosa_head_dim,
-                tau=self.rosa_tau,
-                decay_factor=self.rosa_decay_qk,
-                norm=self.rosa_norm_qkv,
-                boost=self.rosa_boost_qk,
-                training=self.training,
+                suffix_window=self.rosa_suffix_window,
+                suffix_factor=self.rosa_suffix_factor,
+                attention_mask=attention_mask,
             )
         else:
             if not hasattr(past_key_values, "_rosa_cache"):
@@ -82,7 +81,11 @@ class RosaBase(nn.Module):
         output = self.rosa_o_proj(output)
         
         gate = torch.sigmoid(self.rosa_o_gate(hidden_states))
-        return output * gate
+        output = output * gate
+
+        if inject_states is not None:
+            output = output + inject_states * (1 - gate)
+        return output
 
 
 class RosaCache:

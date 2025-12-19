@@ -49,7 +49,9 @@ A critical innovation in our training recipe is **detaching the Value tensor** i
 
 ### 3. Geometric Decay
 
-To bridge the gap between continuous dot products and discrete suffix matching, we apply a **Geometric Decay** to the query and key projections. By setting a decay factor $\lambda < 0.5$ (e.g., 0.45), we enforce a strict hierarchy: matching the most recent token (index 0) contributes more to the score than matching *all* subsequent tokens combined. This mathematically aligns the Flash Attention objective with the "Longest Common Suffix" objective of ROSA.
+To bridge the gap between continuous dot products and discrete suffix matching, we apply a **Geometric Decay** to the query and key projections. The decay factor is calculated dynamically based on the suffix window size, allowing the model to establish an optimal effective context horizon.
+
+This mechanism enforces a **strict temporal hierarchy**: it assigns exponentially higher weights to recent tokens while suppressing distant history. By ensuring that the immediate token match contributes most significantly to the similarity score, this weighting scheme constructs a unique "state fingerprint" that mathematically aligns the Flash Attention objective with the "Longest Common Suffix" logic of ROSA, allowing historical context to serve as disambiguation without dominating the primary signal.
 
 ## Installation & Usage
 
@@ -65,60 +67,38 @@ pip install --no-build-isolation .
 ### 2. Importing the Operator
 
 ```python
-from rosa_cpp import rosa_vdd_ops
+from rosa_cpp import rosa_bits_ops
 ```
 
-## API Reference: `rosa_vdd_ops`
+## API Reference: `rosa_bits_ops`
 
-The core logic is encapsulated in the `rosa_vdd_ops` function:
+The core logic is encapsulated in the `rosa_bits_ops` function:
 
 ```python
-def rosa_vdd_ops(
-        query: Tensor, key: Tensor, value: Tensor, mismatch: int = 0,
-        attn_mask: Optional[Tensor] = None, head_dim: int = 64,
-        decay_factor: float = 0.45, tau: float = 1.0, norm: bool = True,
-        training: bool = False, debug: bool = False,
+def rosa_bits_ops(
+        query: Tensor, key: Tensor, value: Tensor,
+        suffix_window: int = 4,
+        suffix_factor: Optional[float] = None,
+        attention_mask: Optional[Tensor] = None,
+        attention_tau: float = 1.0,
 ):
     """
-    Performs the ROSA operation using the VDD (Value Detach & Decay) mechanism.
+    Performs the Rapid Online Suffix Automaton (ROSA) attention-like operation.
 
-    This operator implements a hybrid discrete-continuous attention mechanism designed to
-    solve the "co-adaptation" problem in training discrete suffix automatons. It combines
-    Hard ROSA (for precise structural retrieval) with Soft SUFA (for semantic search) using
-    a novel gradient flow strategy.
-
-    **Core Mechanism: VDD (Value Detach Decay)**
-    The optimization landscape is decomposed into two decoupled tasks:
-    1.  **Search (Q/K Optimization)**: Handled by a Soft Suffix Attention (SUFA) proxy. Crucially,
-        the `value` tensor is **detached** in this branch. This prevents the model from learning
-        a "blurry mean" value to minimize loss. Instead, gradients force Q and K to align geometrically
-        to find the best existing V.
-    2.  **Content (V Optimization)**: Handled by the Hard ROSA branch. The `value` tensor receives
-        gradients *only* from the precise index selected by the Hard ROSA algorithm. This ensures
-        V remains sharp and structurally aligned.
+    This function computes a differentiable, attention-like mechanism based on the
+    longest common suffix match between query and key sequences. The inputs are
+    expected to be tensors of logits that will be binarized). The operation is designed
+    to be efficient on parallel hardware like GPUs.
 
     Args:
-        query (Tensor): Query tensor (B, H, T, D). Continuous representations.
-        key (Tensor): Key tensor (B, H, T, D). Continuous representations.
-        value (Tensor): Value tensor (B, H, T, D_v).
-        attn_mask (Optional[Tensor]): Standard causal attention mask.
-        head_dim (int): The dimension of the attention heads. Used to determine the window
-            size for the geometric decay projection.
-        decay_factor (float): The geometric decay rate (lambda) for the Suffix Attention proxy.
-            A value < 0.5 (e.g., 0.45) enforces a strict hierarchy where matching the immediate
-            suffix token is weighted higher than matching any number of distant past tokens.
-        tau (float): Temperature scaling for the soft attention scores.
-        norm (bool): If True, uses Spherical Optimization (F.normalize). If False, uses
-            Hypercube Optimization (Clamp/Tanh). Defaults to True for better manifold properties.
-        training (bool): If True, executes the VDD hybrid forward/backward pass. If False,
-            executes only the efficient Hard ROSA inference pass.
-        debug (bool): If True, performs consistency checks between hard and soft outputs.
+        query (Tensor): (B, H, T, D) Logits for Query bits (pre-tanh).
+        key (Tensor): (B, H, T, D) Logits for Key bits (pre-tanh).
+        value (Tensor): (B, H, T, D_v) Logits for Value bits.
+        suffix_window (int): Size of the lookback window for fingerprinting.
+        suffix_factor (Optional[float]): Decay factor for the window.
 
     Returns:
-        Tensor: The output tensor.
-            - In inference: The exact result from the Discrete Suffix Automaton.
-            - In training: A hybrid tensor where the value comes from Hard ROSA (for V updates)
-              but the gradient direction for Q/K comes from Soft SUFA.
+        Tensor: The result of the Hard SAM lookup.
     """
 ```
 

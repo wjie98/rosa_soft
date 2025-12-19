@@ -36,7 +36,3 @@ def dequantize(x: Tensor, v: Tensor | int) -> Tensor:
     else:
         return x
 
-def normalize(x: Tensor, eps: float = 1e-6) -> Tensor:
-    h = x.float()
-    h = h * torch.rsqrt(h.square().sum(-1, keepdim=True) + eps)
-    return h.type_as(x)
