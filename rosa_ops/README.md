@@ -6,7 +6,7 @@ This directory contains the core, low-level implementations of the softened ROSA
 >
 > **Installation & Usage**:
 > 1. Install the extension: `pip install --no-build-isolation .`
-> 2. Import the operator: `from rosa_cpp import rosa_vdd_ops`
+> 2. Import the operator: `from rosa_cpp import rosa_bits_ops`
 
 
 The numbered subdirectories (`2025XXXX/`) contain historical snapshots of the implementation, preserved for research and comparison purposes.
@@ -91,4 +91,8 @@ Below is a timeline of major changes and refinements made to the operator logic.
   - **Refinements**:
     - **Geometric Decay**: Reintroduced a strict decay factor ($\lambda \approx 0.45$) to mathematically align continuous Flash Attention dot products with the hierarchical "Longest Common Suffix" objective.
     - **Hypercube Optimization**: Shifted from Spherical optimization (`F.normalize`) to Hypercube optimization (Tanh/Clamp). This aligns the soft proxy's geometry with the discrete Hamming space, utilizing "bang-bang" gradients to encourage saturation at hypercube vertices for more effective bit-flipping.
-    
+
+- **20251219: Adaptive Suffix Window & Parameter Pruning**
+  - **Suffix Window Optimization**: Empirical analysis revealed that a suffix history of 3-4 tokens is sufficient for effective context locking. We have refactored the interface to use a specific `suffix_window` parameter instead of implicitly expanding to the full `head_dim`. This prevents gradient noise arising from overly long, irrelevant context windows.
+  - **Adaptive Decay**: The decay factor is now calculated adaptively by default based on the suffix window size, significantly reducing the tuning overhead. Manual control is preserved via the `suffix_factor` parameter for specialized use cases.
+  - **API Simplification**: A major cleanup of the interface was performed. We removed a large volume of experimental and ineffective parameters, exposing only the optimal combination to ensure stability and ease of use.

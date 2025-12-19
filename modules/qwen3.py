@@ -24,19 +24,6 @@ from .base import RosaBase
 class RosaQwen3Attention(Qwen3Attention, RosaBase):
     def __init__(self, config: Qwen3Config, layer_idx: int):
         super().__init__(config=config, layer_idx=layer_idx)
-
-        hidden_size = config.hidden_size
-        bias = config.attention_bias
-
-        self.o_gate = nn.Linear(hidden_size, hidden_size, bias=bias)
-
-        config.rosa_num_query_key_bits = 8
-        config.rosa_num_value_bits = 8
-        config.rosa_num_heads = config.hidden_size // 8
-        config.rosa_num_key_value_heads = config.rosa_num_heads
-        
-        config.rosa_norm_qkv = True
-        config.rosa_decay_qk = 1.0
         
         self.init_rosa(config=config, layer_idx=layer_idx)
     
@@ -59,12 +46,10 @@ class RosaQwen3Attention(Qwen3Attention, RosaBase):
             **kwargs,
         )
 
-        gate = torch.sigmoid(self.o_gate(hidden_states))
-        attn_output = attn_output * gate
-
-        attn_output = attn_output + RosaBase.forward(
+        attn_output = RosaBase.forward(
             self,
             hidden_states=hidden_states,
+            inject_states=attn_output,
             past_key_values=past_key_values,
         )
 
