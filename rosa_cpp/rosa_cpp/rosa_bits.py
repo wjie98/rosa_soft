@@ -18,11 +18,12 @@ def rosa_bits_ops(
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        suffix_window: int = 4,
+        suffix_window: int = 8,
         suffix_factor: Optional[float] = None,
         attention_mask: Optional[Tensor] = None,
         attention_tau: float = 1.0,
-):
+        async_op: bool = False,
+) -> Union[Tensor, 'RosaBitsWork']:
     """
     Performs the Rapid Online Suffix Automaton (ROSA) attention-like operation.
 
@@ -37,9 +38,11 @@ def rosa_bits_ops(
         value (Tensor): (B, H, T, D_v) Logits for Value bits.
         suffix_window (int): Size of the lookback window for fingerprinting.
         suffix_factor (Optional[float]): Decay factor for the window.
+        async_op (bool): Whether to return a work object for asynchronous execution.
 
     Returns:
-        Tensor: The result of the Hard SAM lookup.
+        Tensor: The result of the Hard SAM lookup if async_op is False.
+        RosaBitsWork: A work object for asynchronous execution if async_op is True.
     """
 
     params = RosaBitsParams(
@@ -48,15 +51,31 @@ def rosa_bits_ops(
         attention_mask=attention_mask,
         attention_tau=attention_tau,
     )
-    return RosaBitsFunction.apply(query, key, value, params)
+    key = RosaBitsDispatchFunction.apply(query, key, value, params)
+    work = RosaBitsWork(key)
+
+    if async_op:
+        return work
+    return work.wait()
+
+
+class RosaBitsWork:
+    def __init__(self, key: Tensor):
+        self._key = key
+
+    def wait(self):
+        key, self._key = self._key, None
+        if key is None:
+            raise RuntimeError("wait() called twice")
+        return RosaBitsCombineFunction.apply(key)
 
 
 class RosaBitsParams:
     def __init__(self,
-        suffix_window: int = 4,
-        suffix_factor: Optional[float] = None,
-        attention_mask: Optional[Tensor] = None,
-        attention_tau: float = 1.0,
+        suffix_window: int,
+        suffix_factor: Optional[float],
+        attention_mask: Optional[Tensor],
+        attention_tau: float,
     ):
         self.suffix_window = suffix_window
         self.suffix_factor = suffix_factor
@@ -68,13 +87,15 @@ class RosaBitsParams:
         self.attention_tau = attention_tau
 
         self.info: Dict[str, Tensor] = {}
+        self._ctx: Optional[RosaContext] = None
 
 
-class RosaBitsFunction(torch.autograd.Function):
+class RosaBitsDispatchFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, query: Tensor, key: Tensor, value: Tensor, params: RosaBitsParams):
-        x_hard, info = RosaContext().update(query, key, value, 0, inspect=True)
-        params.info.update(info)
+        params._ctx = RosaContext()
+        xq, xk, xv = params._ctx.dispatch(query, key, value)
+        params.info["dispatch"] = (xq, xk, xv)
 
         ctx.save_for_backward(
             query.detach(),
@@ -82,12 +103,20 @@ class RosaBitsFunction(torch.autograd.Function):
             value.detach(),
         )
         ctx.saved_params = params
-        return x_hard
 
+        key = torch.empty(0, dtype=torch.float32, device="cpu")
+        key.rosa_params = params
+        return key
+    
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(ctx, _):
         query, key, value = cast(Tuple[Tensor, ...], ctx.saved_tensors)
         params: RosaBitsParams = ctx.saved_params
+
+        grad_output = params.info.pop("grad_output")
+
+        length = params.info.pop("length")
+        endpos = params.info.pop("endpos")
 
         with torch.enable_grad():
             query.requires_grad_(True)
@@ -96,8 +125,8 @@ class RosaBitsFunction(torch.autograd.Function):
 
             x_soft = suffix_attention_proxy(
                 query, key, value,
-                length=params.info["length"],
-                endpos=params.info["endpos"],
+                length=length,
+                endpos=endpos,
                 suffix_window=params.suffix_window,
                 suffix_factor=params.suffix_factor,
                 attention_mask=params.attention_mask,
@@ -112,6 +141,25 @@ class RosaBitsFunction(torch.autograd.Function):
                 only_inputs=True,
             )
         return grad_query, grad_key, grad_value, None
+
+
+class RosaBitsCombineFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, key: Tensor):
+        params: RosaBitsParams = key.rosa_params
+        xq, xk, xv = params.info.pop("dispatch")
+
+        x_hard, info = params._ctx.inspect(xq, xk, xv, 0)
+        params.info.update(info)
+
+        ctx.saved_params = params
+        return x_hard
+    
+    @staticmethod
+    def backward(ctx, grad_output: Tensor):
+        params: RosaBitsParams = ctx.saved_params
+        params.info["grad_output"] = grad_output
+        return torch.empty(0, dtype=torch.float32, device="cpu")
 
 
 def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
@@ -162,10 +210,10 @@ def gather_v(xv: Tensor, endpos: Tensor):
 def suffix_attention_proxy(
         query: Tensor, key: Tensor, value: Tensor,
         length: Tensor, endpos: Tensor,
-        suffix_window: int = 4,
-        suffix_factor: Optional[float] = None,
-        attention_mask: Optional[Tensor] = None,
-        attention_tau: float = 1.0,
+        suffix_window: int,
+        suffix_factor: Optional[float],
+        attention_mask: Optional[Tensor],
+        attention_tau: float,
 ):
     bsz, num_heads, seq_len, num_q_bits = query.size()
     bsz, num_kv_heads, seq_len, num_k_bits = key.size()
