@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from typing import *
 
-from rosa_cpp import RosaContext, rosa_bits_ops
+from rosa_cpp import RosaContext, rosa_bits_ops, RosaBitsWork
 
 
 
@@ -25,7 +25,7 @@ class RosaBase(nn.Module):
         self.rosa_num_heads = getattr(config, "rosa_num_heads", hidden_size // 8)
         self.rosa_num_kv_heads = getattr(config, "rosa_num_key_value_heads", None)
 
-        self.rosa_suffix_window = getattr(config, "rosa_suffix_window", 4)
+        self.rosa_suffix_window = getattr(config, "rosa_suffix_window", 8)
         self.rosa_suffix_factor = getattr(config, "rosa_suffix_factor", None)
 
         if self.rosa_num_v_bits is None:
@@ -45,13 +45,11 @@ class RosaBase(nn.Module):
         self.rosa_v_emb1 = nn.Parameter(torch.full((self.rosa_num_heads * self.rosa_num_v_bits,), +1e-5))
         self.rosa_o_gate = nn.Linear(hidden_size, hidden_size, bias=bias)
     
-    def forward(
-        self,
-        hidden_states: Tensor,
-        inject_states: Optional[Tensor] = None,
-        attention_mask: Optional[Tensor] = None,
-        past_key_values = None,
-    ) -> Tensor:
+    def rosa_dispatch(self,
+            hidden_states: Tensor,
+            attention_mask: Optional[Tensor] = None,
+            past_key_values = None,
+    ):
         bsz, seq_len, _ = hidden_states.size()
 
         query_states: Tensor = self.rosa_q_proj(hidden_states)
@@ -64,18 +62,38 @@ class RosaBase(nn.Module):
         value_states = value_states.view(bsz, seq_len, self.rosa_num_kv_heads, self.rosa_num_v_bits).transpose(1, 2)
 
         if past_key_values is None:
-            output = rosa_bits_ops(
+            work = rosa_bits_ops(
                 query_states, key_states, value_states,
                 suffix_window=self.rosa_suffix_window,
                 suffix_factor=self.rosa_suffix_factor,
                 attention_mask=attention_mask,
+                async_op=True,
             )
+            states = (work, hidden_states)
         else:
             if not hasattr(past_key_values, "_rosa_cache"):
                 setattr(past_key_values, "_rosa_cache", RosaCache())
             cache: RosaCache = getattr(past_key_values, "_rosa_cache")
-            output = cache.update(query_states, key_states, value_states, layer_idx=self.rosa_layer_idx)
+            rosa_sam = cache.get_rosa_sam(layer_idx=self.rosa_layer_idx)
+            xq, xk, xv = rosa_sam.dispatch(query_states, key_states, value_states)
+            states = (rosa_sam, xq, xk, xv, hidden_states)
         
+        return states
+    
+    def rosa_combine(
+            self,
+            states,
+            inject_states: Optional[Tensor] = None,
+    ) -> Tensor:
+        if isinstance(states[0], RosaBitsWork):
+            work, hidden_states = states
+            output = cast(RosaBitsWork, work).wait()
+        else:
+            rosa_sam, xq, xk, xv, hidden_states = states
+            output = cast(RosaContext, rosa_sam).combine(xq, xk, xv, 0)
+        
+        bsz, _, seq_len, _ = output.size()
+
         output = output.transpose(1, 2).reshape(bsz, seq_len, -1)
         output = self.rosa_v_emb1 * output + self.rosa_v_emb0 * (1 - output)
         output = self.rosa_o_proj(output)
@@ -91,9 +109,11 @@ class RosaBase(nn.Module):
 class RosaCache:
     def __init__(self):
         self.layers: Dict[int, RosaContext] = {}
-
-    def update(self, query: Tensor, key: Tensor, value: Tensor, layer_idx: int):
+    
+    def get_rosa_sam(self, layer_idx: int):
         if layer_idx not in self.layers:
             self.layers[layer_idx] = RosaContext()
-        
-        return self.layers[layer_idx].update(query, key, value)
+        return self.layers[layer_idx]
+
+    def update(self, query: Tensor, key: Tensor, value: Tensor, layer_idx: int):
+        return self.get_rosa_sam(layer_idx).update(query, key, value)
