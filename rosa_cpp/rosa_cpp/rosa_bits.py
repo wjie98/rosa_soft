@@ -6,7 +6,7 @@ import math
 from torch import Tensor
 from typing import *
 
-from .rosa_sam import RosaContext
+from .rosa_sam import RosaContext, RosaWork
 
 
 __all__ = [
@@ -21,7 +21,7 @@ def rosa_bits_ops(
         suffix_window: int = 8,
         suffix_factor: Optional[float] = None,
         attention_mask: Optional[Tensor] = None,
-        attention_tau: float = 1.0,
+        attention_tau: float = 0.1,
         async_op: bool = False,
 ) -> Union[Tensor, 'RosaBitsWork']:
     """
@@ -45,14 +45,15 @@ def rosa_bits_ops(
         RosaBitsWork: A work object for asynchronous execution if async_op is True.
     """
 
-    params = RosaBitsParams(
+    work = RosaBitsWork()
+    work._future = RosaContext().update(query, key, value, 0, inspect=True, async_op=True)
+    work._params = RosaBitsParams(
         suffix_window=suffix_window,
         suffix_factor=suffix_factor,
         attention_mask=attention_mask,
         attention_tau=attention_tau,
     )
-    key = RosaBitsDispatchFunction.apply(query, key, value, params)
-    work = RosaBitsWork(key)
+    work._query_key_value = (query, key, value)
 
     if async_op:
         return work
@@ -60,14 +61,28 @@ def rosa_bits_ops(
 
 
 class RosaBitsWork:
-    def __init__(self, key: Tensor):
-        self._key = key
+    def __init__(self):
+        self._future: RosaWork
+        self._params: RosaBitsParams
+        self._query_key_value: Tuple[Tensor, Tensor, Tensor]
 
     def wait(self):
-        key, self._key = self._key, None
-        if key is None:
+        if self._future is None:
             raise RuntimeError("wait() called twice")
-        return RosaBitsCombineFunction.apply(key)
+        
+        work = self._future
+        params = self._params
+        query, key, value = self._query_key_value
+
+        x_hard, info = work.wait()
+        params.info["x_hard"] = x_hard
+        params.info.update(info)
+
+        self._future = None
+        self._params = None
+        self._query_key_value = None
+
+        return RosaBitsFunction.apply(query, key, value, params)
 
 
 class RosaBitsParams:
@@ -90,12 +105,14 @@ class RosaBitsParams:
         self._ctx: Optional[RosaContext] = None
 
 
-class RosaBitsDispatchFunction(torch.autograd.Function):
+class RosaBitsFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, query: Tensor, key: Tensor, value: Tensor, params: RosaBitsParams):
-        params._ctx = RosaContext()
-        xq, xk, xv = params._ctx.dispatch(query, key, value)
-        params.info["dispatch"] = (xq, xk, xv)
+        if "x_hard" in params.info:
+            x_hard = params.info.pop("x_hard")
+        else:
+            x_hard, info = RosaContext().update(query, key, value, 0, inspect=True)
+            params.info.update(info)
 
         ctx.save_for_backward(
             query.detach(),
@@ -104,16 +121,12 @@ class RosaBitsDispatchFunction(torch.autograd.Function):
         )
         ctx.saved_params = params
 
-        key = torch.empty(0, dtype=torch.float32, device="cpu")
-        key.rosa_params = params
-        return key
+        return x_hard
     
     @staticmethod
-    def backward(ctx, _):
+    def backward(ctx, grad_output: Tensor):
         query, key, value = cast(Tuple[Tensor, ...], ctx.saved_tensors)
         params: RosaBitsParams = ctx.saved_params
-
-        grad_output = params.info.pop("grad_output")
 
         length = params.info.pop("length")
         endpos = params.info.pop("endpos")
@@ -143,25 +156,6 @@ class RosaBitsDispatchFunction(torch.autograd.Function):
         return grad_query, grad_key, grad_value, None
 
 
-class RosaBitsCombineFunction(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, key: Tensor):
-        params: RosaBitsParams = key.rosa_params
-        xq, xk, xv = params.info.pop("dispatch")
-
-        x_hard, info = params._ctx.inspect(xq, xk, xv, 0)
-        params.info.update(info)
-
-        ctx.saved_params = params
-        return x_hard
-    
-    @staticmethod
-    def backward(ctx, grad_output: Tensor):
-        params: RosaBitsParams = ctx.saved_params
-        params.info["grad_output"] = grad_output
-        return torch.empty(0, dtype=torch.float32, device="cpu")
-
-
 def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
     bsz, num_heads, seq_len, head_dim = hidden_states.size()
     if n_rep == 1:
@@ -189,7 +183,7 @@ def decay_qk(xq: Tensor, xk: Tensor, decay_factor: Optional[float] = None):
             wd = max(0.1, min(decay_factor, 0.99))
         
         qk_w = torch.pow(wd, inds)
-        qk_w = qk_w / qk_w.sum() * win_size
+        qk_w = qk_w / qk_w.sum()
         qk_w_sqrt = torch.sqrt(qk_w) # [win_size]
 
         xq = xq * qk_w_sqrt.view(-1, 1).type_as(xq)
@@ -197,14 +191,16 @@ def decay_qk(xq: Tensor, xk: Tensor, decay_factor: Optional[float] = None):
     return xq, xk
 
 
-def gather_v(xv: Tensor, endpos: Tensor):
-    bsz, num_heads, seq_len, num_bits = xv.size()
+def gather_x(x: Tensor, endpos: Tensor, offset: int = 1):
+    bsz, num_heads, seq_len, num_bits = x.size()
     with torch.no_grad():
         epos = endpos.view(bsz, num_heads, seq_len)
     
-    mask = (epos >= 0).view(bsz, num_heads, seq_len, 1).type_as(xv)
-    inds = (epos + 1).view(bsz, num_heads, seq_len, 1).expand_as(xv)
-    return xv.gather(-2, inds) * mask # mask out the padding tokens
+    mask = (epos >= 0).view(bsz, num_heads, seq_len, 1).type_as(x)
+    inds = (epos + offset).clamp(0, seq_len - 1)
+    inds = inds.view(bsz, num_heads, seq_len, 1).expand_as(x)
+
+    return x.gather(-2, inds) * mask # mask out the padding tokens
 
 
 def suffix_attention_proxy(
@@ -233,13 +229,23 @@ def suffix_attention_proxy(
     # print(qk.tolist())
     # print(qv.tolist())
 
-    xq = torch.tanh(query)
-    xk = torch.tanh(key)
-    xv = torch.tanh(value)
+    # xq = torch.tanh(query)
+    # xk = torch.tanh(key)
+    # xv = torch.tanh(value)
 
-    xq = xq + (torch.where(query > 0, 1.0, -1.0) - xq).detach()
-    xk = xk + (torch.where(key   > 0, 1.0, -1.0) - xk).detach()
-    xv = xv + (torch.where(value > 0, 1.0, -1.0) - xv).detach() # [-1, 1] is better
+    xq = F.softsign(query)
+    xk = F.softsign(key)
+    xv = F.softsign(value)
+
+    # xq = torch.sin(query)
+    # xk = torch.sin(key)
+    # xv = torch.sin(value)
+
+    # xq = xq + (torch.where(query > 0, 1.0, -1.0) - xq).detach()
+    # xk = xk + (torch.where(key   > 0, 1.0, -1.0) - xk).detach()
+    # xv = xv + (torch.where(value > 0, 1.0, -1.0) - xv).detach() # [-1, 1] is better
+
+    attention_scale = 1.0 / num_qk_bits / attention_tau
     
     n_rep = num_heads // num_kv_heads
     xk = repeat_kv(xk, n_rep)
@@ -253,11 +259,16 @@ def suffix_attention_proxy(
     xq = xq.reshape(bsz, num_heads, seq_len, num_q_bits * suffix_window)
     xk = xk.reshape(bsz, num_heads, seq_len, num_k_bits * suffix_window)
 
-    scale = 1.0 / (num_qk_bits * suffix_window) / attention_tau
     xo = F.scaled_dot_product_attention(
-        xq, xk, xv.detach(), scale=scale,
+        xq, xk, xv, scale=attention_scale,
         is_causal=True, attn_mask=attention_mask,
     )
 
-    tv = gather_v(xv, endpos)
-    return xo + tv
+    pk = gather_x(xk, endpos)
+    pv = gather_x(xv, endpos)
+
+    gg = torch.sum(xq * pk, dim=-1, keepdim=True)
+    gg = torch.sigmoid(gg * attention_scale)
+    
+    xo = xo * (1 - gg) + pv * gg
+    return xo

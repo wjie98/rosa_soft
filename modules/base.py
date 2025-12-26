@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from typing import *
 
-from rosa_cpp import RosaContext, rosa_bits_ops, RosaBitsWork
+from rosa_cpp import RosaContext, RosaWork, rosa_bits_ops, RosaBitsWork
 
 
 
@@ -41,15 +41,26 @@ class RosaBase(nn.Module):
         self.rosa_v_proj = nn.Linear(hidden_size, self.rosa_num_kv_heads * self.rosa_num_v_bits, bias=bias)
         self.rosa_o_proj = nn.Linear(self.rosa_num_heads * self.rosa_num_v_bits, hidden_size, bias=bias)
 
-        self.rosa_v_emb0 = nn.Parameter(torch.full((self.rosa_num_heads * self.rosa_num_v_bits,), -1e-5))
-        self.rosa_v_emb1 = nn.Parameter(torch.full((self.rosa_num_heads * self.rosa_num_v_bits,), +1e-5))
-        self.rosa_o_gate = nn.Linear(hidden_size, hidden_size, bias=bias)
+        self.rosa_v_emb0 = nn.Parameter(torch.zeros(self.rosa_num_heads * self.rosa_num_v_bits))
+        self.rosa_v_emb1 = nn.Parameter(torch.zeros(self.rosa_num_heads * self.rosa_num_v_bits))
+        # self.rosa_o_gate = nn.Parameter(torch.zeros(hidden_size))
+
+        # scale = -0.02
+        # self.rosa_q_proj.weight.data.uniform_(scale, -scale)
+        # self.rosa_k_proj.weight.data.uniform_(scale, -scale)
+        # self.rosa_v_proj.weight.data.uniform_(scale, -scale)
+        # self.rosa_q_proj.weight.data.copy_(self.rosa_k_proj.weight.data)
+        self.rosa_o_proj.weight.data.zero_()
+
+        self.rosa_v_emb0.data.fill_(-1e-5)
+        self.rosa_v_emb1.data.fill_(+1e-5)
+        # self.rosa_o_gate.data.zero_()
     
     def rosa_dispatch(self,
             hidden_states: Tensor,
             attention_mask: Optional[Tensor] = None,
             past_key_values = None,
-    ):
+    ) -> Tuple[Union[RosaBitsWork, RosaWork], Tensor]:
         bsz, seq_len, _ = hidden_states.size()
 
         query_states: Tensor = self.rosa_q_proj(hidden_states)
@@ -74,35 +85,33 @@ class RosaBase(nn.Module):
             if not hasattr(past_key_values, "_rosa_cache"):
                 setattr(past_key_values, "_rosa_cache", RosaCache())
             cache: RosaCache = getattr(past_key_values, "_rosa_cache")
-            rosa_sam = cache.get_rosa_sam(layer_idx=self.rosa_layer_idx)
-            xq, xk, xv = rosa_sam.dispatch(query_states, key_states, value_states)
-            states = (rosa_sam, xq, xk, xv, hidden_states)
+
+            work = cache.get_rosa_sam(layer_idx=self.rosa_layer_idx).update(
+                query_states, key_states, value_states, 0,
+                async_op=True,
+            )
+            states = (work, hidden_states)
         
         return states
     
     def rosa_combine(
             self,
-            states,
+            states: Tuple[Union[RosaBitsWork, RosaWork], Tensor],
             inject_states: Optional[Tensor] = None,
     ) -> Tensor:
-        if isinstance(states[0], RosaBitsWork):
-            work, hidden_states = states
-            output = cast(RosaBitsWork, work).wait()
-        else:
-            rosa_sam, xq, xk, xv, hidden_states = states
-            output = cast(RosaContext, rosa_sam).combine(xq, xk, xv, 0)
-        
+        work, hidden_states = states
+        output = work.wait()
+
         bsz, _, seq_len, _ = output.size()
 
         output = output.transpose(1, 2).reshape(bsz, seq_len, -1)
         output = self.rosa_v_emb1 * output + self.rosa_v_emb0 * (1 - output)
         output = self.rosa_o_proj(output)
         
-        gate = torch.sigmoid(self.rosa_o_gate(hidden_states))
-        output = output * gate
-
+        # gate = torch.sigmoid(self.rosa_o_gate)
         if inject_states is not None:
-            output = output + inject_states * (1 - gate)
+            # output = output * gate + inject_states * (1 - gate)
+            output = output + inject_states
         return output
 
 

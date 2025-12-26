@@ -11,13 +11,54 @@ from .utils import quantize, dequantize
 
 
 __all__ = [
+    "RosaWork",
     "RosaContext",
 ]
+
+
+class RosaWork:
+    def __init__(self):
+        self._ctx: RosaContext
+        self._qkv: Tuple[Tensor, Tensor, Tensor, int]
+        self._inspect: bool = False
+    
+    def wait(self):
+        if self._ctx is None:
+            raise RuntimeError("wait() called twice")
+        ctx = self._ctx
+        xq, xk, xv, u = self._qkv
+
+        self._ctx = None
+        self._qkv = None
+
+        if self._inspect:
+            return ctx._inspect(xq, xk, xv, u)
+        else:
+            return ctx._combine(xq, xk, xv, u)
 
 
 class RosaContext:
     def __init__(self):
         self._sam: RosaSAM | None = None
+    
+    def update(self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        mismatch: int = 0,
+        inspect: bool = False,
+        async_op: bool = False,
+    ) -> Union[Tensor, Tuple[Tensor, Dict[str, Tensor]]]:
+        xq, xk, xv = self._dispatch(query=query, key=key, value=value)
+        
+        work = RosaWork()
+        work._ctx = self
+        work._qkv = (xq, xk, xv, mismatch)
+        work._inspect = inspect
+
+        if async_op:
+            return work
+        return work.wait()
     
     def _init_sam(self, query: Tensor, key: Tensor, value: Tensor):
         bsz, num_q_heads, seq_len, num_q_bits = query.size()
@@ -43,22 +84,7 @@ class RosaContext:
             assert self.num_k_bits == num_k_bits
             assert self.num_v_bits == num_v_bits
     
-    def update(self,
-        query: Tensor,
-        key: Tensor,
-        value: Tensor,
-        mismatch: int = 0,
-        inspect: bool = False,
-    ) -> Union[Tensor, Tuple[Tensor, Dict[str, Tensor]]]:
-        xq, xk, xv = self.dispatch(query=query, key=key, value=value)
-        if inspect:
-            output, info = self.inspect(xq=xq, xk=xk, xv=xv, mismatch=mismatch)
-            return output, info
-        else:
-            output = self.combine(xq=xq, xk=xk, xv=xv, mismatch=mismatch)
-            return output
-    
-    def dispatch(self, query: Tensor, key: Tensor, value: Tensor):
+    def _dispatch(self, query: Tensor, key: Tensor, value: Tensor):
         self._init_sam(query=query, key=key, value=value)
 
         xq = quantize(query)
@@ -72,7 +98,7 @@ class RosaContext:
         
         return xq, xk, xv
 
-    def combine(self, xq: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0):
+    def _combine(self, xq: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0):
         self.stream.synchronize()
 
         bsz, num_q_heads, seq_len = xq.size()
@@ -98,7 +124,7 @@ class RosaContext:
         xo = xo.view(bsz, num_q_heads, seq_len, self.num_v_bits)
         return xo
     
-    def inspect(self, xq: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0) -> Tuple[Tensor, Dict[str, Tensor]]:
+    def _inspect(self, xq: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0) -> Tuple[Tensor, Dict[str, Tensor]]:
         self.stream.synchronize()
 
         bsz, num_q_heads, seq_len = xq.size()
