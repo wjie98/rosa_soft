@@ -1,8 +1,6 @@
 import torch
 
-from rosa_cpp.ops import *
-from rosa_cpp.rosa_gss import rosa_gss_ops
-from rosa_cpp.rosa_gqs import rosa_gqs_ops
+from rosa_cpp import RosaContext, rosa_bits_ops
 
 
 def samx_qkv_slow(qqq, kkk, vvv): # slow, only for reference
@@ -40,41 +38,28 @@ if __name__ == "__main__":
 
             o1 = torch.tensor(samx_qkv_slow(q, k, v))
 
-            ctx = torch.zeros(1, dtype=torch.long)
-            rosa_sam_init(ctx)
-            o2 = rosa_sam_update(
-                ctx,
-                torch.tensor([q]),
-                torch.tensor([k]),
-                torch.tensor([v]),
-                0,
-            )[0]
-            rosa_sam_free(ctx)
+            query = (torch.tensor([q]).view(1, 1, -1, 1) >> torch.arange(4)) & 1
+            key   = (torch.tensor([k]).view(1, 1, -1, 1) >> torch.arange(4)) & 1
+            value = (torch.tensor([v]).view(1, 1, -1, 1) >> torch.arange(4)) & 1
 
-            o3 = rosa_sam_forward(
-                torch.tensor([q]),
-                torch.tensor([k]),
-                torch.tensor([v]),
-                0,
-            )[0]
+            query = query.float()
+            key   = key.float()
+            value = value.float()
+            # print(query.size(), key.size(), value.size())
 
-            o4, = rosa_gss_forward(
-                torch.tensor([q]),
-                torch.tensor([k]),
-                torch.tensor([v]),
-                0,
-                3, 1.0,
-            )[0]
+            o2 = RosaContext().update(query, key, value, 0)
+            o2 = ((o2 > 0) << torch.arange(4)).sum(dim=-1).squeeze()
+            
+            o3 = rosa_bits_ops(query, key, value)
+            o3 = ((o3 > 0) << torch.arange(4)).sum(dim=-1).squeeze()
 
             print(o1)
             print(o2)
-            # print(o3)
-            # print(o4)
+            print(o3)
             print()
             
             assert (o1 == o2).all()
             assert (o1 == o3).all()
-            assert (o1 == o4).all()
 
         print("✅ Forward Pass Passed!")
     except AssertionError as e:
@@ -89,34 +74,7 @@ if __name__ == "__main__":
             k = torch.randint(0, 2, size=(8, 2)).float().view(1, 1, -1, 2).requires_grad_()
             v = torch.randint(0, 2, size=(8, 2)).float().view(1, 1, -1, 2).requires_grad_()
 
-            o = rosa_gss_ops(q, k, v, 0, 3, 1.0, training=True)
-            o.sum().backward()
-
-            # print(q.grad.size())
-            # print(k.grad.size())
-            # print(v.grad.size())
-
-            assert not q.grad.isnan().any()
-            assert not k.grad.isnan().any()
-            assert not v.grad.isnan().any()
-
-            assert not q.grad.isinf().any()
-            assert not k.grad.isinf().any()
-            assert not v.grad.isinf().any()
-
-        print("✅ Backward Pass Passed!")
-    except AssertionError as e:
-        print("❌ Backward Pass Failed!")
-        print(e)
-    print()
-
-    try:    
-        for _ in range(10):
-            q = torch.randint(0, 2, size=(8, 2)).float().view(1, 1, -1, 2).requires_grad_()
-            k = torch.randint(0, 2, size=(8, 2)).float().view(1, 1, -1, 2).requires_grad_()
-            v = torch.randint(0, 2, size=(8, 2)).float().view(1, 1, -1, 2).requires_grad_()
-
-            o = rosa_gqs_ops(q, k, v, 0, training=True)
+            o = rosa_bits_ops(q, k, v)
             o.sum().backward()
 
             # print(q.grad.size())

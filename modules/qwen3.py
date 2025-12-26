@@ -102,15 +102,18 @@ class RosaQwen3DecoderLayer(Qwen3DecoderLayer):
         position_embeddings = None,
         **kwargs,
     ) -> torch.Tensor:
-        rosa_states = self.rosa_norm(hidden_states)
-        rosa_states = self.rosa_attn.rosa_dispatch(
-            hidden_states=rosa_states,
-            attention_mask=attention_mask,
-            past_key_values=past_key_values,
-        )
-        
         # Self Attention
         residual = hidden_states
+        
+        hidden_states = self.rosa_attn.rosa_combine(
+            states=self.rosa_attn.rosa_dispatch(
+                hidden_states=self.rosa_norm(hidden_states),
+                attention_mask=attention_mask,
+                past_key_values=past_key_values,
+            ),
+            inject_states=hidden_states,
+        )
+
         hidden_states = self.input_layernorm(hidden_states)
         hidden_states, _ = self.self_attn(
             hidden_states=hidden_states,
@@ -121,11 +124,6 @@ class RosaQwen3DecoderLayer(Qwen3DecoderLayer):
             cache_position=cache_position,
             position_embeddings=position_embeddings,
             **kwargs,
-        )
-        
-        hidden_states = self.rosa_attn.rosa_combine(
-            states=rosa_states,
-            inject_states=hidden_states,
         )
 
         hidden_states = residual + hidden_states
