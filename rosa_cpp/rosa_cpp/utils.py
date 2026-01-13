@@ -4,7 +4,7 @@ from torch import Tensor
 from typing import *
 
 
-def quantize(x: Tensor) -> Tensor:
+def quantize(x: Tensor, thresh: float | None = None) -> Tensor:
     assert x.is_floating_point()
     num_bits = x.size(-1)
     if num_bits <= 8:
@@ -16,9 +16,15 @@ def quantize(x: Tensor) -> Tensor:
     else:
         dtype = torch.int64
     
-    r = torch.arange(num_bits, device=x.device)
-    x = ((x > 0).to(dtype) << r).sum(dim=-1)
-    return x
+    if thresh is None:
+        r = torch.arange(num_bits, device=x.device)
+        x = ((x > 0).to(dtype) << r).sum(dim=-1)
+        return x
+    else:
+        r = torch.arange(num_bits, device=x.device)
+        m = ((x.abs() > thresh).to(dtype) << r).sum(dim=-1)
+        x = ((x > 0).to(dtype) << r).sum(dim=-1)
+        return x, m
 
 def dequantize(x: Tensor, v: Tensor | int) -> Tensor:
     assert not x.is_floating_point()

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import math
 from torch import Tensor
 from typing import *
 
@@ -43,18 +44,21 @@ class RosaBase(nn.Module):
 
         self.rosa_v_emb0 = nn.Parameter(torch.zeros(self.rosa_num_heads * self.rosa_num_v_bits))
         self.rosa_v_emb1 = nn.Parameter(torch.zeros(self.rosa_num_heads * self.rosa_num_v_bits))
-        # self.rosa_o_gate = nn.Parameter(torch.zeros(hidden_size))
+        self.rosa_o_gate = nn.Parameter(torch.zeros(hidden_size))
 
-        # scale = -0.02
-        # self.rosa_q_proj.weight.data.uniform_(scale, -scale)
-        # self.rosa_k_proj.weight.data.uniform_(scale, -scale)
-        # self.rosa_v_proj.weight.data.uniform_(scale, -scale)
-        # self.rosa_q_proj.weight.data.copy_(self.rosa_k_proj.weight.data)
-        self.rosa_o_proj.weight.data.zero_()
+        scale = -0.02 / getattr(config, "num_hidden_layers")
+        self.rosa_q_proj.weight.data.uniform_(scale, -scale)
+        self.rosa_k_proj.weight.data.copy_(self.rosa_q_proj.weight.data)
+
+        s0 = self.rosa_v_proj.weight.size(0)
+        s1 = self.rosa_v_proj.weight.size(1)
+        scale = max(1.0, math.sqrt(s0 / s1))
+        nn.init.orthogonal_(self.rosa_v_proj.weight.data, gain=scale)
+        nn.init.zeros_(self.rosa_o_proj.weight.data)
 
         self.rosa_v_emb0.data.fill_(-1e-5)
         self.rosa_v_emb1.data.fill_(+1e-5)
-        # self.rosa_o_gate.data.zero_()
+        self.rosa_o_gate.data.zero_()
     
     def rosa_dispatch(self,
             hidden_states: Tensor,
@@ -78,6 +82,7 @@ class RosaBase(nn.Module):
                 suffix_window=self.rosa_suffix_window,
                 suffix_factor=self.rosa_suffix_factor,
                 attention_mask=attention_mask,
+                # threshold=0.1,
                 async_op=True,
             )
             states = (work, hidden_states)
@@ -108,10 +113,10 @@ class RosaBase(nn.Module):
         output = self.rosa_v_emb1 * output + self.rosa_v_emb0 * (1 - output)
         output = self.rosa_o_proj(output)
         
-        # gate = torch.sigmoid(self.rosa_o_gate)
+        gate = torch.sigmoid(self.rosa_o_gate)
         if inject_states is not None:
-            # output = output * gate + inject_states * (1 - gate)
-            output = output + inject_states
+            output = output * gate + inject_states * (1 - gate)
+            # output = output + inject_states
         return output
 
 

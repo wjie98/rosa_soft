@@ -19,22 +19,23 @@ __all__ = [
 class RosaWork:
     def __init__(self):
         self._ctx: RosaContext
-        self._qkv: Tuple[Tensor, Tensor, Tensor, int]
+        self._qkv: Tuple[Tensor, ...]
+        self._mis: int
         self._inspect: bool = False
     
     def wait(self):
         if self._ctx is None:
             raise RuntimeError("wait() called twice")
         ctx = self._ctx
-        xq, xk, xv, u = self._qkv
+        qkv = self._qkv
 
         self._ctx = None
         self._qkv = None
 
         if self._inspect:
-            return ctx._inspect(xq, xk, xv, u)
+            return ctx._inspect(*qkv, mismatch=self._mis)
         else:
-            return ctx._combine(xq, xk, xv, u)
+            return ctx._combine(*qkv, mismatch=self._mis)
 
 
 class RosaContext:
@@ -46,21 +47,21 @@ class RosaContext:
         key: Tensor,
         value: Tensor,
         mismatch: int = 0,
+        thresh: float | None = None,
         inspect: bool = False,
         async_op: bool = False,
     ) -> Union[Tensor, Tuple[Tensor, Dict[str, Tensor]]]:
-        xq, xk, xv = self._dispatch(query=query, key=key, value=value)
-        
         work = RosaWork()
         work._ctx = self
-        work._qkv = (xq, xk, xv, mismatch)
+        work._qkv = self._dispatch(query=query, key=key, value=value, thresh=thresh)
+        work._mis = mismatch
         work._inspect = inspect
 
         if async_op:
             return work
         return work.wait()
     
-    def _init_sam(self, query: Tensor, key: Tensor, value: Tensor):
+    def _init_sam(self, query: Tensor, key: Tensor, value: Tensor, thresh: float | None):
         bsz, num_q_heads, seq_len, num_q_bits = query.size()
         bsz, num_k_heads, seq_len, num_k_bits = key.size()
         bsz, num_v_heads, seq_len, num_v_bits = value.size()
@@ -71,7 +72,10 @@ class RosaContext:
         assert num_v_bits <= 64, f"Unsupported bit width for value: {num_v_bits}."
 
         if self._sam is None:
-            self._sam = RosaSAM(bsz * num_q_heads)
+            if thresh is None:
+                self._sam = RosaSAM(bsz * num_q_heads)
+            else:
+                self._sam = RosaTritSAM(bsz * num_q_heads)
 
             self.num_q_bits = num_q_bits
             self.num_k_bits = num_k_bits
@@ -84,21 +88,33 @@ class RosaContext:
             assert self.num_k_bits == num_k_bits
             assert self.num_v_bits == num_v_bits
     
-    def _dispatch(self, query: Tensor, key: Tensor, value: Tensor):
-        self._init_sam(query=query, key=key, value=value)
+    def _dispatch(self, query: Tensor, key: Tensor, value: Tensor, thresh: float | None):
+        self._init_sam(query=query, key=key, value=value, thresh=thresh)
 
-        xq = quantize(query)
-        xk = quantize(key)
-        xv = quantize(value)
+        if thresh is None:
+            xq = quantize(query)
+            xk = quantize(key)
+            xv = quantize(value)
 
-        with self.stream(post_wait=False):
-            xq = xq.to("cpu", non_blocking=True)
-            xk = xk.to("cpu", non_blocking=True)
-            xv = xv.to("cpu", non_blocking=True)
-        
-        return xq, xk, xv
+            with self.stream(post_wait=False):
+                xq = xq.to("cpu", non_blocking=True)
+                xk = xk.to("cpu", non_blocking=True)
+                xv = xv.to("cpu", non_blocking=True)
+            xm = None
+        else:
+            xq, xm = quantize(query, thresh=thresh)
+            xk = quantize(key)
+            xv = quantize(value)
 
-    def _combine(self, xq: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0):
+            with self.stream(post_wait=False):
+                xq = xq.to("cpu", non_blocking=True)
+                xm = xm.to("cpu", non_blocking=True)
+                xk = xk.to("cpu", non_blocking=True)
+                xv = xv.to("cpu", non_blocking=True)
+        return xq, xm, xk, xv
+
+
+    def _combine(self, xq: Tensor, xm: Tensor | None, xk: Tensor, xv: Tensor, mismatch: int = 0):
         self.stream.synchronize()
 
         bsz, num_q_heads, seq_len = xq.size()
@@ -114,17 +130,20 @@ class RosaContext:
         xk = xk.reshape(-1, seq_len)
         xv = xv.reshape(-1, seq_len)
 
-        xo = self._sam.update(xq, xk, xv, mismatch)
+        if xm is None:
+            xo = self._sam.update(xq, xk, xv, mismatch)
+        else:
+            xm = xm.reshape(-1, seq_len)
+            xo = self._sam.update(xq, xm, xk, xv, mismatch)
 
         with self.stream(prev_wait=False):
-            # xo = xo.to(self.device, non_blocking=True)
-            xo = xo.to(self.device) # TODO: fix this
+            xo = xo.to(self.device, non_blocking=True)
         
         xo = dequantize(xo, self.num_v_bits).to(self.dtype)
         xo = xo.view(bsz, num_q_heads, seq_len, self.num_v_bits)
         return xo
     
-    def _inspect(self, xq: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0) -> Tuple[Tensor, Dict[str, Tensor]]:
+    def _inspect(self, xq: Tensor, xm: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0) -> Tuple[Tensor, Dict[str, Tensor]]:
         self.stream.synchronize()
 
         bsz, num_q_heads, seq_len = xq.size()
@@ -140,7 +159,11 @@ class RosaContext:
         xk = xk.reshape(-1, seq_len)
         xv = xv.reshape(-1, seq_len)
 
-        xo, info = self._sam.inspect(xq, xk, xv, mismatch)
+        if xm is None:
+            xo, info = self._sam.inspect(xq, xk, xv, mismatch)
+        else:
+            xm = xm.reshape(-1, seq_len)
+            xo, info = self._sam.inspect(xq, xm, xk, xv, mismatch)
 
         with self.stream(prev_wait=False):
             xo = xo.to(self.device, non_blocking=True)
@@ -225,4 +248,42 @@ class RosaSAM:
             "length": length,
         }
         return xo, info
+
+class RosaTritSAM:
+    def __init__(self, n_ctx: int = 1):
+        assert n_ctx >= 0
+        self._objs = torch.zeros(n_ctx, dtype=torch.int64, device="cpu")
+        self._objs = rosa_trit_init(self._objs)
+    
+    def __del__(self):
+        try:
+            rosa_trit_free(self._objs)
+        except (AttributeError, TypeError):
+            pass
+    
+    def __len__(self):
+        return self._objs.numel()
+    
+    def update(self, q: Tensor, m: Tensor, k: Tensor, v: Tensor, u: int) -> Tensor:
+        xq = q.to(torch.int64)
+        xm = m.to(torch.int64)
+        xk = k.to(torch.int64)
+        xv = v.to(torch.int64)
+        xo = rosa_trit_update(self._objs, xq, xm, xk, xv, u)
+        return xo.to(v.dtype)
+    
+    def inspect(self, q: Tensor, m: Tensor, k: Tensor, v: Tensor, u: int) -> Tuple[Tensor, Dict[str, Tensor]]:
+        xq = q.to(torch.int64)
+        xm = m.to(torch.int64)
+        xk = k.to(torch.int64)
+        xv = v.to(torch.int64)
+        xo, endpos, length = rosa_trit_inspect(self._objs, xq, xm, xk, xv, u)
+        
+        xo = xo.to(v.dtype)
+        info = {
+            "endpos": endpos,
+            "length": length,
+        }
+        return xo, info
+    
     

@@ -53,13 +53,18 @@ if __name__ == "__main__":
             o3 = rosa_bits_ops(query, key, value)
             o3 = ((o3 > 0) << torch.arange(4)).sum(dim=-1).squeeze()
 
+            o4 = RosaContext().update(query, key, value, 0, thresh=-0.1)
+            o4 = ((o4 > 0) << torch.arange(4)).sum(dim=-1).squeeze()
+
             print(o1)
             print(o2)
             print(o3)
+            print(o4)
             print()
             
             assert (o1 == o2).all()
             assert (o1 == o3).all()
+            assert (o1 == o4).all()
 
         print("✅ Forward Pass Passed!")
     except AssertionError as e:
