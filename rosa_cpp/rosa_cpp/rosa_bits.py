@@ -22,6 +22,7 @@ def rosa_bits_ops(
         suffix_factor: Optional[float] = None,
         attention_mask: Optional[Tensor] = None,
         attention_tau: float = 0.1,
+        threshold: float | None = None,
         async_op: bool = False,
 ) -> Union[Tensor, 'RosaBitsWork']:
     """
@@ -46,7 +47,7 @@ def rosa_bits_ops(
     """
 
     work = RosaBitsWork()
-    work._future = RosaContext().update(query, key, value, 0, inspect=True, async_op=True)
+    work._future = RosaContext().update(query, key, value, 0, thresh=threshold, inspect=True, async_op=True)
     work._params = RosaBitsParams(
         suffix_window=suffix_window,
         suffix_factor=suffix_factor,
@@ -237,9 +238,9 @@ def suffix_attention_proxy(
     xk = F.softsign(key)
     xv = F.softsign(value)
 
-    # xq = torch.sin(query)
-    # xk = torch.sin(key)
-    # xv = torch.sin(value)
+    # xq = QuantizeFunction.apply(query, 1e-3)
+    # xk = QuantizeFunction.apply(key, 1e-3)
+    # xv = QuantizeFunction.apply(value, 1e-3)
 
     # xq = xq + (torch.where(query > 0, 1.0, -1.0) - xq).detach()
     # xk = xk + (torch.where(key   > 0, 1.0, -1.0) - xk).detach()
@@ -272,3 +273,20 @@ def suffix_attention_proxy(
     
     xo = xo * (1 - gg) + pv * gg
     return xo
+
+
+class QuantizeFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: Tensor, tau: float):
+        ctx.save_for_backward(x)
+        ctx.saved_tau = tau
+        return torch.where(x > 0, 1.0, -1.0)
+    
+    @staticmethod
+    def backward(ctx, g: Tensor):
+        x: Tensor = ctx.saved_tensors[0]
+        tau: float = ctx.saved_tau
+
+        mag = x.abs().clamp_min_(tau)
+        return g / mag, None
+    
