@@ -29,6 +29,8 @@ class RosaBase(nn.Module):
         self.rosa_suffix_window = getattr(config, "rosa_suffix_window", 8)
         self.rosa_suffix_factor = getattr(config, "rosa_suffix_factor", None)
 
+        self.rosa_schmitt_trigger = 0.1
+
         if self.rosa_num_v_bits is None:
             self.rosa_num_v_bits = self.rosa_num_qk_bits
 
@@ -82,7 +84,7 @@ class RosaBase(nn.Module):
                 suffix_window=self.rosa_suffix_window,
                 suffix_factor=self.rosa_suffix_factor,
                 attention_mask=attention_mask,
-                # threshold=0.1,
+                schmitt_trigger=self.rosa_schmitt_trigger,
                 async_op=True,
             )
             states = (work, hidden_states)
@@ -93,7 +95,7 @@ class RosaBase(nn.Module):
 
             work = cache.get_rosa_sam(layer_idx=self.rosa_layer_idx).update(
                 query_states, key_states, value_states, 0,
-                async_op=True,
+                schmitt_trigger=self.rosa_schmitt_trigger, async_op=True,
             )
             states = (work, hidden_states)
         

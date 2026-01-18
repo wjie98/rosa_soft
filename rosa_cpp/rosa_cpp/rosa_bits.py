@@ -19,10 +19,10 @@ def rosa_bits_ops(
         key: Tensor,
         value: Tensor,
         suffix_window: int = 8,
-        suffix_factor: Optional[float] = None,
+        suffix_factor: Optional[float] = 0.5,
         attention_mask: Optional[Tensor] = None,
         attention_tau: float = 0.1,
-        threshold: float | None = None,
+        schmitt_trigger: float = 0.0,
         async_op: bool = False,
 ) -> Union[Tensor, 'RosaBitsWork']:
     """
@@ -47,7 +47,12 @@ def rosa_bits_ops(
     """
 
     work = RosaBitsWork()
-    work._future = RosaContext().update(query, key, value, 0, thresh=threshold, inspect=True, async_op=True)
+    work._future = RosaContext().update(
+        query=query, key=key, value=value, mismatch=0,
+        inspect=True, schmitt_trigger=schmitt_trigger,
+        async_op=True,
+    )
+
     work._params = RosaBitsParams(
         suffix_window=suffix_window,
         suffix_factor=suffix_factor,
