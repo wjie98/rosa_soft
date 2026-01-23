@@ -266,8 +266,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> torch_rosa_sam_inspect(c
 
 
 TORCH_LIBRARY(rosa_cpp, m) {
-    m.def("rosa_sam_init(Tensor ctx) -> Tensor");
-    m.def("rosa_sam_free(Tensor ctx) -> Tensor");
+    m.def("rosa_sam_init(Tensor(a!) ctx) -> Tensor");
+    m.def("rosa_sam_free(Tensor(a!) ctx) -> Tensor");
     m.def("rosa_sam_update(Tensor ctx, Tensor q, Tensor k, Tensor v, int u) -> Tensor");
     m.def("rosa_sam_inspect(Tensor ctx, Tensor q, Tensor k, Tensor v, int u) -> (Tensor, Tensor, Tensor)");
 }
