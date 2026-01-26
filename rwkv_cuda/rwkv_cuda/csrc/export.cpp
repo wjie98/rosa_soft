@@ -31,6 +31,5 @@ TORCH_LIBRARY(rwkv_cuda, m) {
     m.def("rwkv7_statepassing_clampw_forward(Tensor s0, Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor(a!) y, Tensor(a!) sT, Tensor s, Tensor(a!) sa) -> ()");
     m.def("rwkv7_statepassing_clampw_backward(Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor dy, Tensor(a!) dsT, Tensor s, Tensor sa, Tensor(a!) ds0, Tensor(a!) dr, Tensor(a!) dw, Tensor(a!) dk, Tensor(a!) dv, Tensor(a!) da, Tensor(a!) db) -> ()");
 
-    m.def("rwkv7_albatross_forward_w0_fp16_dither_seq(Tensor(a!) s0, Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor(a!) y, Tensor elapsed_t) -> ()");
-    m.def("rwkv7_albatross_forward_w0_fp16_dither_one(Tensor(a!) s0, Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor(a!) y, Tensor elapsed_t) -> ()");
+    m.def("rwkv7_albatross_forward_w0_fp16_dither(Tensor(a!) s0, Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor(a!) y, Tensor elapsed_t) -> ()");
 }

@@ -9,7 +9,7 @@ import os
 import math
 from dataclasses import dataclass
 
-from rwkv_cuda.rwkv7 import RWKV7_CLAMPW_CUDA
+from rwkv_cuda.rwkv7 import RWKV7_CLAMPW_CUDA, RWKV7_ALBATROSS_W0_FP16_DITHER
 
 
 class RWKV_CMix_x070(nn.Module):
@@ -51,7 +51,16 @@ class RWKV_CMix_x070(nn.Module):
         
         k = x + xx * self.x_k
         k = torch.relu(self.key(k)) ** 2
+        return self.value(k)
+    
+    @torch.no_grad()
+    def inference(self, x: Tensor, state: Dict[str, Tensor]):
+        x0 = state["token_shift_ffn"][self.layer_id]
+        xx = torch.cat([x0[:, None, :], x[:, :-1, :]], dim=1) - x
+        x0.copy_(x[:, -1, :])
 
+        k = x + xx * self.x_k
+        k = torch.relu(self.key(k)) ** 2
         return self.value(k)
     
 
@@ -191,10 +200,10 @@ class RWKV_Tmix_x070(nn.Module):
         xa = x + xx * self.x_a
         xg = x + xx * self.x_g
 
-        r = self.receptance(xr)
-        w = -F.softplus(-(self.w0 + torch.tanh(xw @ self.w1) @ self.w2)) - 0.5 # soft-clamp to (-inf, -0.5)
-        k = self.key(xk)
-        v = self.value(xv)
+        r: Tensor = self.receptance(xr)
+        w: Tensor = -F.softplus(-(self.w0 + torch.tanh(xw @ self.w1) @ self.w2)) - 0.5 # soft-clamp to (-inf, -0.5)
+        k: Tensor = self.key(xk)
+        v: Tensor = self.value(xv)
         if self.layer_id == 0:
             v_first = v # store the v of the first layer
         else:
@@ -203,12 +212,56 @@ class RWKV_Tmix_x070(nn.Module):
         g = torch.sigmoid(xg @ self.g1) @ self.g2
 
         kk = k * self.k_k
-        kk = F.normalize(kk.view(B,T,H,-1), dim=-1, p=2.0).view(B,T,C)
+        kk = F.normalize(kk.view(B, T, H, -1), dim=-1, p=2.0).view(B, T, C)
         k = k * (1 + (a-1) * self.k_a)
 
         x = RWKV7_CLAMPW_CUDA(r, w, k, v, -kk, kk*a)
-        x = self.ln_x(x.view(B * T, C)).view(B, T, C)
 
+        x = self.ln_x(x.view(B * T, C)).view(B, T, C)
+        x = x + ((r.view(B, T, H, -1) * k.view(B, T, H, -1) * self.r_k).sum(dim=-1, keepdim=True) * v.view(B, T, H, -1)).view(B, T, C)
+        x = self.output(x * g)
+        return x, v_first
+    
+    @torch.no_grad()
+    def inference(self, x: Tensor, v_first: Tensor, state: Dict[str, Tensor]):
+        B, T, C = x.size()
+        H = self.n_head
+
+        x0 = state["token_shift_att"][self.layer_id]
+        s0 = state["time_mixing_state"][self.layer_id]
+        elapsed_t = state["elapsed_tokens"]
+
+        xx = torch.cat([x0[:, None, :], x[:, :-1, :]], dim=1) - x
+        x0.copy_(x[:, -1, :])
+
+        xr = x + xx * self.x_r
+        xw = x + xx * self.x_w
+        xk = x + xx * self.x_k
+        xv = x + xx * self.x_v
+        xa = x + xx * self.x_a
+        xg = x + xx * self.x_g
+
+        r: Tensor = self.receptance(xr)
+        w: Tensor = -F.softplus(-(self.w0 + torch.tanh(xw @ self.w1) @ self.w2)) - 0.5 # soft-clamp to (-inf, -0.5)
+        k: Tensor = self.key(xk)
+        v: Tensor = self.value(xv)
+        if self.layer_id == 0:
+            v_first = v # store the v of the first layer
+        else:
+            v = v + (v_first - v) * torch.sigmoid(self.v0 + (xv @ self.v1) @ self.v2) # add value residual
+        a = torch.sigmoid(self.a0 + (xa @ self.a1) @ self.a2) # a is "in-context learning rate"
+        g = torch.sigmoid(xg @ self.g1) @ self.g2
+
+        kk = k * self.k_k
+        kk = F.normalize(kk.view(B, T, H, -1), dim=-1, p=2.0).view(B, T, C)
+        k = k * (1 + (a-1) * self.k_a)
+
+        x, _ = RWKV7_ALBATROSS_W0_FP16_DITHER(s0, r, w, k, v, -kk, kk*a, elapsed_t, inplace=True)
+        # from rwkv_cuda.rwkv7 import RWKV7_RNN_OP
+        # x, sT = RWKV7_RNN_OP(s0, r, w, k, v, -kk, kk*a)
+        # s0.copy_(sT)
+
+        x = self.ln_x(x.view(B * T, C)).view(B, T, C)
         x = x + ((r.view(B, T, H, -1) * k.view(B, T, H, -1) * self.r_k).sum(dim=-1, keepdim=True) * v.view(B, T, H, -1)).view(B, T, C)
         x = self.output(x * g)
         return x, v_first
@@ -263,6 +316,17 @@ class RWKV_Block_x070(nn.Module):
 
         x = x + self.ffn(self.ln2(x))
         return x, v_first
+    
+    @torch.no_grad()
+    def inference(self, x: Tensor, v_first: Tensor, state: Dict[str, Tensor]):
+        if self.layer_id == 0:
+            x = self.ln0(x)
+        
+        x_attn, v_first = self.att.inference(self.ln1(x), v_first, state)
+        x = x + x_attn
+
+        x = x + self.ffn.inference(self.ln2(x), state)
+        return x, v_first
 
 
 class L2Wrap(torch.autograd.Function):
@@ -284,13 +348,11 @@ class L2Wrap(torch.autograd.Function):
 
 @dataclass
 class RWKV_Args_x070:
-    vocab_size: int
-    ctx_len: int
-    n_embd: int
-    n_layer: int
-    head_size: int
-    dim_att: int | None = None
-    dim_ffn: int | None = None
+    vocab_size: int = 65536
+    ctx_len: int = 4096
+    n_embd: int = 768
+    n_layer: int = 12
+    head_size: int = 64
     weight_decay: float = 0.1
     lr_init: float = 6e-4       # 6e-4 for L12-D768, 4e-4 for L24-D1024, 3e-4 for L24-D2048
     lr_final: float = 1e-5
@@ -329,6 +391,36 @@ class RWKV_x070(nn.Module):
         v_first = torch.empty_like(x)
         for block in self.blocks:
             x, v_first = block(x, v_first)
+
+        x = self.ln_out(x)
+        x = self.head(x)
+        return x
+    
+    @torch.no_grad()
+    def generate_zero_state(self, batch_size: int = 1, dtype = None, device = None) -> Dict[str, Tensor | List[Dict[str, Tensor]]]:
+        n_embd = self.args.n_embd
+        n_layer = self.args.n_layer
+
+        head_size = self.args.head_size
+        n_head = n_embd // head_size
+        
+        return {
+            "token_shift_att": torch.zeros(n_layer, batch_size, n_embd, dtype=dtype, device=device),
+            "token_shift_ffn": torch.zeros(n_layer, batch_size, n_embd, dtype=dtype, device=device),
+            "time_mixing_state": torch.zeros(n_layer, batch_size, n_head, head_size, head_size, dtype=dtype, device=device),
+            "elapsed_tokens": torch.zeros(batch_size, dtype=torch.int32, device=device),
+        }
+    
+    @torch.no_grad()
+    def inference(self, idx: Tensor, state: Dict[str, Tensor]) -> Tensor:
+        B, T = idx.size()
+        x = self.emb(idx)
+
+        v_first = torch.empty_like(x)
+        for layer_id, block in enumerate(self.blocks):
+            x, v_first = block.inference(x, v_first, state)
+        
+        state["elapsed_tokens"] += T
 
         x = self.ln_out(x)
         x = self.head(x)
@@ -464,18 +556,44 @@ class RWKV_x070(nn.Module):
                     nn.init.orthogonal_(p, gain=scale)
 
 if __name__ == "__main__":
-    args = RWKV_Args_x070(100, 512, 768, 3, head_size=64)
+    from rwkv.utils import PIPELINE
+
+    model_path = os.path.expanduser("~/rwkv7-g1a-0.1b-20250728-ctx4096.pth")
+    state_dict = torch.load(model_path, mmap=True)
+
+    args = RWKV_Args_x070() # 0.1b
     model = RWKV_x070(args).cuda()
+
     for name, p in model.named_parameters():
         print(name, p.size())
     
-    model.reset_parameters()
+    # model.reset_parameters()
+    model.load_state_dict(state_dict)
 
-    x = torch.randint(0, args.vocab_size, size=(4, 32 * 16), dtype=torch.long).cuda()
-    logits = model(x)
+    class Proxy(nn.Module):
+        def __init__(self, model: RWKV_x070):
+            super().__init__()
+            self.model = model.to(torch.float16)
+        
+        def forward(self, idx: Tensor, state = None):
+            idx = torch.tensor([idx]).cuda()
+            if state is None:
+                state = self.model.generate_zero_state(dtype=torch.float16, device=idx.device)
+            
+            idx = self.model.inference(idx, state=state)
+            return idx[0, -1], state
 
-    print(x.size(), logits.size())
-
-    optimizer = model.configure_optimizers()
-    print(optimizer)
+    pipeline = PIPELINE(Proxy(model), "rwkv_vocab_v20230424")
     
+    text = pipeline.generate("User: simulate SpaceX mars landing using python\n\nAssistant: <think")
+    print(text)
+
+    ids = pipeline.encode("User: simulate SpaceX mars landing using python\n\nAssistant: <think")
+    while len(ids) < 16 or len(ids) % 16 != 1:
+        ids.append(0)
+    ids = torch.tensor([ids], dtype=torch.long).cuda()
+    print(ids.size())
+
+    with torch.no_grad():
+        loss = model.compute_loss(ids[:, :-1], ids[:, 1:])
+    print(loss)
