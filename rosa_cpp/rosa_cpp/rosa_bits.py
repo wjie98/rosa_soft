@@ -21,7 +21,7 @@ def rosa_bits_ops(
         suffix_window: int = 8,
         suffix_factor: Optional[float] = 0.5,
         attention_mask: Optional[Tensor] = None,
-        attention_tau: float = 0.1,
+        attention_tau: float = 1.0,
         schmitt_trigger: float = 0.0,
         async_op: bool = False,
 ) -> Union[Tensor, 'RosaBitsWork']:
@@ -39,6 +39,7 @@ def rosa_bits_ops(
         value (Tensor): (B, H, T, D_v) Logits for Value bits.
         suffix_window (int): Size of the lookback window for fingerprinting.
         suffix_factor (Optional[float]): Decay factor for the window.
+        schmitt_trigger (float): Threshold for Schmitt trigger to prevent noise.
         async_op (bool): Whether to return a work object for asynchronous execution.
 
     Returns:

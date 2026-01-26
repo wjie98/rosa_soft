@@ -10,10 +10,41 @@ __all__ = [
     "RWKV7_CLAMPW_CUDA",
     "RWKV7_STATE_CLAMPW_CUDA",
     "RWKV7_STATE_PASSING_CLAMPW_CUDA",
-    "RWKV7_ALBATROSS_W0_FP16_DITHER_SEQ",
-    "RWKV7_ALBATROSS_W0_FP16_DITHER_ONE",
+    "RWKV7_ALBATROSS_W0_FP16_DITHER",
 ]
 
+@torch.no_grad()
+def RWKV7_RNN_OP(s0: Tensor, r: Tensor, w: Tensor, k: Tensor, v: Tensor, a: Tensor, b: Tensor) -> Tuple[Tensor, Tensor]:
+    B, T, C = r.size()
+    HEAD_SIZE = s0.size(-1)
+    H = C // HEAD_SIZE
+    N = HEAD_SIZE
+    DTYPE = v.dtype
+
+    r = r.view(B, T, H, N).float()
+    k = k.view(B, T, H, N).float()
+    v = v.view(B, T, H, N).float()
+    a = a.view(B, T, H, N).float()
+    b = b.view(B, T, H, N).float()
+    w = torch.exp(-torch.exp(w.view(B, T, H, N).float()))
+    
+    out = torch.zeros((B, T, H, N), device=r.device, dtype=torch.float)
+
+    if s0 is None:
+        state = torch.zeros((B, H, N, N), device=r.device, dtype=torch.float)
+    else:
+        state = s0.float()
+
+    for t in range(T):
+        kk = k[:, t, :].view(B, H, 1, N)
+        rr = r[:, t, :].view(B, H, N, 1)
+        vv = v[:, t, :].view(B, H, N, 1)
+        aa = a[:, t, :].view(B, H, N, 1)
+        bb = b[:, t, :].view(B, H, 1, N)
+        state = state * w[: , t, :, None, :] + state @ aa @ bb + vv @ kk
+        out[:, t, :] = (state @ rr).view(B, H, N)
+    
+    return out.view(B, T, C).to(dtype=DTYPE), state.type_as(s0)
 
 ######################################################################################################
 
@@ -129,29 +160,17 @@ def RWKV7_STATE_PASSING_CLAMPW_CUDA(s0: Tensor, r: Tensor, w: Tensor, k: Tensor,
 
 ######################################################################################################
 
-def RWKV7_ALBATROSS_W0_FP16_DITHER_SEQ(s0: Tensor, r: Tensor, w: Tensor, k: Tensor, v: Tensor, a: Tensor, b: Tensor, elapsed_t: Tensor) -> Tuple[Tensor, Tensor]:
+@torch.no_grad()
+def RWKV7_ALBATROSS_W0_FP16_DITHER(s0: Tensor, r: Tensor, w: Tensor, k: Tensor, v: Tensor, a: Tensor, b: Tensor, elapsed_t: Tensor, inplace: bool = False) -> Tuple[Tensor, Tensor]:
     B, T, C = r.size()
     HEAD_SIZE = s0.size(-1)
     r, w, k, v, a, b = [i.view(B, T, C // HEAD_SIZE, HEAD_SIZE) for i in [r, w, k, v, a, b]]
 
     assert all(i.is_contiguous() for i in [s0, r, w, k, v, a, b])
 
-    sT = s0.clone()
+    sT = s0 if inplace else s0.clone()
     y = torch.empty_like(v)
 
-    rwkv7_albatross_forward_w0_fp16_dither_seq(sT, r, w, k, v, a, b, y, elapsed_t)
+    rwkv7_albatross_forward_w0_fp16_dither(sT, r, w, k, v, a, b, y, elapsed_t)
     return y.view(B, T, C), sT
 
-
-def RWKV7_ALBATROSS_W0_FP16_DITHER_ONE(s0: Tensor, r: Tensor, w: Tensor, k: Tensor, v: Tensor, a: Tensor, b: Tensor, elapsed_t: Tensor) -> Tuple[Tensor, Tensor]:
-    B, C = r.size()
-    HEAD_SIZE = s0.size(-1)
-    r, w, k, v, a, b = [i.view(B, C // HEAD_SIZE, HEAD_SIZE) for i in [r, w, k, v, a, b]]
-
-    assert all(i.is_contiguous() for i in [s0, r, w, k, v, a, b])
-
-    sT = s0.clone()
-    y = torch.empty_like(v)
-
-    rwkv7_albatross_forward_w0_fp16_dither_one(sT, r, w, k, v, a, b, y, elapsed_t)
-    return y.view(B, C), sT
