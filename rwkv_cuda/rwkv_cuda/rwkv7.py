@@ -7,11 +7,46 @@ from typing import Tuple
 from rwkv_cuda.ops import *
 
 __all__ = [
+    "RWKV7_OP",
     "RWKV7_CLAMPW_CUDA",
     "RWKV7_STATE_CLAMPW_CUDA",
     "RWKV7_STATE_PASSING_CLAMPW_CUDA",
     "RWKV7_ALBATROSS_W0_FP16_DITHER",
 ]
+
+@torch.no_grad()
+def RWKV7_OP(s0: Tensor, r: Tensor, w: Tensor, k: Tensor, v: Tensor, a: Tensor, b: Tensor) -> Tuple[Tensor, Tensor]:
+    B, T, C = r.size()
+
+    CHUNK_LEN = 16
+    if T > CHUNK_LEN:
+        _T = T // CHUNK_LEN * CHUNK_LEN
+        out0, sT = RWKV7_STATE_PASSING_CLAMPW_CUDA(
+            s0=s0,
+            r=r[:, :_T].contiguous(),
+            w=w[:, :_T].contiguous(),
+            k=k[:, :_T].contiguous(),
+            v=v[:, :_T].contiguous(),
+            a=a[:, :_T].contiguous(),
+            b=b[:, :_T].contiguous(),
+        )
+
+        out1, sT = RWKV7_RNN_OP(
+            s0=sT,
+            r=r[:, _T:],
+            w=w[:, _T:],
+            k=k[:, _T:],
+            v=v[:, _T:],
+            a=a[:, _T:],
+            b=b[:, _T:],
+        )
+    
+        out = torch.cat([out0, out1], dim=1)
+    
+    else:
+        out, sT = RWKV7_RNN_OP(s0, r, w, k, v, a, b)
+    
+    return out, sT
 
 @torch.no_grad()
 def RWKV7_RNN_OP(s0: Tensor, r: Tensor, w: Tensor, k: Tensor, v: Tensor, a: Tensor, b: Tensor) -> Tuple[Tensor, Tensor]:

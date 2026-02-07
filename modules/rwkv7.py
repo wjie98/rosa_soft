@@ -9,7 +9,7 @@ import os
 import math
 from dataclasses import dataclass
 
-from rwkv_cuda.rwkv7 import RWKV7_CLAMPW_CUDA, RWKV7_ALBATROSS_W0_FP16_DITHER
+from rwkv_cuda.rwkv7 import RWKV7_OP, RWKV7_CLAMPW_CUDA, RWKV7_ALBATROSS_W0_FP16_DITHER
 
 
 class RWKV_CMix_x070(nn.Module):
@@ -256,10 +256,9 @@ class RWKV_Tmix_x070(nn.Module):
         kk = F.normalize(kk.view(B, T, H, -1), dim=-1, p=2.0).view(B, T, C)
         k = k * (1 + (a-1) * self.k_a)
 
-        x, _ = RWKV7_ALBATROSS_W0_FP16_DITHER(s0, r, w, k, v, -kk, kk*a, elapsed_t, inplace=True)
-        # from rwkv_cuda.rwkv7 import RWKV7_RNN_OP
-        # x, sT = RWKV7_RNN_OP(s0, r, w, k, v, -kk, kk*a)
-        # s0.copy_(sT)
+        # x, _ = RWKV7_ALBATROSS_W0_FP16_DITHER(s0, r, w, k, v, -kk, kk*a, elapsed_t, inplace=True)
+        x, sT = RWKV7_OP(s0, r, w, k, v, -kk, kk*a)
+        s0.copy_(sT)
 
         x = self.ln_x(x.view(B * T, C)).view(B, T, C)
         x = x + ((r.view(B, T, H, -1) * k.view(B, T, H, -1) * self.r_k).sum(dim=-1, keepdim=True) * v.view(B, T, H, -1)).view(B, T, C)
@@ -457,12 +456,13 @@ class RWKV_x070(nn.Module):
         param_dict = {n: p for n, p in self.named_parameters()}
         
         optim_groups = [
-            {"params": [param_dict[n] for n in lr_1x], "weight_decay": 0.0, "my_lr_scale": 1.0},
-            {"params": [param_dict[n] for n in lr_2x], "weight_decay": 0.0, "my_lr_scale": 2.0},
+            {"params": [param_dict[n] for n in lr_1x], "weight_decay": 0.0, "lr": 1.0 * self.args.lr_init},
+            {"params": [param_dict[n] for n in lr_2x], "weight_decay": 0.0, "lr": 2.0 * self.args.lr_init},
         ]
 
         if args.weight_decay > 0:
-            optim_groups += [{"params": [param_dict[n] for n in lr_decay], "weight_decay": args.weight_decay, "my_lr_scale": 1.0}]
+            optim_groups += [{"params": [param_dict[n] for n in lr_decay], "weight_decay": args.weight_decay, "lr": 1.0 * self.args.lr_init}]
+
         return torch.optim.AdamW(optim_groups, lr=self.args.lr_init, betas=self.args.betas, eps=self.args.adam_eps)
     
     def reset_parameters(self):
@@ -482,7 +482,7 @@ class RWKV_x070(nn.Module):
             elif hasattr(module, "reset_parameters"):
                 module.reset_parameters()
 
-        self.post_init_weight(module=self, n_layer=args.n_layer)
+        self.post_init_weight(module=self, n_layer=self.args.n_layer)
 
     @staticmethod
     def post_init_weight(module: nn.Module, n_layer: int):
@@ -570,30 +570,32 @@ if __name__ == "__main__":
     # model.reset_parameters()
     model.load_state_dict(state_dict)
 
-    class Proxy(nn.Module):
-        def __init__(self, model: RWKV_x070):
-            super().__init__()
-            self.model = model.to(torch.float16)
+    model.configure_optimizers()
+
+    # class Proxy(nn.Module):
+    #     def __init__(self, model: RWKV_x070):``
+    #         super().__init__()
+    #         self.model = model.to(torch.float16)
         
-        def forward(self, idx: Tensor, state = None):
-            idx = torch.tensor([idx]).cuda()
-            if state is None:
-                state = self.model.generate_zero_state(dtype=torch.float16, device=idx.device)
+    #     def forward(self, idx: Tensor, state = None):
+    #         idx = torch.tensor([idx]).cuda()
+    #         if state is None:
+    #             state = self.model.generate_zero_state(dtype=torch.float16, device=idx.device)
             
-            idx = self.model.inference(idx, state=state)
-            return idx[0, -1], state
+    #         idx = self.model.inference(idx, state=state)
+    #         return idx[0, -1], state
 
-    pipeline = PIPELINE(Proxy(model), "rwkv_vocab_v20230424")
+    # pipeline = PIPELINE(Proxy(model), "rwkv_vocab_v20230424")
     
-    text = pipeline.generate("User: simulate SpaceX mars landing using python\n\nAssistant: <think")
-    print(text)
+    # text = pipeline.generate("User: simulate SpaceX mars landing using python\n\nAssistant: <think", token_count=5000)
+    # print(text)
 
-    ids = pipeline.encode("User: simulate SpaceX mars landing using python\n\nAssistant: <think")
-    while len(ids) < 16 or len(ids) % 16 != 1:
-        ids.append(0)
-    ids = torch.tensor([ids], dtype=torch.long).cuda()
-    print(ids.size())
+    # ids = pipeline.encode("User: simulate SpaceX mars landing using python\n\nAssistant: <think")
+    # while len(ids) < 16 or len(ids) % 16 != 1:
+    #     ids.append(0)
+    # ids = torch.tensor([ids], dtype=torch.long).cuda()
+    # print(ids.size())
 
-    with torch.no_grad():
-        loss = model.compute_loss(ids[:, :-1], ids[:, 1:])
-    print(loss)
+    # with torch.no_grad():
+    #     loss = model.compute_loss(ids[:, :-1], ids[:, 1:])
+    # print(loss)
