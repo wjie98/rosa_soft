@@ -2,13 +2,6 @@
 
 This directory contains the core, low-level implementations of the softened ROSA QKV operator.
 
-> **🚀 Latest Update**: The newest core operators have been migrated to the local `rosa_cpp` extension.
->
-> **Installation & Usage**:
-> 1. Install the extension: `pip install --no-build-isolation .`
-> 2. Import the operator: `from rosa_cpp import rosa_bits_ops`
-
-
 The numbered subdirectories (`2025XXXX/`) contain historical snapshots of the implementation, preserved for research and comparison purposes.
 
 ## Implementation History
