@@ -12,7 +12,7 @@ from torch.utils.cpp_extension import (
 )
 
 
-library_name = "rosa_cpp"
+library_name = "rosa_soft"
 
 
 def get_extensions():
@@ -32,7 +32,7 @@ def get_extensions():
         ],
     }
 
-    extensions_dir = Path(__file__).parent / "rosa_cpp" / "csrc"
+    extensions_dir = Path(__file__).parent / library_name / "csrc"
     sources = list(str(p) for p in extensions_dir.glob("*.cpp"))
 
     extensions_cuda_dir = extensions_dir / "cuda"
@@ -55,10 +55,11 @@ def get_extensions():
 
 setup(
     name=library_name,
-    version="0.0.1",
-    packages=find_packages(),
+    version="0.1.0",
+    author="Wenjie Huang",
+    packages=["rosa_soft"],
     ext_modules=get_extensions(),
-    install_requires=["torch"],
-    description="Torch ROSA C++ Extension",
+    install_requires=["torch", "fla-core", "ninja"],
+    description="ROSA Operations for PyTorch",
     cmdclass={"build_ext": BuildExtension},
 )

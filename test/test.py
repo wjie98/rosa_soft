@@ -1,6 +1,6 @@
 import torch
 
-from rosa_cpp import RosaContext, rosa_bits_ops
+from rosa_soft import RosaContext, rosa_bits_ops
 
 
 def samx_qkv_slow(qqq, kkk, vvv): # slow, only for reference

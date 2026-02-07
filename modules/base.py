@@ -6,7 +6,7 @@ import math
 from torch import Tensor
 from typing import *
 
-from rosa_cpp import RosaContext, RosaWork, rosa_bits_ops, RosaBitsWork
+from rosa_soft import RosaContext, RosaWork, rosa_bits_ops, RosaBitsWork
 
 
 

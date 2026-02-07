@@ -9,7 +9,7 @@ import os
 import math
 from dataclasses import dataclass
 
-from rosa_cpp import rosa_bits_ops, RosaContext
+from rosa_soft import rosa_scan_ops, RosaContext
 
 try:
     from .rwkv7 import RWKV_Tmix_x070, RWKV_CMix_x070, RWKV_Args_x070, RWKV_x070, L2Wrap
@@ -88,7 +88,7 @@ class RWKV_ROSA_x070(nn.Module):
         xk = xk.view(B, T, H, -1).transpose(1, 2)
         xv = xv.view(B, T, H, -1).transpose(1, 2)
 
-        xo = rosa_bits_ops(xq, xk, xv, schmitt_trigger=self.schmitt_trigger)
+        xo = rosa_scan_ops(xq, xk, xv, schmitt_trigger=self.schmitt_trigger)
         xo = xo.transpose(1, 2).reshape(B, T, -1)
         xo = self.emb1 * xo + self.emb0 * (1.0 - xo)
         return xo
