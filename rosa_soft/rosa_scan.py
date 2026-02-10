@@ -27,7 +27,7 @@ def rosa_scan_ops(
         grad_eps: float = 1e-3,
         suffix_window: int = 8,
         suffix_factor: Optional[float] = 0.5,
-        quantize_mode: str = "ste",
+        quantize_mode: str = "soft",
         schmitt_trigger: float = 0.0,
         async_op: bool = False,
 ) -> Union[Tensor, 'RosaScanWork']:
@@ -219,13 +219,13 @@ def suffix_linear_attention_proxy(
     
     ## feature transformation
     xq = torch.cat([
-        F.relu( xq).pow(exponent),
-        F.relu(-xq).pow(exponent),
+        F.relu( xq).mul(2).pow(exponent),
+        F.relu(-xq).mul(2).pow(exponent),
     ], dim=-1)
 
     xk = torch.cat([
-        F.relu( xk).pow(exponent),
-        F.relu(-xk).pow(exponent),
+        F.relu( xk).mul(2).pow(exponent),
+        F.relu(-xk).mul(2).pow(exponent),
     ], dim=-1)
 
     ## repeat key and value for multi-head attention
@@ -245,9 +245,9 @@ def suffix_linear_attention_proxy(
     xk = xk.reshape(bsz, num_heads, seq_len, 2 * num_k_bits * suffix_window)
 
     if scale is None:
-        scale = 1.0 / math.sqrt(num_qk_bits * suffix_window)
+        scale = 1.0 / math.sqrt(num_qk_bits)
     else:
-        scale = float(scale) / math.sqrt(suffix_window)
+        scale = float(scale)
 
     xo: Tensor = chunk_linear_attn(
         xq.transpose(1, 2),
