@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 import math
@@ -29,6 +30,7 @@ def rosa_scan_ops(
         suffix_factor: Optional[float] = 0.5,
         quantize_mode: str = "soft",
         schmitt_trigger: float = 0.0,
+        expansion_factor: int = 2,
         async_op: bool = False,
 ) -> Union[Tensor, 'RosaScanWork']:
     """
@@ -50,6 +52,7 @@ def rosa_scan_ops(
         suffix_factor (Optional[float]): Decay factor for the window. If None, it will be dynamically set based on the window size. Default: `0.5`.
         quantize_mode (str): Mode for quantizing the inputs. One of "tanh", "soft", or "ste". Default: "ste".
         schmitt_trigger (float): Threshold for Schmitt trigger to prevent noise. Default: `0.0`.
+        expansion_factor (int): Factor to expand the feature dimension for better expressiveness. Default: `2`.
         async_op (bool): Whether to return a work object for asynchronous execution. Default: `False`.
 
     Returns:
@@ -71,6 +74,7 @@ def rosa_scan_ops(
         suffix_window=suffix_window,
         suffix_factor=suffix_factor,
         quantize_mode=quantize_mode,
+        expansion_factor=expansion_factor,
     )
     work._query_key_value = (query, key, value)
 
@@ -112,6 +116,7 @@ class RosaScanParams:
         suffix_window: int,
         suffix_factor: Optional[float],
         quantize_mode: str,
+        expansion_factor: int,
     ):
         self.scale = scale
         self.exponent = exponent
@@ -119,6 +124,7 @@ class RosaScanParams:
         self.suffix_factor = suffix_factor
         self.quantize_mode = quantize_mode
         self.grad_eps = grad_eps
+        self.expansion_factor = expansion_factor
 
         self.info: Dict[str, Tensor] = {}
         self._ctx: Optional[RosaContext] = None
@@ -165,6 +171,7 @@ class RosaScanFunction(torch.autograd.Function):
                 suffix_window=params.suffix_window,
                 suffix_factor=params.suffix_factor,
                 quantize_mode=params.quantize_mode,
+                expansion_factor=params.expansion_factor,
             )
 
             grad_query, grad_key, grad_value = torch.autograd.grad(
@@ -185,12 +192,12 @@ def suffix_linear_attention_proxy(
         suffix_factor: Optional[float],
         quantize_mode: str,
         grad_eps: float,
+        expansion_factor: int,
 ):
     bsz, num_heads, seq_len, num_q_bits = query.size()
     bsz, num_kv_heads, seq_len, num_k_bits = key.size()
     bsz, num_kv_heads, seq_len, num_v_bits = value.size()
 
-    num_qk_bits = num_q_bits
     assert num_q_bits == num_k_bits, "query and key must have the same number of bits"
 
     # q = torch.linspace(0, 1, 10, device=query.device)
@@ -218,6 +225,17 @@ def suffix_linear_attention_proxy(
         raise ValueError(f"Unsupported quantize_mode: {quantize_mode}, expected one of 'tanh', 'soft', or 'ste'")
     
     ## feature transformation
+    num_qk_bits = num_q_bits * expansion_factor
+    mat = torch.randint(
+        0, 2,
+        (num_q_bits, num_qk_bits),
+        dtype=xq.dtype,
+        device=xq.device,
+    ).mul_(2).sub_(1).div_(math.sqrt(num_qk_bits))
+    
+    xq = xq @ mat
+    xk = xk @ mat
+
     xq = torch.cat([
         F.relu( xq).mul(2).pow(exponent),
         F.relu(-xq).mul(2).pow(exponent),
@@ -241,8 +259,8 @@ def suffix_linear_attention_proxy(
     xq, xk = decay_qk(xq, xk, decay_factor=suffix_factor)
 
     ## compute linear attention
-    xq = xq.reshape(bsz, num_heads, seq_len, 2 * num_q_bits * suffix_window)
-    xk = xk.reshape(bsz, num_heads, seq_len, 2 * num_k_bits * suffix_window)
+    xq = xq.reshape(bsz, num_heads, seq_len, 2 * num_qk_bits * suffix_window)
+    xk = xk.reshape(bsz, num_heads, seq_len, 2 * num_qk_bits * suffix_window)
 
     if scale is None:
         scale = 1.0 / math.sqrt(num_qk_bits)

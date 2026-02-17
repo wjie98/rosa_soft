@@ -115,7 +115,6 @@ class RosaBase(nn.Module):
                 query_states, key_states, value_states,
                 suffix_window=self.rosa_suffix_window,
                 suffix_factor=self.rosa_suffix_factor,
-                quantize_mode="soft",
                 schmitt_trigger=self.rosa_schmitt_trigger,
                 async_op=True,
             )
