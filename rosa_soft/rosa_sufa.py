@@ -51,7 +51,7 @@ def rosa_sufa_ops(
 
     Returns:
         Tensor: The result of the Hard SAM lookup if async_op is False.
-        RosaBitsWork: A work object for asynchronous execution if async_op is True.
+        RosaSoftWork: A work object for asynchronous execution if async_op is True.
     """
 
     work = RosaSoftWork()
