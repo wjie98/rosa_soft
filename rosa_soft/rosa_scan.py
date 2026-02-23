@@ -12,10 +12,11 @@ from fla.ops.linear_attn import chunk_linear_attn
 from .rosa_sam import RosaContext, RosaWork
 from .utils import QuantizeFunction, repeat_kv, unfold_qk, decay_qk, gather_x
 
+from .rosa_soft import RosaSoftWork
+
 
 __all__ = [
     "rosa_scan_ops",
-    "RosaScanWork",
 ]
 
 
@@ -25,14 +26,14 @@ def rosa_scan_ops(
         value: Tensor,
         scale: Optional[float] = None,
         exponent: float = 2.0,
-        grad_eps: float = 1e-3,
         suffix_window: int = 8,
         suffix_factor: Optional[float] = 0.5,
-        quantize_mode: str = "soft",
+        quant_mode: str = "soft",
+        quant_scale: Optional[float] = None,
         schmitt_trigger: float = 0.0,
         expansion_factor: int = 2,
         async_op: bool = False,
-) -> Union[Tensor, 'RosaScanWork']:
+) -> Union[Tensor, RosaSoftWork]:
     """
     Performs the Rapid Online Suffix Automaton (ROSA) scan-like operation.
 
@@ -47,35 +48,38 @@ def rosa_scan_ops(
         value (Tensor): (B, H, T, D_v) Logits for Value bits.
         scale (Optional[float]): Scale factor for the attention scores. If not provided, it will default to `1 / sqrt(D)`. Default: `None`.
         exponent (float): Exponent for the feature transformation. Default: `2.0`.
-        grad_eps (float): Epsilon for gradient scaling in the STE quantization. Default: `1e-3`.
         suffix_window (int): Size of the lookback window for fingerprinting. Default: `8`.
         suffix_factor (Optional[float]): Decay factor for the window. If None, it will be dynamically set based on the window size. Default: `0.5`.
-        quantize_mode (str): Mode for quantizing the inputs. One of "tanh", "soft", or "ste". Default: "ste".
+        quant_mode (str): Mode for quantizing the inputs. Supported values are "tanh" for tanh-based quantization and "soft" for softsign-based quantization. Default: `"soft"`.
+        quant_scale (Optional[float]): Scale factor for quantization. If not provided, it will default to `1.0`. Default: `None`.
         schmitt_trigger (float): Threshold for Schmitt trigger to prevent noise. Default: `0.0`.
         expansion_factor (int): Factor to expand the feature dimension for better expressiveness. Default: `2`.
         async_op (bool): Whether to return a work object for asynchronous execution. Default: `False`.
 
     Returns:
         Tensor: The result of the Hard SAM lookup if async_op is False.
-        RosaScanWork: A work object for asynchronous execution if async_op is True.
+        RosaSoftWork: A work object for asynchronous execution if async_op is True.
     """
 
-    work = RosaScanWork()
+    work = RosaSoftWork()
     work._future = RosaContext().update(
-        query=query, key=key, value=value, mismatch=0,
-        inspect=True, schmitt_trigger=schmitt_trigger,
+        query=query, key=key, value=value,
+        schmitt_trigger=schmitt_trigger,
         async_op=True,
     )
 
     work._params = RosaScanParams(
         scale=scale,
         exponent=exponent,
-        grad_eps=grad_eps,
         suffix_window=suffix_window,
         suffix_factor=suffix_factor,
-        quantize_mode=quantize_mode,
+        quant_mode=quant_mode,
+        quant_scale=quant_scale,
         expansion_factor=expansion_factor,
+        schmitt_trigger=schmitt_trigger,
     )
+
+    work._function_apply = RosaScanFunction.apply
     work._query_key_value = (query, key, value)
 
     if async_op:
@@ -83,48 +87,25 @@ def rosa_scan_ops(
     return work.wait()
 
 
-class RosaScanWork:
-    def __init__(self):
-        self._future: RosaWork
-        self._params: RosaScanParams
-        self._query_key_value: Tuple[Tensor, Tensor, Tensor]
-
-    def wait(self):
-        if self._future is None:
-            raise RuntimeError("wait() called twice")
-        
-        work = self._future
-        params = self._params
-        query, key, value = self._query_key_value
-
-        x_hard, info = work.wait()
-        params.info["x_hard"] = x_hard
-        params.info.update(info)
-
-        self._future = None
-        self._params = None
-        self._query_key_value = None
-
-        return RosaScanFunction.apply(query, key, value, params)
-
-
 class RosaScanParams:
     def __init__(self,
         scale: Optional[float],
         exponent: float,
-        grad_eps: float,
         suffix_window: int,
         suffix_factor: Optional[float],
-        quantize_mode: str,
+        quant_mode: str,
+        quant_scale: Optional[float],
         expansion_factor: int,
+        schmitt_trigger: float,
     ):
         self.scale = scale
         self.exponent = exponent
         self.suffix_window = suffix_window
         self.suffix_factor = suffix_factor
-        self.quantize_mode = quantize_mode
-        self.grad_eps = grad_eps
+        self.quant_mode = quant_mode
+        self.quant_scale = quant_scale
         self.expansion_factor = expansion_factor
+        self.schmitt_trigger = schmitt_trigger
 
         self.info: Dict[str, Tensor] = {}
         self._ctx: Optional[RosaContext] = None
@@ -136,7 +117,10 @@ class RosaScanFunction(torch.autograd.Function):
         if "x_hard" in params.info:
             x_hard = params.info.pop("x_hard")
         else:
-            x_hard, info = RosaContext().update(query, key, value, 0, inspect=True)
+            x_hard, info = RosaContext().update(
+                query=query, key=key, value=value,
+                schmitt_trigger=params.schmitt_trigger,
+            )
             params.info.update(info)
 
         ctx.save_for_backward(
@@ -163,14 +147,13 @@ class RosaScanFunction(torch.autograd.Function):
 
             x_soft = suffix_linear_attention_proxy(
                 query, key, value,
-                length=length,
                 endpos=endpos,
                 scale=params.scale,
                 exponent=params.exponent,
-                grad_eps=params.grad_eps,
                 suffix_window=params.suffix_window,
                 suffix_factor=params.suffix_factor,
-                quantize_mode=params.quantize_mode,
+                quant_mode=params.quant_mode,
+                quant_scale=params.quant_scale,
                 expansion_factor=params.expansion_factor,
             )
 
@@ -186,12 +169,13 @@ class RosaScanFunction(torch.autograd.Function):
 
 def suffix_linear_attention_proxy(
         query: Tensor, key: Tensor, value: Tensor,
-        length: Tensor, endpos: Tensor,
-        scale: Optional[float], exponent: float,
+        endpos: Tensor,
+        scale: Optional[float],
+        exponent: float,
         suffix_window: int,
         suffix_factor: Optional[float],
-        quantize_mode: str,
-        grad_eps: float,
+        quant_mode: str,
+        quant_scale: Optional[float],
         expansion_factor: int,
 ):
     bsz, num_heads, seq_len, num_q_bits = query.size()
@@ -209,20 +193,25 @@ def suffix_linear_attention_proxy(
     # print(qv.tolist())
 
     ## quantize query, key, value
-    if quantize_mode == "tanh":
+
+    if quant_scale is not None:
+        assert quant_scale >= 1.0, "quant_scale must be >= 1.0"
+        query = query * quant_scale
+        key = key * quant_scale
+        value = value * quant_scale
+    else:
+        quant_scale = 1.0
+
+    if quant_mode == "tanh":
         xq = torch.tanh(query)
         xk = torch.tanh(key)
         xv = torch.tanh(value)
-    elif quantize_mode == "soft":
+    elif quant_mode == "soft":
         xq = F.softsign(query)
         xk = F.softsign(key)
         xv = F.softsign(value)
-    elif quantize_mode == "ste":
-        xq = QuantizeFunction.apply(query, grad_eps)
-        xk = QuantizeFunction.apply(key, grad_eps)
-        xv = QuantizeFunction.apply(value, grad_eps)
     else:
-        raise ValueError(f"Unsupported quantize_mode: {quantize_mode}, expected one of 'tanh', 'soft', or 'ste'")
+        raise ValueError(f"Unsupported quant_mode: {quant_mode}, expected 'tanh' or 'soft'")
     
     ## feature transformation
     num_qk_bits = num_q_bits * expansion_factor

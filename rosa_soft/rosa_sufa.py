@@ -9,26 +9,26 @@ from typing import *
 from .rosa_sam import RosaContext, RosaWork
 from .utils import QuantizeFunction, repeat_kv, unfold_qk, decay_qk, gather_x
 
+from .rosa_soft import RosaSoftWork
+
 
 __all__ = [
-    "rosa_bits_ops",
-    "RosaBitsWork",
+    "rosa_sufa_ops",
 ]
 
 
-def rosa_bits_ops(
+def rosa_sufa_ops(
         query: Tensor,
         key: Tensor,
         value: Tensor,
         scale: Optional[float] = None,
-        grad_eps: float = 1e-3,
         suffix_window: int = 8,
         suffix_factor: Optional[float] = 0.5,
-        attention_mask: Optional[Tensor] = None,
-        quantize_mode: str = "soft",
+        quant_mode: str = "soft",
+        quant_scale: Optional[float] = None,
         schmitt_trigger: float = 0.0,
         async_op: bool = False,
-) -> Union[Tensor, 'RosaBitsWork']:
+) -> Union[Tensor, RosaSoftWork]:
     """
     Performs the Rapid Online Suffix Automaton (ROSA) attention-like operation.
 
@@ -42,11 +42,10 @@ def rosa_bits_ops(
         key (Tensor): (B, H, T, D) Logits for Key bits.
         value (Tensor): (B, H, T, D_v) Logits for Value bits.
         scale (Optional[float]): Scale factor for the attention scores. If not provided, it will default to `1 / D`. Default: `None`.
-        grad_eps (float): Epsilon for gradient scaling in the STE quantization. Default: `1e-3`.
         suffix_window (int): Size of the lookback window for fingerprinting. Default: `8`.
         suffix_factor (Optional[float]): Decay factor for the window. If None, it will be dynamically set based on the window size. Default: `0.5`.
-        attention_mask (Optional[Tensor]): Attention mask to be applied on the attention scores. Should be broadcastable to (B, H, T, T). Default: `None`.
-        quantize_mode (str): Mode for quantizing the inputs. One of "tanh", "soft", or "ste". Default: "soft".
+        quant_mode (str): Mode for quantizing the inputs. Supported values are "tanh" for tanh-based quantization and "soft" for softsign-based quantization. Default: `"soft"`.
+        quant_scale (Optional[float]): Scale factor for quantization. If not provided, it will default to `1.0`. Default: `None`.
         schmitt_trigger (float): Threshold for Schmitt trigger to prevent noise. Default: `0.0`.
         async_op (bool): Whether to return a work object for asynchronous execution. Default: `False`.
 
@@ -55,21 +54,23 @@ def rosa_bits_ops(
         RosaBitsWork: A work object for asynchronous execution if async_op is True.
     """
 
-    work = RosaBitsWork()
+    work = RosaSoftWork()
     work._future = RosaContext().update(
-        query=query, key=key, value=value, mismatch=0,
-        inspect=True, schmitt_trigger=schmitt_trigger,
+        query=query, key=key, value=value,
+        schmitt_trigger=schmitt_trigger,
         async_op=True,
     )
 
-    work._params = RosaBitsParams(
+    work._params = RosaSufaParams(
         scale=scale,
-        grad_eps=grad_eps,
         suffix_window=suffix_window,
         suffix_factor=suffix_factor,
-        attention_mask=attention_mask,
-        quantize_mode=quantize_mode,
+        quant_mode=quant_mode,
+        quant_scale=quant_scale,
+        schmitt_trigger=schmitt_trigger,
     )
+
+    work._function_apply = RosaSufaFunction.apply
     work._query_key_value = (query, key, value)
 
     if async_op:
@@ -77,62 +78,36 @@ def rosa_bits_ops(
     return work.wait()
 
 
-class RosaBitsWork:
-    def __init__(self):
-        self._future: RosaWork
-        self._params: RosaBitsParams
-        self._query_key_value: Tuple[Tensor, Tensor, Tensor]
-
-    def wait(self):
-        if self._future is None:
-            raise RuntimeError("wait() called twice")
-        
-        work = self._future
-        params = self._params
-        query, key, value = self._query_key_value
-
-        x_hard, info = work.wait()
-        params.info["x_hard"] = x_hard
-        params.info.update(info)
-
-        self._future = None
-        self._params = None
-        self._query_key_value = None
-
-        return RosaBitsFunction.apply(query, key, value, params)
-
-
-class RosaBitsParams:
+class RosaSufaParams:
     def __init__(self,
         scale: Optional[float],
-        grad_eps: float,
         suffix_window: int,
         suffix_factor: Optional[float],
-        attention_mask: Optional[Tensor],
-        quantize_mode: str,
+        quant_mode: str,
+        quant_scale: Optional[float],
+        schmitt_trigger: float,
     ):
         self.scale = scale
-        self.grad_eps = grad_eps
         self.suffix_window = suffix_window
         self.suffix_factor = suffix_factor
-        self.quantize_mode = quantize_mode
-        
-        if isinstance(attention_mask, Tensor):
-            self.attention_mask = attention_mask.detach()
-        else:
-            self.attention_mask = None
+        self.quant_mode = quant_mode
+        self.quant_scale = quant_scale
+        self.schmitt_trigger = schmitt_trigger
 
         self.info: Dict[str, Tensor] = {}
         self._ctx: Optional[RosaContext] = None
 
 
-class RosaBitsFunction(torch.autograd.Function):
+class RosaSufaFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, query: Tensor, key: Tensor, value: Tensor, params: RosaBitsParams):
+    def forward(ctx, query: Tensor, key: Tensor, value: Tensor, params: RosaSufaParams):
         if "x_hard" in params.info:
             x_hard = params.info.pop("x_hard")
         else:
-            x_hard, info = RosaContext().update(query, key, value, 0, inspect=True)
+            x_hard, info = RosaContext().update(
+                query=query, key=key, value=value,
+                schmitt_trigger=params.schmitt_trigger,
+            )
             params.info.update(info)
 
         ctx.save_for_backward(
@@ -147,7 +122,7 @@ class RosaBitsFunction(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output: Tensor):
         query, key, value = cast(Tuple[Tensor, ...], ctx.saved_tensors)
-        params: RosaBitsParams = ctx.saved_params
+        params: RosaSufaParams = ctx.saved_params
 
         length = params.info.pop("length")
         endpos = params.info.pop("endpos")
@@ -159,14 +134,12 @@ class RosaBitsFunction(torch.autograd.Function):
 
             x_soft = suffix_attention_proxy(
                 query, key, value,
-                length=length,
                 endpos=endpos,
                 scale=params.scale,
-                grad_eps=params.grad_eps,
                 suffix_window=params.suffix_window,
                 suffix_factor=params.suffix_factor,
-                attention_mask=params.attention_mask,
-                quantize_mode=params.quantize_mode,
+                quant_mode=params.quant_mode,
+                quant_scale=params.quant_scale,
             )
 
             grad_query, grad_key, grad_value = torch.autograd.grad(
@@ -181,12 +154,12 @@ class RosaBitsFunction(torch.autograd.Function):
 
 def suffix_attention_proxy(
         query: Tensor, key: Tensor, value: Tensor,
-        length: Tensor, endpos: Tensor,
-        scale: Optional[float], grad_eps: float,
+        endpos: Tensor,
+        scale: Optional[float],
         suffix_window: int,
         suffix_factor: Optional[float],
-        attention_mask: Optional[Tensor],
-        quantize_mode: str,
+        quant_mode: str,
+        quant_scale: Optional[float],
 ):
     bsz, num_heads, seq_len, num_q_bits = query.size()
     bsz, num_kv_heads, seq_len, num_k_bits = key.size()
@@ -207,20 +180,25 @@ def suffix_attention_proxy(
     # print(qv.tolist())
 
     ## quantize query, key, value
-    if quantize_mode == "tanh":
+    
+    if quant_scale is not None:
+        assert quant_scale >= 1.0, "quant_scale must be >= 1.0"
+        query = query * quant_scale
+        key = key * quant_scale
+        value = value * quant_scale
+    else:
+        quant_scale = 1.0
+
+    if quant_mode == "tanh":
         xq = torch.tanh(query)
         xk = torch.tanh(key)
         xv = torch.tanh(value)
-    elif quantize_mode == "soft":
+    elif quant_mode == "soft":
         xq = F.softsign(query)
         xk = F.softsign(key)
         xv = F.softsign(value)
-    elif quantize_mode == "ste":
-        xq = QuantizeFunction.apply(query, grad_eps)
-        xk = QuantizeFunction.apply(key, grad_eps)
-        xv = QuantizeFunction.apply(value, grad_eps)
     else:
-        raise ValueError(f"Unsupported quantize_mode: {quantize_mode}, expected one of 'tanh', 'soft', or 'ste'")
+        raise ValueError(f"Unsupported quant_mode: {quant_mode}, expected one of 'tanh' or 'soft'")
     
     ## repeat key and value for multi-head attention
     n_rep = num_heads // num_kv_heads
@@ -245,7 +223,7 @@ def suffix_attention_proxy(
 
     xo = F.scaled_dot_product_attention(
         xq, xk, xv, scale=scale,
-        is_causal=True, attn_mask=attention_mask,
+        is_causal=True, attn_mask=None,
     )
 
     ## apply gating based value detach

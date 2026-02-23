@@ -18,11 +18,7 @@ from transformers.modeling_flash_attention_utils import FlashAttentionKwargs
 from transformers.processing_utils import Unpack
 from transformers.utils import logging
 
-from rosa_soft import (
-    RosaContext, RosaWork,
-    rosa_bits_ops, RosaBitsWork,
-    rosa_scan_ops, RosaScanWork,
-)
+from rosa_soft import *
 
 logger = logging.get_logger(__name__)
 
@@ -90,7 +86,7 @@ class RosaBase(nn.Module):
             hidden_states: Tensor,
             attention_mask: Optional[Tensor] = None,
             past_key_values = None,
-    ) -> Tuple[Union[RosaBitsWork, RosaWork], Tensor]:
+    ) -> Tuple[Union[RosaSoftWork, RosaWork], Tensor]:
         bsz, seq_len, _ = hidden_states.size()
 
         query_states: Tensor = self.rosa_q_proj(hidden_states)
@@ -103,6 +99,11 @@ class RosaBase(nn.Module):
         value_states = value_states.view(bsz, seq_len, self.rosa_num_kv_heads, self.rosa_num_v_bits).transpose(1, 2)
 
         if past_key_values is None:
+            work = rosa_soft_ops(
+                query_states, key_states, value_states,
+                schmitt_trigger=self.rosa_schmitt_trigger,
+                async_op=True,
+            )
             # work = rosa_bits_ops(
             #     query_states, key_states, value_states,
             #     suffix_window=self.rosa_suffix_window,
@@ -111,13 +112,13 @@ class RosaBase(nn.Module):
             #     schmitt_trigger=self.rosa_schmitt_trigger,
             #     async_op=True,
             # )
-            work = rosa_scan_ops(
-                query_states, key_states, value_states,
-                suffix_window=self.rosa_suffix_window,
-                suffix_factor=self.rosa_suffix_factor,
-                schmitt_trigger=self.rosa_schmitt_trigger,
-                async_op=True,
-            )
+            # work = rosa_scan_ops(
+            #     query_states, key_states, value_states,
+            #     suffix_window=self.rosa_suffix_window,
+            #     suffix_factor=self.rosa_suffix_factor,
+            #     schmitt_trigger=self.rosa_schmitt_trigger,
+            #     async_op=True,
+            # )
             states = (work, hidden_states)
         else:
             if not hasattr(past_key_values, "_rosa_cache"):
@@ -134,7 +135,7 @@ class RosaBase(nn.Module):
     
     def rosa_combine(
             self,
-            states: Tuple[Union[RosaBitsWork, RosaWork], Tensor],
+            states: Tuple[Union[RosaSoftWork, RosaWork], Tensor],
             inject_states: Optional[Tensor] = None,
     ) -> Tensor:
         work, hidden_states = states

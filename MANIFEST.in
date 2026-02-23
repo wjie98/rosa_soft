@@ -1,1 +1,1 @@
-recursive-include rosa_cpp/csrc *.cpp *.h *.cu
+recursive-include rosa_soft/csrc *.cpp *.h *.cu
