@@ -20,10 +20,8 @@ class RosaWork:
     def __init__(self):
         self._ctx: RosaContext
         self._qkv: Tuple[Tensor, ...]
-        self._mis: int
-        self._inspect: bool = False
     
-    def wait(self):
+    def wait(self) -> Tuple[Tensor, Dict[str, Tensor]]:
         if self._ctx is None:
             raise RuntimeError("wait() called twice")
         ctx = self._ctx
@@ -32,10 +30,7 @@ class RosaWork:
         self._ctx = None
         self._qkv = None
 
-        if self._inspect:
-            return ctx._inspect(*qkv, mismatch=self._mis)
-        else:
-            return ctx._combine(*qkv, mismatch=self._mis)
+        return ctx._combine(*qkv)
 
 
 class RosaContext:
@@ -46,16 +41,12 @@ class RosaContext:
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        mismatch: int = 0,
-        inspect: bool = False,
         schmitt_trigger: float = 0.0,
         async_op: bool = False,
-    ) -> Union[Tensor, Tuple[Tensor, Dict[str, Tensor]]]:
+    ) -> Union[RosaWork, Tuple[Tensor, Dict[str, Tensor]]]:
         work = RosaWork()
         work._ctx = self
         work._qkv = self._dispatch(query=query, key=key, value=value, schmitt_trigger=schmitt_trigger)
-        work._mis = mismatch
-        work._inspect = inspect
 
         if async_op:
             return work
@@ -73,9 +64,6 @@ class RosaContext:
 
         if self._sam is None:
             self._sam = RosaSAM(bsz * num_q_heads)
-            self._qqs = None
-            self._kqs = None
-            self._vqs = None
 
             self.num_q_bits = num_q_bits
             self.num_k_bits = num_k_bits
@@ -91,44 +79,20 @@ class RosaContext:
     def _dispatch(self, query: Tensor, key: Tensor, value: Tensor, schmitt_trigger: float):
         self._init_sam(query=query, key=key, value=value)
 
-        xq, self._qqs = quantize(query, state=self._qqs, schmitt_trigger=schmitt_trigger)
-        xk, self._kqs = quantize(key, state=self._kqs, schmitt_trigger=schmitt_trigger)
-        xv, self._vqs = quantize(value, state=self._vqs)
+        xq, mq = quantize(query, schmitt_trigger=schmitt_trigger)
+        xk, mk = quantize(key, schmitt_trigger=schmitt_trigger)
+        xv, _  = quantize(value)
 
         with self.stream(post_wait=False):
             xq = xq.to("cpu", non_blocking=True)
             xk = xk.to("cpu", non_blocking=True)
             xv = xv.to("cpu", non_blocking=True)
+            mq = mq.to("cpu", non_blocking=True)
+            mk = mk.to("cpu", non_blocking=True)
 
-        return xq, xk, xv
-
-
-    def _combine(self, xq: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0):
-        self.stream.synchronize()
-
-        bsz, num_q_heads, seq_len = xq.size()
-        bsz, num_k_heads, seq_len = xk.size()
-        bsz, num_v_heads, seq_len = xv.size()
-        
-        n_rep = num_q_heads // num_k_heads
-        if n_rep > 1:
-            xk = xk.view(bsz, num_k_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
-            xv = xv.view(bsz, num_v_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
-
-        xq = xq.reshape(-1, seq_len)
-        xk = xk.reshape(-1, seq_len)
-        xv = xv.reshape(-1, seq_len)
-
-        xo = self._sam.update(xq, xk, xv, mismatch)
-
-        with self.stream(prev_wait=False):
-            xo = xo.to(self.device, non_blocking=True)
-        
-        xo = dequantize(xo, self.num_v_bits).to(self.dtype)
-        xo = xo.view(bsz, num_q_heads, seq_len, self.num_v_bits)
-        return xo
+        return xq, xk, xv, mq, mk
     
-    def _inspect(self, xq: Tensor, xk: Tensor, xv: Tensor, mismatch: int = 0) -> Tuple[Tensor, Dict[str, Tensor]]:
+    def _combine(self, xq: Tensor, xk: Tensor, xv: Tensor, mq: Tensor, mk: Tensor) -> Tuple[Tensor, Dict[str, Tensor]]:
         self.stream.synchronize()
 
         bsz, num_q_heads, seq_len = xq.size()
@@ -139,18 +103,22 @@ class RosaContext:
         if n_rep > 1:
             xk = xk.view(bsz, num_k_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
             xv = xv.view(bsz, num_v_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
+            mk = mk.view(bsz, num_k_heads, 1, seq_len).repeat(1, 1, n_rep, 1)
 
         xq = xq.reshape(-1, seq_len)
         xk = xk.reshape(-1, seq_len)
         xv = xv.reshape(-1, seq_len)
+        mq = mq.reshape(-1, seq_len)
+        mk = mk.reshape(-1, seq_len)
 
-        xo, info = self._sam.inspect(xq, xk, xv, mismatch)
+        xo, mo, info = self._sam.update(xq, xk, xv, mq, mk)
 
         with self.stream(prev_wait=False):
             xo = xo.to(self.device, non_blocking=True)
+            mo = mo.to(self.device, non_blocking=True)
             info = {key: val.to(self.device, non_blocking=True) for key, val in info.items()}
         
-        xo = dequantize(xo, self.num_v_bits).to(self.dtype)
+        xo = dequantize(xo, mo, self.num_v_bits).to(self.dtype)
         xo = xo.view(bsz, num_q_heads, seq_len, self.num_v_bits)
         info = {key: val.view(bsz, num_q_heads, seq_len) for key, val in info.items()}
         return xo, info
@@ -210,22 +178,22 @@ class RosaSAM:
     def __len__(self):
         return self._objs.numel()
     
-    def update(self, q: Tensor, k: Tensor, v: Tensor, u: int) -> Tensor:
-        xq = q.to(torch.int64)
-        xk = k.to(torch.int64)
-        xv = v.to(torch.int64)
-        xo = rosa_sam_update(self._objs, xq, xk, xv, u)
-        return xo.to(v.dtype)
-    
-    def inspect(self, q: Tensor, k: Tensor, v: Tensor, u: int) -> Tuple[Tensor, Dict[str, Tensor]]:
-        xq = q.to(torch.int64)
-        xk = k.to(torch.int64)
-        xv = v.to(torch.int64)
-        xo, endpos, length = rosa_sam_inspect(self._objs, xq, xk, xv, u)
+    def update(self, xq: Tensor, xk: Tensor, xv: Tensor, mq: Optional[Tensor] = None, mk: Optional[Tensor] = None, u: int = 0) -> Tuple[Tensor, Tensor, Dict[str, Tensor]]:
+        xq = xq.to(torch.int64)
+        xk = xk.to(torch.int64)
+        xv = xv.to(torch.int64)
+
+        mq = torch.full_like(xq, -1) if mq is None else mq.to(torch.int64)
+        mk = torch.full_like(xk, -1) if mk is None else mk.to(torch.int64)
         
-        xo = xo.to(v.dtype)
+        xo, endpos, length = rosa_sam_update(self._objs, xq, xk, xv, mq, mk, u)
+        
+        xo = xo.to(xv.dtype)
+        mo = torch.zeros_like(xo)
+        mo[length > 0] = -1 # mark no-match with "0" for dequantization
+
         info = {
             "endpos": endpos,
             "length": length,
         }
-        return xo, info
+        return xo, mo, info

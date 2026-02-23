@@ -41,22 +41,21 @@ struct rosa_state_t {
 template<typename K, typename V, typename P>
 class rosa_sam {
 public:
-    rosa_sam() : last_q_(0), last_k_(0) {}
-    const std::vector<V>& values() const { return values_; }
+    rosa_sam() : last_q_state_(0), last_k_state_(0), last_q_bits_(0), last_k_bits_(0) {}
 
-    V append(K q, K k, V v, V u) {
-        P i = update_query_(q, last_q_);
-        update_key_value_(k, v);
-        return i != -1 ? values_[i + 1] : u;
-    }
+    V update(K xq, K xk, V xv, K mq, K mk, V u, P& endpos, P& length) {
+        xq = (xq & mq) | (last_q_bits_ & ~mq);
+        xk = (xk & mk) | (last_k_bits_ & ~mk);
 
-    P probe(K q, K k, V v, V u, P& endpos, P& length) {
-        P i = update_query_(q, last_q_);
-        update_key_value_(k, v);
+        last_q_bits_ = xq;
+        last_k_bits_ = xk;
+
+        P i = update_query_(xq, last_q_state_);
+        update_key_value_(xk, xv);
 
         endpos = i;
-        length = states_[last_q_].length;
-        
+        length = states_[last_q_state_].length;
+
         return i != -1 ? values_[i + 1] : u;
     }
 
@@ -69,9 +68,9 @@ private:
 
         P r = states_.size();
         states_.emplace_back();
-        states_[r].length = states_[last_k_].length + 1;
+        states_[r].length = states_[last_k_state_].length + 1;
 
-        P p = last_k_;
+        P p = last_k_state_;
         while (p != -1) {
             if (states_[p].transitions.count(k)) {
                 break;
@@ -107,7 +106,7 @@ private:
             }
         }
 
-        last_k_ = r;
+        last_k_state_ = r;
 
         while (r != -1) {
             states_[r].endpos = i;
@@ -145,8 +144,12 @@ private:
 
     std::vector<V> values_;
     std::vector<rosa_state_t<K, V, P>> states_;
-    P last_q_;
-    P last_k_;
+    
+    P last_q_state_;
+    P last_k_state_;
+
+    K last_q_bits_;
+    K last_k_bits_;
 };
 
 
@@ -192,55 +195,26 @@ torch::Tensor& torch_rosa_sam_free(torch::Tensor& ctx) {
     return ctx;
 }
 
+
 template<typename K, typename V, typename P>
-torch::Tensor torch_rosa_sam_update(const torch::Tensor& ctx, const torch::Tensor& q, const torch::Tensor& k, const torch::Tensor& v, int64_t u) {
-    assert(ctx.numel() == q.size(0));
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> torch_rosa_sam_update(const torch::Tensor& ctx, const torch::Tensor& xq, const torch::Tensor& xk, const torch::Tensor& xv, const torch::Tensor& mq, const torch::Tensor& mk, int64_t u) {
+    assert(ctx.numel() == xq.size(0));
 
-    int64_t B = q.size(0);
-    int64_t N = q.size(1);
+    int64_t B = xq.size(0);
+    int64_t N = xq.size(1);
 
-    auto q_a = q.accessor<K, 2>();
-    auto k_a = k.accessor<K, 2>();
-    auto v_a = v.accessor<V, 2>();
+    auto xq_a = xq.accessor<K, 2>();
+    auto xk_a = xk.accessor<K, 2>();
+    auto xv_a = xv.accessor<V, 2>();
+    auto mq_a = mq.accessor<K, 2>();
+    auto mk_a = mk.accessor<K, 2>();
 
-    auto out = torch::empty({B, N}, v.options());
+    auto out = torch::empty({B, N}, xv.options());
 
     auto ctx_a = ctx.accessor<int64_t, 1>();
     auto out_a = out.accessor<V, 2>();
 
-    #pragma omp parallel for schedule(dynamic)
-    for (int64_t i = 0; i < B; ++i) {
-        auto r = (rosa_sam<K, V, P>*)ctx_a[i];
-        if (!r) {
-            throw std::runtime_error("rosa context is null");
-        }
-
-        for (int64_t t = 0; t < N; ++t) {
-            out_a[i][t] = r->append(q_a[i][t], k_a[i][t], v_a[i][t], static_cast<V>(u));
-        }
-    }
-
-    return out;
-}
-
-
-template<typename K, typename V, typename P>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> torch_rosa_sam_inspect(const torch::Tensor& ctx, const torch::Tensor& q, const torch::Tensor& k, const torch::Tensor& v, int64_t u) {
-    assert(ctx.numel() == q.size(0));
-
-    int64_t B = q.size(0);
-    int64_t N = q.size(1);
-
-    auto q_a = q.accessor<K, 2>();
-    auto k_a = k.accessor<K, 2>();
-    auto v_a = v.accessor<V, 2>();
-
-    auto out = torch::empty({B, N}, v.options());
-
-    auto ctx_a = ctx.accessor<int64_t, 1>();
-    auto out_a = out.accessor<V, 2>();
-
-    auto options = torch::TensorOptions().dtype(torch::kInt64).device(v.device());
+    auto options = torch::TensorOptions().dtype(torch::kInt64).device(xv.device());
     
     auto endpos = torch::empty({B, N}, options);
     auto endpos_a = endpos.accessor<V, 2>();
@@ -250,11 +224,16 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> torch_rosa_sam_inspect(c
 
     #pragma omp parallel for schedule(dynamic)
     for (int64_t i = 0; i < B; ++i) {
-        rosa_sam<K, V, P> r;
+        auto r = (rosa_sam<K, V, P>*)ctx_a[i];
+        if (!r) {
+            throw std::runtime_error("rosa context is null");
+        }
+
         for (int64_t t = 0; t < N; ++t) {
             P _endpos = -1;
             P _length = 0;
-            out_a[i][t] = r.probe(q_a[i][t], k_a[i][t], v_a[i][t], static_cast<V>(u), _endpos, _length);
+            
+            out_a[i][t] = r->update(xq_a[i][t], xk_a[i][t], xv_a[i][t], mq_a[i][t], mk_a[i][t], static_cast<V>(u), _endpos, _length);
 
             endpos_a[i][t] = _endpos;
             length_a[i][t] = _length;
@@ -265,16 +244,14 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> torch_rosa_sam_inspect(c
 }
 
 
-TORCH_LIBRARY(rosa_cpp, m) {
+TORCH_LIBRARY(rosa_soft, m) {
     m.def("rosa_sam_init(Tensor(a!) ctx) -> Tensor");
     m.def("rosa_sam_free(Tensor(a!) ctx) -> Tensor");
-    m.def("rosa_sam_update(Tensor ctx, Tensor q, Tensor k, Tensor v, int u) -> Tensor");
-    m.def("rosa_sam_inspect(Tensor ctx, Tensor q, Tensor k, Tensor v, int u) -> (Tensor, Tensor, Tensor)");
+    m.def("rosa_sam_update(Tensor ctx, Tensor xq, Tensor xk, Tensor xv, Tensor mq, Tensor mk, int u) -> (Tensor, Tensor, Tensor)");
 }
 
-TORCH_LIBRARY_IMPL(rosa_cpp, CPU, m) {
+TORCH_LIBRARY_IMPL(rosa_soft, CPU, m) {
     m.impl("rosa_sam_init", &torch_rosa_sam_init<int64_t, int64_t, int64_t>);
     m.impl("rosa_sam_free", &torch_rosa_sam_free<int64_t, int64_t, int64_t>);
     m.impl("rosa_sam_update", &torch_rosa_sam_update<int64_t, int64_t, int64_t>);
-    m.impl("rosa_sam_inspect", &torch_rosa_sam_inspect<int64_t, int64_t, int64_t>);
 }

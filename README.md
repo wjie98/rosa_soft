@@ -41,12 +41,13 @@ $ pip install --no-build-isolation rwkv_cuda
 ### Using the ROSA Operator
 
 Two operators are exported:
-- **`rosa_bits_ops`**: Uses standard SDPA attention as the gradient proxy.
+- **`rosa_soft_ops`**: Uses softened dynamic programming as the gradient proxy.
+- **`rosa_sufa_ops`**: Uses suffix attention as the gradient proxy.
 - **`rosa_scan_ops`** (experimental): Uses linear attention as the gradient proxy (currently under fine-tuning).
 
 ```python
 import torch
-from rosa_soft import rosa_scan_ops
+from rosa_soft import *
 
 # B: Batch, H: Heads, T: Sequence Length, D: Bits
 # Inputs are usually logits (before tanh or sign)
@@ -54,15 +55,21 @@ query = torch.randn(2, 64, 1024, 8).cuda()
 key   = torch.randn(2, 64, 1024, 8).cuda()
 value = torch.randn(2, 64, 1024, 8).cuda()
 
-# For standard SDPA proxy:
-output: Tensor = rosa_bits_ops(
+# For softened dynamic programming proxy
+output: Tensor = rosa_soft_ops(
+    query, key, value,
+    schmitt_trigger=0.1     # Threshold to prevent noise toggling
+)
+
+# For suffix attention proxy:
+output: Tensor = rosa_sufa_ops(
     query, key, value,
     suffix_window=8,        # Lookback window for fingerprinting
     suffix_factor=0.5,      # Decay factor for the window
     schmitt_trigger=0.1     # Threshold to prevent noise toggling
 )
 
-# For linear attention proxy (experimental):
+# For suffix linear attention proxy (experimental):
 output: Tensor = rosa_scan_ops(
     query, key, value,
     suffix_window=8,        # Lookback window for fingerprinting
@@ -72,7 +79,7 @@ output: Tensor = rosa_scan_ops(
 
 ```
 
-### API Reference: `rosa_bits_ops` & `rosa_scan_ops`
+### API Reference: `rosa_soft_ops` & `rosa_sufa_ops` & `rosa_scan_ops`
 
 | Parameter | Type | Description |
 | --- | --- | --- |
