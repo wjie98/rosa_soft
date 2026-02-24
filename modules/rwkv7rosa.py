@@ -9,31 +9,64 @@ import os
 import math
 from dataclasses import dataclass
 
-from rosa_soft import rosa_scan_ops, RosaContext
+from rosa_soft import RosaContext, rosa_sufa_ops
 
 try:
-    from .rwkv7 import RWKV_Tmix_x070, RWKV_CMix_x070, RWKV_Args_x070, RWKV_x070, L2Wrap
+    from .rwkv7 import RWKV_Tmix_x070, RWKV_CMix_x070, RWKV_x070, L2Wrap
 except ImportError:
-    from rwkv7 import RWKV_Tmix_x070, RWKV_CMix_x070, RWKV_Args_x070, RWKV_x070, L2Wrap
+    from rwkv7 import RWKV_Tmix_x070, RWKV_CMix_x070, RWKV_x070, L2Wrap
 
 
+class RosaBitsLayer(nn.Module):
+    def __init__(self, n_embd: int, n_bits: int = 8) -> None:
+        super().__init__()
+        assert n_embd % n_bits == 0, "n_embd must be divisible by n_bits"
+        self.n_embd = n_embd
+        self.n_bits = n_bits
+        self.emb = nn.Parameter(torch.ones(1, 1, self.n_embd))
+    
+    def reset_parameters(self):
+        nn.init.constant_(self.emb, 1.0)
+    
+    def forward(self, xq: Tensor, xk: Tensor, xv: Tensor) -> Tensor:
+        B, T, C = xq.size()
+
+        xq = xq.reshape(B, T, -1, self.n_bits).transpose(1, 2)
+        xk = xk.reshape(B, T, -1, self.n_bits).transpose(1, 2)
+        xv = xv.reshape(B, T, -1, self.n_bits).transpose(1, 2)
+
+        xo = rosa_sufa_ops(xq, xk, xv)
+
+        xo = xo.transpose(1, 2).reshape(B, T, C)
+        return xo * self.emb
+    
+    @torch.no_grad()
+    def inference(self, xq: Tensor, xk: Tensor, xv: Tensor, state: RosaContext) -> Tensor:
+        B, T, C = xq.size()
+
+        xq = xq.reshape(B, T, -1, self.n_bits).transpose(1, 2)
+        xk = xk.reshape(B, T, -1, self.n_bits).transpose(1, 2)
+        xv = xv.reshape(B, T, -1, self.n_bits).transpose(1, 2)
+
+        xo, _ = state.update(xq, xk, xv)
+
+        xo = xo.transpose(1, 2).reshape(B, T, C)
+        return xo * self.emb
+    
 
 class RWKV_ROSA_x070(nn.Module):
     def __init__(
             self,
             n_embd: int,
+            n_bits: int,
             n_layer: int,
             layer_id: int,
-            qk_bits: int,
-            v_bits: int,
     ):
         super().__init__()
         self.n_embd = n_embd
+        self.n_bits = n_bits
         self.n_layer = n_layer
         self.layer_id = layer_id
-
-        assert n_embd % qk_bits == 0
-        self.n_head = n_embd // qk_bits
 
         self.time_shift = nn.ZeroPad2d((0, 0, 1, -1))
 
@@ -41,19 +74,15 @@ class RWKV_ROSA_x070(nn.Module):
         self.x_k = nn.Parameter(torch.zeros(1, 1, n_embd))
         self.x_v = nn.Parameter(torch.zeros(1, 1, n_embd))
 
-        self.query = nn.Linear(n_embd, self.n_head * qk_bits, bias=False)
-        self.key = nn.Linear(n_embd, self.n_head * qk_bits, bias=False)
-        self.value = nn.Linear(self.n_head * v_bits, n_embd, bias=False)
+        self.query = nn.Linear(n_embd, n_embd, bias=False)
+        self.key = nn.Linear(n_embd, n_embd, bias=False)
+        self.value = nn.Linear(n_embd, n_embd, bias=False)
 
-        self.emb0 = nn.Parameter(torch.full((1, 1, self.n_head * v_bits), -1.0))
-        self.emb1 = nn.Parameter(torch.full((1, 1, self.n_head * v_bits), +1.0))
-
-        self.schmitt_trigger = 1e-3
+        self.rosa_layer = RosaBitsLayer(n_embd=n_embd, n_bits=n_bits)
 
         self.reset_parameters()
     
     def reset_parameters(self):
-        H = self.n_head
         C = self.n_embd
 
         ratio_1_to_almost0 = 1.0 - (self.layer_id / self.n_layer)  # 1 to ~0
@@ -68,12 +97,9 @@ class RWKV_ROSA_x070(nn.Module):
         self.key.weight.data.uniform_(-0.05 / sqrt_C, +0.05 / sqrt_C)
         self.value.weight.data.uniform_(-0.5 / sqrt_C, +0.5 / sqrt_C)
 
-        self.emb0.data.fill_(-1.0)
-        self.emb1.data.fill_(+1.0)
+        self.rosa_layer.reset_parameters()
     
     def forward(self, x: Tensor):
-        B, T, C = x.size()
-        H = self.n_head
         xx = self.time_shift(x) - x
 
         xq = x + xx * self.x_q
@@ -84,20 +110,11 @@ class RWKV_ROSA_x070(nn.Module):
         xk: Tensor = self.key(xk)
         xv: Tensor = self.value(xv)
 
-        xq = xq.view(B, T, H, -1).transpose(1, 2)
-        xk = xk.view(B, T, H, -1).transpose(1, 2)
-        xv = xv.view(B, T, H, -1).transpose(1, 2)
-
-        xo = rosa_scan_ops(xq, xk, xv, schmitt_trigger=self.schmitt_trigger)
-        xo = xo.transpose(1, 2).reshape(B, T, -1)
-        xo = self.emb1 * xo + self.emb0 * (1.0 - xo)
+        xo = self.rosa_layer(xq, xk, xv)
         return xo
     
     @torch.no_grad()
     def inference(self, x: Tensor, state: Dict[str, Tensor]):
-        B, T, C = x.size()
-        H = self.n_head
-
         x0: Tensor = state["token_shift_rosa"][self.layer_id]
         s0: RosaContext = state["rosa_state"][self.layer_id]
 
@@ -112,24 +129,17 @@ class RWKV_ROSA_x070(nn.Module):
         xk: Tensor = self.key(xk)
         xv: Tensor = self.value(xv)
 
-        xq = xq.view(B, T, H, -1).transpose(1, 2)
-        xk = xk.view(B, T, H, -1).transpose(1, 2)
-        xv = xv.view(B, T, H, -1).transpose(1, 2)
-
-        xo = s0.update(xq, xk, xv, schmitt_trigger=self.schmitt_trigger)
-        xo = xo.transpose(1, 2).reshape(B, T, -1)
-        xo = self.emb1 * xo + self.emb0 * (1.0 - xo)
+        xo = self.rosa_layer.inference(xq, xk, xv, s0)
         return xo
 
 
-class Block(nn.Module):
+class RWKV_ROSA_Block_x070(nn.Module):
     def __init__(
             self,
             n_embd: int,
             n_layer: int,
             layer_id: int,
-            qk_bits: int,
-            v_bits: int,
+            rosa_bits: int,
             head_size: int = 64,
     ):
         super().__init__()
@@ -157,10 +167,9 @@ class Block(nn.Module):
 
         self.rosa = RWKV_ROSA_x070(
             n_embd=n_embd,
+            n_bits=rosa_bits,
             n_layer=n_layer,
             layer_id=layer_id,
-            qk_bits=qk_bits,
-            v_bits=v_bits,
         )
     
     def reset_parameters(self):
@@ -200,22 +209,21 @@ class Block(nn.Module):
 
 
 @dataclass
-class Model_Args:
+class RWKV_ROSA_Args_x070:
     vocab_size: int = 65536
     ctx_len: int = 4096
     n_embd: int = 768
     n_layer: int = 12
     head_size: int = 64
-    qk_bits: int = 8
-    v_bits: int = 8
+    rosa_bits: int = 8
     weight_decay: float = 0.1
     lr_init: float = 6e-4       # 6e-4 for L12-D768, 4e-4 for L24-D1024, 3e-4 for L24-D2048
     lr_final: float = 1e-5
     betas: Tuple[float, float] = (0.9, 0.99)
     adam_eps: float = 1e-18
 
-class Model(nn.Module):
-    def __init__(self, args: Model_Args):
+class RWKV_ROSA_Model_x070(nn.Module):
+    def __init__(self, args: RWKV_ROSA_Args_x070):
         super().__init__()
         self.args = args
 
@@ -223,12 +231,11 @@ class Model(nn.Module):
 
         self.blocks = nn.ModuleList()
         for layer_id in range(args.n_layer):
-            self.blocks.append(Block(
+            self.blocks.append(RWKV_ROSA_Block_x070(
                 n_embd=args.n_embd,
                 n_layer=args.n_layer,
                 layer_id=layer_id,
-                qk_bits=args.qk_bits,
-                v_bits=args.v_bits,
+                rosa_bits=args.rosa_bits,
                 head_size=args.head_size,
             ))
 
@@ -345,10 +352,10 @@ class Model(nn.Module):
         RWKV_x070.post_init_weight(module=self, n_layer=self.args.n_layer)
 
 if __name__ == "__main__":
-    args = Model_Args() # 0.1b
+    args = RWKV_ROSA_Args_x070() # 0.1b
     print(args)
 
-    model = Model(args).cuda()
+    model = RWKV_ROSA_Model_x070(args).cuda()
 
     for name, p in model.named_parameters():
         print(name, p.size())
