@@ -45,15 +45,36 @@ class RosaSoftWork:
 
 
 def rosa_soft_ops(
-        query: Tensor,
-        key: Tensor,
-        value: Tensor,
-        scale: Optional[float] = None,
-        quant_mode: str = "soft",
-        quant_scale: Optional[float] = None,
-        schmitt_trigger: float = 0.0,
-        async_op: bool = False,
-) -> Union[Tensor, 'RosaSoftWork']:
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    scale: Optional[float] = None,
+    quant_mode: str = "soft",
+    quant_scale: Optional[float] = None,
+    schmitt_trigger: float = 0.0,
+    async_op: bool = False,
+) -> Union[Tensor, RosaSoftWork]:
+    """ROSA Soft Dynamic Programming operator (Baseline).
+
+    Exact softening of suffix matching via recurrent gated accumulation.
+    Forward uses discrete ROSA (hard SAM), backward uses soft DP gradients
+    via Straight-Through Estimator (STE).
+
+    Complexity: O(T^2) time, O(T^2) space.
+
+    Args:
+        query: (B, H, T, D) Query logits.
+        key: (B, H, T, D) Key logits.
+        value: (B, H, T, D_v) Value logits.
+        scale: Attention scale factor. Defaults to 1/D.
+        quant_mode: Quantization mode ("tanh" or "soft").
+        quant_scale: Quantization scale factor.
+        schmitt_trigger: Threshold for noise filtering.
+        async_op: Return work object for async execution.
+
+    Returns:
+        Tensor if async_op=False, RosaSoftWork if async_op=True.
+    """
 
     work = RosaSoftWork()
     work._future = RosaContext().update(

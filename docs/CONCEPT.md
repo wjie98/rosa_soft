@@ -65,7 +65,7 @@ $$
 $$
 
 Since $M < 1$, the gradient contribution from distant history vanishes rapidly.
-**Insight**: A fixed-size suffix window (e.g., $W=8$) captures the majority of the "suffix fingerprint" information required for gradients. The distinction between a match of length 8 and length 100 provides diminishing returns for local optimization.
+**Insight**: A fixed-size suffix window (e.g., $W=8$) captures the majority of the "suffix fingerprint" (essentially an n-gram representation with positional decay) information required for gradients. The distinction between a match of length 8 and length 100 provides diminishing returns for local optimization.
 
 ### 3.2 The Suffix Attention Mechanism
 Instead of recurrent DP, we construct "Suffix Vectors" by concatenating the last $W$ tokens:
@@ -95,7 +95,7 @@ $$
 To further reduce computational complexity from $O(T^2)$ to $O(T)$, we explore **Linear Suffix Attention**.
 
 ### 4.1 The Low-Rank Hypothesis
-We hypothesize that for any given attention head, the diversity of valid suffix patterns is limited (Low Rank). The "Suffix Fingerprint" does not need to be compared pair-wise strictly.
+We hypothesize that for any given attention head, the diversity of valid suffix patterns is limited (Low Rank). The "suffix fingerprint" (essentially an n-gram representation with positional decay) does not need to be compared pair-wise strictly.
 
 ### 4.2 Linear Approximation
 By removing the Softmax nonlinearity and utilizing the kernel trick (associative property of matrix multiplication), we can aggregate global suffix statistics:
@@ -104,7 +104,7 @@ $$
 O = (Q K^T) V \rightarrow Q (K^T V)
 $$
 
-While this sacrifices the precision of the "longest" match formulation, it acts as a highly efficient global filter to identify relevant historical contexts based on suffix n-gram statistics. This serves as a lightweight proxy for the initial phases of training or for very long sequence extensions.
+While this sacrifices the precision of the "longest" match formulation, it acts as a highly efficient global filter to identify relevant historical contexts based on global statistics of suffix fingerprints. This serves as a lightweight proxy for the initial phases of training or for very long sequence extensions.
 
 ---
 
@@ -115,7 +115,7 @@ The evolution of ROSA Soft represents a trade-off between theoretical exactness 
 | Operator Type | Complexity (Time) | Complexity (Space) | Mechanism | Semantic Interpretation | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Soft DP** | $O(T^2)$ | $O(T^2)$ | Recurrent Gated Accumulation | **Exact Softening**. Computes probability of all possible suffix lengths. | Theoretical Baseline |
-| **Suffix Attention** | $O(T^2)$ * | $O(T)$ * | Windowed Dot-Product + Softmax | **Local Approximation**. Matches "Fingerprints" of length $W$. | **Production (Default)** |
-| **Linear Attention** | $O(T)$ | $O(T)$ | Kernel Trick / RNN-like state | **Statistical Approximation**. Matches global n-gram distribution. | Experimental |
+| **Suffix Attention** | $O(T^2)$ * | $O(T)$ * | Windowed Dot-Product + Softmax | **Local Approximation**. Matches suffix fingerprints (essentially n-grams with positional decay) of length $W$. | **Production (Default)** |
+| **Linear Attention** | $O(T)$ | $O(T)$ | Kernel Trick / RNN-like state | **Statistical Approximation**. Aggregates global statistics of suffix fingerprints. | Experimental |
 
 *\* With Flash Attention optimization.*
