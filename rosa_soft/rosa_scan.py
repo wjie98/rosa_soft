@@ -21,44 +21,43 @@ __all__ = [
 
 
 def rosa_scan_ops(
-        query: Tensor,
-        key: Tensor,
-        value: Tensor,
-        scale: Optional[float] = None,
-        exponent: float = 2.0,
-        suffix_window: int = 8,
-        suffix_factor: Optional[float] = 0.5,
-        quant_mode: str = "soft",
-        quant_scale: Optional[float] = None,
-        schmitt_trigger: float = 0.0,
-        expansion_factor: int = 2,
-        async_op: bool = False,
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    scale: Optional[float] = None,
+    exponent: float = 2.0,
+    suffix_window: int = 8,
+    suffix_factor: Optional[float] = 0.5,
+    quant_mode: str = "soft",
+    quant_scale: Optional[float] = None,
+    schmitt_trigger: float = 0.0,
+    expansion_factor: int = 2,
+    async_op: bool = False,
 ) -> Union[Tensor, RosaSoftWork]:
-    """
-    Performs the Rapid Online Suffix Automaton (ROSA) scan-like operation.
+    """ROSA Linear Suffix Attention operator (Experimental).
 
-    This function computes a differentiable, scan-like mechanism based on the
-    longest common suffix match between query and key sequences. The inputs are
-    expected to be tensors of logits that will be binarized. The operation is designed
-    to be efficient on parallel hardware like GPUs.
+    Reduces complexity to O(T) via kernel trick (associative property).
+    Aggregates global statistics of suffix fingerprints (essentially n-gram
+    representations with positional decay) without exact "longest match".
+
+    Complexity: O(T) time, O(T) space.
 
     Args:
-        query (Tensor): (B, H, T, D) Logits for Query bits.
-        key (Tensor): (B, H, T, D) Logits for Key bits.
-        value (Tensor): (B, H, T, D_v) Logits for Value bits.
-        scale (Optional[float]): Scale factor for the attention scores. If not provided, it will default to `1 / sqrt(D)`. Default: `None`.
-        exponent (float): Exponent for the feature transformation. Default: `2.0`.
-        suffix_window (int): Size of the lookback window for fingerprinting. Default: `8`.
-        suffix_factor (Optional[float]): Decay factor for the window. If None, it will be dynamically set based on the window size. Default: `0.5`.
-        quant_mode (str): Mode for quantizing the inputs. Supported values are "tanh" for tanh-based quantization and "soft" for softsign-based quantization. Default: `"soft"`.
-        quant_scale (Optional[float]): Scale factor for quantization. If not provided, it will default to `1.0`. Default: `None`.
-        schmitt_trigger (float): Threshold for Schmitt trigger to prevent noise. Default: `0.0`.
-        expansion_factor (int): Factor to expand the feature dimension for better expressiveness. Default: `2`.
-        async_op (bool): Whether to return a work object for asynchronous execution. Default: `False`.
+        query: (B, H, T, D) Query logits.
+        key: (B, H, T, D) Key logits.
+        value: (B, H, T, D_v) Value logits.
+        scale: Attention scale factor. Defaults to 1/sqrt(D).
+        exponent: Feature transformation exponent.
+        suffix_window: Size of suffix lookback window.
+        suffix_factor: Decay factor for windowed aggregation.
+        quant_mode: Quantization mode ("tanh" or "soft").
+        quant_scale: Quantization scale factor.
+        schmitt_trigger: Threshold for noise filtering.
+        expansion_factor: Feature dimension expansion factor.
+        async_op: Return work object for async execution.
 
     Returns:
-        Tensor: The result of the Hard SAM lookup if async_op is False.
-        RosaSoftWork: A work object for asynchronous execution if async_op is True.
+        Tensor if async_op=False, RosaSoftWork if async_op=True.
     """
 
     work = RosaSoftWork()
