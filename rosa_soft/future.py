@@ -37,4 +37,6 @@ class RosaSoftWork:
         self._function_apply = None
         self._query_key_value = None
 
+        work.context.destroy()
+
         return function_apply(query, key, value, params)

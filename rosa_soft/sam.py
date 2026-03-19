@@ -40,6 +40,9 @@ class RosaContext:
     def __init__(self, batch_size: int, num_heads: int) -> None:
         self.cache = RosaCache(batch_size, num_heads)
     
+    def destroy(self):
+        self.cache.destroy()
+    
     def update(
             self,
             query: Tensor,
@@ -169,7 +172,13 @@ class RosaCache:
         rosa_cache_create_(self.cache, num_heads)
     
     def __del__(self):
-        rosa_cache_delete_(self.cache)
+        self.destroy()
+    
+    def destroy(self):
+        try:
+            rosa_cache_delete_(self.cache)
+        except Exception:
+            pass
     
     def update(
             self,
