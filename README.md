@@ -11,29 +11,17 @@
 ## 📂 Project Structure
 
 * **`rosa_soft/`**: The core Python package containing the C++ kernel for the ROSA operator.
-* **`rwkv_cuda/`**: Standalone, high-performance CUDA operators for standard RWKV models.
-* **`modules/`**: PyTorch implementations of ROSA layers and reference models (e.g., Qwen3, RWKV7).
 * **`legacy/`**: Historical snapshots of the operator evolution.
+* **`demo/`**: PyTorch implementations of ROSA layers and reference models (e.g., RWKV7).
 
 ## 🚀 Installation
 
 Prerequisites: **PyTorch** and **CUDA** toolkit.
 
-### 1. Install from Source (Recommended)
-
 You can install the core `rosa_soft` operator directly from GitHub:
 
 ```bash
 $ pip install --no-build-isolation git+https://github.com/wjie98/rosa_soft.git
-```
-
-### 2. (Optional) Install RWKV CUDA Operators
-
-If you are using the provided RWKV-based reference models in `modules/` or need standalone RWKV ops:
-
-```bash
-$ git clone https://github.com/wjie98/rosa_soft.git && cd rosa_soft
-$ pip install --no-build-isolation rwkv_cuda
 ```
 
 ## 🛠 Usage
@@ -49,11 +37,11 @@ Two operators are exported:
 import torch
 from rosa_soft import *
 
-# B: Batch, H: Heads, T: Sequence Length, D: Bits
+# B: Batch, T: Sequence Length, H: Heads, D: Bits
 # Inputs are usually logits (before tanh or sign)
-query = torch.randn(2, 64, 1024, 8).cuda()
-key   = torch.randn(2, 64, 1024, 8).cuda()
-value = torch.randn(2, 64, 1024, 8).cuda()
+query = torch.randn(2, 1024, 64, 8).cuda()
+key   = torch.randn(2, 1024, 64, 8).cuda()
+value = torch.randn(2, 1024, 16, 32).cuda()
 
 # For softened dynamic programming proxy
 output: Tensor = rosa_soft_ops(
@@ -83,21 +71,21 @@ output: Tensor = rosa_scan_ops(
 
 | Parameter | Type | Description |
 | --- | --- | --- |
-| `query` | `Tensor` | (B, H, T, D) Logits for Query bits. |
-| `key` | `Tensor` | (B, H, T, D) Logits for Key bits. |
-| `value` | `Tensor` | (B, H, T, D_v) Logits for Value bits. |
+| `query` | `Tensor` | (B, T, H, D) Logits for Query bits. |
+| `key` | `Tensor` | (B, T, H, D) Logits for Key bits. |
+| `value` | `Tensor` | (B, T, H_v, D_v) Logits for Value bits. |
 | `suffix_window` | `int` | Size of the lookback window for geometric decay fingerprinting (SUFA proxy). |
 | `suffix_factor` | `float` | Decay factor for the window. |
 | `schmitt_trigger` | `float` | Hysteresis threshold to stabilize bit flipping against noise. |
 
-## 🧩 Reference Modules
+## 🧩 Reference Demo Modules
 
-The `modules/` directory contains experimental integrations of the ROSA layer into modern architectures.
+The `demo/` directory contains experimental integrations of the ROSA layer into modern architectures.
 
-* **`rwkv7rosa.py`**: A hybrid architecture combining RWKV-7 token mixing with the ROSA operator.
-* **`qwen3.py`**: Experiments with Qwen-based architectures.
+* **`rwkv7.py`**: PyTorch implementation of the RWKV-7 model.
+* **`rwkv7rosa.py`**: A hybrid architecture combining RWKV-7 with the ROSA token mixing layer.
 
-> **Warning:** The architectures in `modules/` are subject to change as we refine the best practices for placing the ROSA layer.
+> **Warning:** The architectures in `demo/` are subject to change as we refine the best practices for placing the ROSA layer.
 
 ## 📅 Roadmap & History
 
