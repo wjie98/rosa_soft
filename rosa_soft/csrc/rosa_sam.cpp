@@ -1,4 +1,5 @@
 #include <map>
+#include <sys/types.h>
 #include <tuple>
 #include <vector>
 #include <cstdint>
@@ -152,106 +153,248 @@ private:
     K last_k_bits_;
 };
 
+using rosa_cache = std::vector<rosa_sam<int64_t, int64_t, int64_t>>;
+
+template<typename K, typename V>
+void rosa_cache_update_kernel(
+    const int64_t B, const int64_t nqk, const int64_t nvv, const V u,
+    rosa_cache** cache, const int64_t* batch,
+    const K* query, const K* key, const V* value,
+    const K* query_trigger, const K* key_trigger,
+    V* output, int64_t* endpos, int64_t* length
+) {
+    std::vector<int64_t> offset(B + 1);
+    for (int64_t b = 0; b < B; ++b) {
+        if (!cache[b]) {
+            throw std::runtime_error("rosa cache is not initialized");
+        } else if (cache[b]->size() != nqk) {
+            throw std::runtime_error("rosa cache size does not match nqk");
+        }
+
+        offset[b + 1] = offset[b] + batch[b];
+    }
+
+    const int64_t n_rep = nqk / nvv;
+
+    #pragma omp parallel for collapse(2) schedule(dynamic)
+    for (int64_t h = 0; h < nqk; ++h) {
+        for (int64_t b = 0; b < B; ++b) {
+            auto& r = cache[b]->at(h);
+            for (int64_t t = 0; t < batch[b]; ++t) {
+                int64_t qk_idx = h * offset[B] + offset[b] + t;
+                int64_t vv_idx = h / n_rep * offset[B] + offset[b] + t;
+
+                uint64_t xq = static_cast<uint64_t>(query[qk_idx]);
+                uint64_t xk = static_cast<uint64_t>(key[qk_idx]);
+                uint64_t xv = static_cast<uint64_t>(value[vv_idx]);
+
+                uint64_t mq = -1;
+                if (query_trigger) {
+                    mq = static_cast<uint64_t>(query_trigger[qk_idx]);
+                }
+
+                uint64_t mk = -1;
+                if (key_trigger) {
+                    mk = static_cast<uint64_t>(key_trigger[qk_idx]);
+                }
+
+                uint64_t uv = static_cast<uint64_t>(u);
+
+                int64_t pos = -1;
+                int64_t len = 0;
+
+                V out = r.update(xq, xk, xv, mq, mk, uv, pos, len);
+
+                output[qk_idx] = static_cast<V>(out);
+                endpos[qk_idx] = pos;
+                length[qk_idx] = len;
+            }
+        }
+    }
+}
+
 
 #include <torch/extension.h>
 
-template<typename K, typename V, typename P>
-torch::Tensor& torch_rosa_sam_init(torch::Tensor& ctx) {
-    int64_t B = ctx.numel();
-    auto ctx_a = ctx.accessor<int64_t, 1>();
+#define DISPATCH_KEY_TYPES(TYPE, NAME, ...) \
+    do { \
+        switch (TYPE) { \
+            case at::ScalarType::Char:  { using key_t = int8_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::Byte:  { using key_t = uint8_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::Short:  { using key_t = int16_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::UInt16:  { using key_t = uint16_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::Int:  { using key_t = int32_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::UInt32:  { using key_t = uint32_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::Long:  { using key_t = int64_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::UInt64:  { using key_t = uint64_t;  (__VA_ARGS__)(); break; } \
+            default: TORCH_CHECK(false, #NAME, " not implemented for '", toString(TYPE), "'"); \
+        } \
+    } while (false)
+
+#define DISPATCH_VALUE_TYPES(TYPE, NAME, ...) \
+    do { \
+        switch (TYPE) { \
+            case at::ScalarType::Char:  { using value_t = int8_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::Byte:  { using value_t = uint8_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::Short:  { using value_t = int16_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::UInt16:  { using value_t = uint16_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::Int:  { using value_t = int32_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::UInt32:  { using value_t = uint32_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::Long:  { using value_t = int64_t;  (__VA_ARGS__)(); break; } \
+            case at::ScalarType::UInt64:  { using value_t = uint64_t;  (__VA_ARGS__)(); break; } \
+            default: TORCH_CHECK(false, #NAME, " not implemented for '", toString(TYPE), "'"); \
+        } \
+    } while (false)
+
+#define CHECK_QK_TENSOR(x, nqk, ntk) \
+    do { \
+        TORCH_CHECK(x.dim() == 2, #x, " must be 2D tensor"); \
+        TORCH_CHECK(x.size(0) == nqk, #x, " must have size(0) equal to nqk"); \
+        TORCH_CHECK(x.size(1) == ntk, #x, " must have size(1) equal to ntk"); \
+        TORCH_CHECK(x.is_contiguous(), #x, " must be contiguous"); \
+    } while (false)
+
+#define CHECK_VV_TENSOR(x, nvv, ntk) \
+    do { \
+        TORCH_CHECK(x.dim() == 2, #x, " must be 2D tensor"); \
+        TORCH_CHECK(x.size(0) == nvv, #x, " must have size(0) equal to nvv"); \
+        TORCH_CHECK(x.size(1) == ntk, #x, " must have size(1) equal to ntk"); \
+        TORCH_CHECK(x.is_contiguous(), #x, " must be contiguous"); \
+    } while (false)
+
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> torch_rosa_cache_update(
+    const torch::Tensor& cache,
+    const torch::Tensor& batch,
+    const torch::Tensor& query,
+    const torch::Tensor& key,
+    const torch::Tensor& value,
+    const c10::optional<torch::Tensor>& query_trigger,
+    const c10::optional<torch::Tensor>& key_trigger,
+    int64_t u
+) {
+    auto cache_ = cache.accessor<int64_t, 1>();
+    auto batch_ = batch.accessor<int64_t, 1>();
+
+    int64_t B = cache.numel();
+    int64_t nqk = query.size(0);
+    int64_t nvv = value.size(0);
+
+    if (batch.numel() != cache.numel()) {
+        throw std::runtime_error("batch size must be equal to cache size");
+    }
+
+    if (query.size(0) % value.size(0) != 0) {
+        throw std::runtime_error("query heads must be divisible by value heads");
+    }
+
+    int64_t ntk = 0; // total tokens
+    std::vector<rosa_cache*> cache_vec(B); // cache pointer vector
+    std::vector<int64_t> batch_vec(B); // batch size vector
+    for (int64_t i = 0; i < B; ++i) {
+        ntk += batch_[i];
+        cache_vec[i] = (rosa_cache*)cache_[i];
+        batch_vec[i] = batch_[i];
+    }
+
+    CHECK_QK_TENSOR(query, nqk, ntk);
+    CHECK_QK_TENSOR(key, nqk, ntk);
+    CHECK_VV_TENSOR(value, nvv, ntk);
+
+    if (query_trigger.has_value()) { CHECK_QK_TENSOR(query_trigger.value(), nqk, ntk); }
+    if (key_trigger.has_value()) { CHECK_QK_TENSOR(key_trigger.value(), nqk, ntk); }
+
+    auto options = torch::TensorOptions().dtype(torch::kInt64).device(value.device());
+
+    auto output = torch::empty({nqk, ntk}, value.options());
+    auto endpos = torch::empty({nqk, ntk}, options);
+    auto length = torch::empty({nqk, ntk}, options);
+
+    DISPATCH_KEY_TYPES(
+        key.scalar_type(),
+        "rosa_cache_update_",
+        [&] {
+            DISPATCH_VALUE_TYPES(
+                value.scalar_type(),
+                "rosa_cache_update_",
+                [&] {
+                    const key_t* query_ptr = query.data_ptr<key_t>();
+                    const key_t* key_ptr = key.data_ptr<key_t>();
+                    const value_t* value_ptr = value.data_ptr<value_t>();
+
+                    const key_t* query_trigger_ptr = nullptr;
+                    if (query_trigger.has_value()) {
+                        query_trigger_ptr = query_trigger.value().data_ptr<key_t>();
+                    }
+                    
+                    const key_t* key_trigger_ptr = nullptr;
+                    if (key_trigger.has_value()) {
+                        key_trigger_ptr = key_trigger.value().data_ptr<key_t>();
+                    }
+
+                    value_t* output_ptr = output.data_ptr<value_t>();
+                    int64_t* endpos_ptr = endpos.data_ptr<int64_t>();
+                    int64_t* length_ptr = length.data_ptr<int64_t>();
+
+                    rosa_cache_update_kernel<key_t, value_t>(
+                        B, nqk, nvv, static_cast<value_t>(u),
+                        cache_vec.data(), batch_vec.data(),
+                        query_ptr, key_ptr, value_ptr,
+                        query_trigger_ptr, key_trigger_ptr,
+                        output_ptr, endpos_ptr, length_ptr
+                    );
+                }
+            );
+        }
+    );
+
+    // for (int64_t i = 0; i < B; ++i) {
+    //     cache_[i] = (int64_t)cache_vec[i];
+    // }
+
+    return {output, endpos, length};
+}
+
+void torch_rosa_cache_create(torch::Tensor& cache, int64_t num_heads) {
+    auto cache_ = cache.accessor<int64_t, 1>();
+    int64_t B = cache.numel();
 
     #pragma omp parallel for
     for (int64_t i = 0; i < B; ++i) {
-        auto r = (rosa_sam<K, V, P>*)ctx_a[i];
-        
-        if (r) {
-            delete r;
-        }
-
-        r = new rosa_sam<K, V, P>();
-
-        ctx_a[i] = (int64_t)r;
-    }
-
-    return ctx;
-}
-
-template<typename K, typename V, typename P>
-torch::Tensor& torch_rosa_sam_free(torch::Tensor& ctx) {
-    int64_t B = ctx.numel();
-    auto ctx_a = ctx.accessor<int64_t, 1>();
-
-    #pragma omp parallel for
-    for (int64_t i = 0; i < B; ++i) {
-        auto r = (rosa_sam<K, V, P>*)ctx_a[i];
-        
-        if (r) {
-            delete r;
-        }
-
-        ctx_a[i] = 0;
-    }
-
-    return ctx;
-}
-
-
-template<typename K, typename V, typename P>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> torch_rosa_sam_update(const torch::Tensor& ctx, const torch::Tensor& xq, const torch::Tensor& xk, const torch::Tensor& xv, const torch::Tensor& mq, const torch::Tensor& mk, int64_t u) {
-    assert(ctx.numel() == xq.size(0));
-
-    int64_t B = xq.size(0);
-    int64_t N = xq.size(1);
-
-    auto xq_a = xq.accessor<K, 2>();
-    auto xk_a = xk.accessor<K, 2>();
-    auto xv_a = xv.accessor<V, 2>();
-    auto mq_a = mq.accessor<K, 2>();
-    auto mk_a = mk.accessor<K, 2>();
-
-    auto out = torch::empty({B, N}, xv.options());
-
-    auto ctx_a = ctx.accessor<int64_t, 1>();
-    auto out_a = out.accessor<V, 2>();
-
-    auto options = torch::TensorOptions().dtype(torch::kInt64).device(xv.device());
-    
-    auto endpos = torch::empty({B, N}, options);
-    auto endpos_a = endpos.accessor<V, 2>();
-
-    auto length = torch::empty({B, N}, options);
-    auto length_a = length.accessor<V, 2>();
-
-    #pragma omp parallel for schedule(dynamic)
-    for (int64_t i = 0; i < B; ++i) {
-        auto r = (rosa_sam<K, V, P>*)ctx_a[i];
+        auto r = (rosa_cache*)cache_[i];
         if (!r) {
-            throw std::runtime_error("rosa context is null");
+            r = new rosa_cache();
+            r->resize(num_heads);
+        } else if (r->size() != num_heads) {
+            throw std::runtime_error("cache size must be equal to num_heads");
         }
-
-        for (int64_t t = 0; t < N; ++t) {
-            P _endpos = -1;
-            P _length = 0;
-            
-            out_a[i][t] = r->update(xq_a[i][t], xk_a[i][t], xv_a[i][t], mq_a[i][t], mk_a[i][t], static_cast<V>(u), _endpos, _length);
-
-            endpos_a[i][t] = _endpos;
-            length_a[i][t] = _length;
-        }
+        cache_[i] = (int64_t)r;
     }
+}
 
-    return {out, endpos, length};
+void torch_rosa_cache_delete(torch::Tensor& cache) {
+    auto cache_ = cache.accessor<int64_t, 1>();
+    int64_t B = cache.numel();
+
+    #pragma omp parallel for
+    for (int64_t i = 0; i < B; ++i) {
+        auto r = (rosa_cache*)cache_[i];
+        if (r) {
+            delete r;
+        }
+        cache_[i] = 0;
+    }
 }
 
 
 TORCH_LIBRARY(rosa_soft, m) {
-    m.def("rosa_sam_init(Tensor(a!) ctx) -> Tensor");
-    m.def("rosa_sam_free(Tensor(a!) ctx) -> Tensor");
-    m.def("rosa_sam_update(Tensor ctx, Tensor xq, Tensor xk, Tensor xv, Tensor mq, Tensor mk, int u) -> (Tensor, Tensor, Tensor)");
+    m.def("rosa_cache_update(Tensor(a!) cache, Tensor batch, Tensor query, Tensor key, Tensor value, Tensor? query_trigger, Tensor? key_trigger, int u) -> (Tensor, Tensor, Tensor)");
+    m.def("rosa_cache_create(Tensor(a!) cache, int num_heads) -> ()");
+    m.def("rosa_cache_delete(Tensor(a!) cache) -> ()");
 }
 
 TORCH_LIBRARY_IMPL(rosa_soft, CPU, m) {
-    m.impl("rosa_sam_init", &torch_rosa_sam_init<int64_t, int64_t, int64_t>);
-    m.impl("rosa_sam_free", &torch_rosa_sam_free<int64_t, int64_t, int64_t>);
-    m.impl("rosa_sam_update", &torch_rosa_sam_update<int64_t, int64_t, int64_t>);
+    m.impl("rosa_cache_update", &torch_rosa_cache_update);
+    m.impl("rosa_cache_create", &torch_rosa_cache_create);
+    m.impl("rosa_cache_delete", &torch_rosa_cache_delete);
 }

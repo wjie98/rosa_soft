@@ -6,10 +6,10 @@ import math
 from torch import Tensor
 from typing import *
 
-from .rosa_sam import RosaContext, RosaWork
-from .utils import QuantizeFunction, repeat_kv, unfold_qk, decay_qk, gather_x
+from .sam import RosaContext
+from .future import RosaSoftWork
 
-from .rosa_soft import RosaSoftWork
+from .utils import quantize
 
 
 __all__ = [
@@ -39,10 +39,10 @@ def rosa_sufa_ops(
     Complexity: O(T^2) time, O(T) space (with Flash Attention).
 
     Args:
-        query: (B, H, T, D) Query logits.
-        key: (B, H, T, D) Key logits.
-        value: (B, H, T, D_v) Value logits.
-        scale: Attention scale factor. Defaults to 1/D.
+        query: (B, T, H, D) Query logits.
+        key: (B, T, H, D) Key logits.
+        value: (B, T, H_v, D_v) Value logits.
+        scale: Attention scale factor.
         suffix_window: Size of suffix lookback window (W).
         suffix_factor: Decay factor for windowed aggregation.
         quant_mode: Quantization mode ("tanh" or "soft").
@@ -54,8 +54,14 @@ def rosa_sufa_ops(
         Tensor if async_op=False, RosaSoftWork if async_op=True.
     """
 
+    batch_size, _, num_heads, _ = query.size()
+
     work = RosaSoftWork()
-    work._future = RosaContext().update(
+
+    work._future = RosaContext(
+        batch_size=batch_size,
+        num_heads=num_heads,
+    ).update(
         query=query, key=key, value=value,
         schmitt_trigger=schmitt_trigger,
         async_op=True,
@@ -82,7 +88,7 @@ class RosaSufaParams:
     def __init__(self,
         scale: Optional[float],
         suffix_window: int,
-        suffix_factor: Optional[float],
+        suffix_factor: float,
         quant_mode: str,
         quant_scale: Optional[float],
         schmitt_trigger: float,
@@ -95,26 +101,19 @@ class RosaSufaParams:
         self.schmitt_trigger = schmitt_trigger
 
         self.info: Dict[str, Tensor] = {}
-        self._ctx: Optional[RosaContext] = None
 
 
 class RosaSufaFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, query: Tensor, key: Tensor, value: Tensor, params: RosaSufaParams):
-        if "x_hard" in params.info:
-            x_hard = params.info.pop("x_hard")
-        else:
-            x_hard, info = RosaContext().update(
-                query=query, key=key, value=value,
-                schmitt_trigger=params.schmitt_trigger,
-            )
-            params.info.update(info)
+        x_hard = params.info.pop("x_hard")
 
         ctx.save_for_backward(
             query.detach(),
             key.detach(),
             value.detach(),
         )
+
         ctx.saved_params = params
 
         return x_hard
@@ -127,11 +126,11 @@ class RosaSufaFunction(torch.autograd.Function):
         length = params.info.pop("length")
         endpos = params.info.pop("endpos")
 
-        with torch.enable_grad():
-            query.requires_grad_(True)
-            key.requires_grad_(True)
-            value.requires_grad_(True)
+        query.requires_grad_(True)
+        key.requires_grad_(True)
+        value.requires_grad_(True)
 
+        with torch.enable_grad():
             x_soft = suffix_attention_proxy(
                 query, key, value,
                 endpos=endpos,
@@ -142,13 +141,14 @@ class RosaSufaFunction(torch.autograd.Function):
                 quant_scale=params.quant_scale,
             )
 
-            grad_query, grad_key, grad_value = torch.autograd.grad(
-                outputs=x_soft,
-                inputs=(query, key, value),
-                grad_outputs=grad_output,
-                retain_graph=False,
-                only_inputs=True,
-            )
+        grad_query, grad_key, grad_value = torch.autograd.grad(
+            outputs=x_soft,
+            inputs=(query, key, value),
+            grad_outputs=grad_output,
+            retain_graph=False,
+            only_inputs=True,
+        )
+
         return grad_query, grad_key, grad_value, None
 
 
@@ -157,19 +157,28 @@ def suffix_attention_proxy(
         endpos: Tensor,
         scale: Optional[float],
         suffix_window: int,
-        suffix_factor: Optional[float],
+        suffix_factor: float,
         quant_mode: str,
         quant_scale: Optional[float],
 ):
-    bsz, num_heads, seq_len, num_q_bits = query.size()
-    bsz, num_kv_heads, seq_len, num_k_bits = key.size()
-    bsz, num_kv_heads, seq_len, num_v_bits = value.size()
+    bsz, seq_len, num_q_heads, num_q_bits = query.size()
+    bsz, seq_len, num_k_heads, num_k_bits = key.size()
+    bsz, seq_len, num_v_heads, num_v_bits = value.size()
 
-    num_qk_bits = num_q_bits
-    assert num_q_bits == num_k_bits, "query and key must have the same number of bits"
+    assert num_q_heads == num_k_heads, "num_q_heads must be equal to num_k_heads"
+    assert num_q_heads % num_v_heads == 0, "num_q_heads must be divisible by num_v_heads"
 
     MAX_ATTENTION_HEAD_DIM = 256
-    assert 0 < num_qk_bits * suffix_window <= MAX_ATTENTION_HEAD_DIM
+    assert num_q_bits == num_k_bits, "num_q_bits must be equal to num_k_bits"
+    assert 0 < num_q_bits * suffix_window <= MAX_ATTENTION_HEAD_DIM, \
+        f"num_q_bits * suffix_window ({num_q_bits * suffix_window}) must be <= {MAX_ATTENTION_HEAD_DIM}"
+
+    assert suffix_window >= 1, "suffix_window must be >= 1"
+    assert 0 < suffix_factor <= 1.0, "suffix_factor must be in (0, 1]"
+
+    query = query.permute(0, 2, 1, 3)
+    key   = key.permute(0, 2, 1, 3)
+    value = value.permute(0, 2, 1, 3)
 
     # q = torch.linspace(0, 1, 10, device=query.device)
     # qq = torch.quantile(query.flatten(), q, dim=0)
@@ -180,44 +189,36 @@ def suffix_attention_proxy(
     # print(qv.tolist())
 
     ## quantize query, key, value
+    xq, xk, xv = quantize(
+        query=query, key=key, value=value,
+        quant_mode=quant_mode, quant_scale=quant_scale,
+    )
     
-    if quant_scale is not None:
-        assert quant_scale >= 1.0, "quant_scale must be >= 1.0"
-        query = query * quant_scale
-        key = key * quant_scale
-        value = value * quant_scale
-    else:
-        quant_scale = 1.0
-
-    if quant_mode == "tanh":
-        xq = torch.tanh(query)
-        xk = torch.tanh(key)
-        xv = torch.tanh(value)
-    elif quant_mode == "soft":
-        xq = F.softsign(query)
-        xk = F.softsign(key)
-        xv = F.softsign(value)
-    else:
-        raise ValueError(f"Unsupported quant_mode: {quant_mode}, expected one of 'tanh' or 'soft'")
-    
-    ## repeat key and value for multi-head attention
-    n_rep = num_heads // num_kv_heads
-    xk = repeat_kv(xk, n_rep)
-    xv = repeat_kv(xv, n_rep)
+    ## repeat value for multi-head attention
+    n_rep = num_q_heads // num_v_heads
+    if n_rep > 1:
+        xv = xv[:, :, None, :, :].expand(bsz, num_v_heads, n_rep, seq_len, num_v_bits)
+        xv = xv.reshape(bsz, num_q_heads, seq_len, num_v_bits)
 
     ## unfold query and key for suffix attention
-    xq = unfold_qk(xq, win_size=suffix_window, offset=0)
-    xk = unfold_qk(xk, win_size=suffix_window, offset=1) # predict next token
+    xq = F.pad(xq, (0, 0, suffix_window - 1, 0)).unfold(-2, suffix_window, 1).transpose(-2, -1)
+    xk = F.pad(xk, (0, 0, suffix_window,    -1)).unfold(-2, suffix_window, 1).transpose(-2, -1)
 
     ## apply geometric decay to the query and key features within the suffix window
-    xq, xk = decay_qk(xq, xk, decay_factor=suffix_factor)
+    with torch.no_grad():
+        decs = suffix_window - 1 - torch.arange(suffix_window, device=xq.device)
+        decs = torch.pow(suffix_factor, decs.float())
+        decs = torch.sqrt(decs / torch.sum(decs)).view(-1, 1)
+
+    xq = xq * decs.to(xq.dtype)
+    xk = xk * decs.to(xk.dtype)
 
     ## compute scaled dot product attention
-    xq = xq.reshape(bsz, num_heads, seq_len, num_q_bits * suffix_window)
-    xk = xk.reshape(bsz, num_heads, seq_len, num_k_bits * suffix_window)
+    xq = xq.reshape(bsz, num_q_heads, seq_len, num_q_bits * suffix_window)
+    xk = xk.reshape(bsz, num_k_heads, seq_len, num_k_bits * suffix_window)
 
     if scale is None:
-        scale = 1.0 / num_qk_bits
+        scale = 1.0 / math.sqrt(num_q_bits * suffix_window)
     else:
         scale = float(scale)
 
@@ -227,13 +228,17 @@ def suffix_attention_proxy(
     )
 
     ## apply gating based value detach
-    pk = gather_x(xk, endpos)
-    pv = gather_x(xv, endpos)
+    with torch.no_grad():
+        epos = endpos.permute(0, 2, 1)
+        mask = (epos >= 0).unsqueeze(-1).type_as(xq)
+        inds = (epos + 1).clamp(0, seq_len - 1).unsqueeze(-1).long()
+    
+    sk = torch.gather(xk, dim=2, index=inds) * mask
+    sv = torch.gather(xv, dim=2, index=inds) * mask
 
-    gg = torch.sum(xq * pk, dim=-1, keepdim=True)
+    gg = torch.sum(xq * sk, dim=-1, keepdim=True)
     gg = torch.sigmoid(gg * scale)
+    xo = xo * (1 - gg) + sv * gg
     
-    xo = xo * (1 - gg) + pv * gg
-    return xo
+    return xo.permute(0, 2, 1, 3)
 
-    

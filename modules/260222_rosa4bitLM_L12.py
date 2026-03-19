@@ -127,9 +127,9 @@ class rosa_4bit_layer(nn.Module):
     def forward(self, xq: Tensor, xk: Tensor, xv: Tensor) -> Tensor:
         B, T, C = xq.size()
 
-        xq = xq.reshape(B, T, -1, 4).transpose(1, 2)
-        xk = xk.reshape(B, T, -1, 4).transpose(1, 2)
-        xv = xv.reshape(B, T, -1, 4).transpose(1, 2)
+        xq = xq.reshape(B, T, -1, 4)
+        xk = xk.reshape(B, T, -1, 4)
+        xv = xv.reshape(B, T, -1, 4)
 
         xo = rosa_sufa_ops(xq, xk, xv)
 
@@ -146,21 +146,21 @@ class rosa_4bit_layer(nn.Module):
         #         print(f'[{b}, {g}] bo={bo.tolist()}')
         #         print()
 
-        xo = xo.transpose(1, 2).reshape(B, T, C)
-        return xo * self.emb
+        xo = xo.reshape(B, T, C) * self.emb
+        return xo
     
     @torch.no_grad()
     def inference(self, xq: Tensor, xk: Tensor, xv: Tensor, state: RosaContext) -> Tensor:
         B, T, C = xq.size()
 
-        xq = xq.reshape(B, T, -1, 4).transpose(1, 2)
-        xk = xk.reshape(B, T, -1, 4).transpose(1, 2)
-        xv = xv.reshape(B, T, -1, 4).transpose(1, 2)
+        xq = xq.reshape(B, T, -1, 4)
+        xk = xk.reshape(B, T, -1, 4)
+        xv = xv.reshape(B, T, -1, 4)
 
-        xo, _ = state.update(xq, xk, xv)
+        xo, *_ = state.update(xq, xk, xv)
 
-        xo = xo.transpose(1, 2).reshape(B, T, C)
-        return xo * self.emb
+        xo = xo.reshape(B, T, C) * self.emb
+        return xo
 
 
 class RWKV_ROSA_4bit(nn.Module):
@@ -327,7 +327,7 @@ class RWKV(nn.Module):
         return {
             "token_shift_ffn": torch.zeros(n_layer, batch_size, n_embd, dtype=dtype, device=device),
             "token_shift_rosa": torch.zeros(n_layer, batch_size, n_embd, dtype=dtype, device=device),
-            "rosa_state": [RosaContext() for _ in range(n_layer)],
+            "rosa_state": [RosaContext(batch_size=batch_size, num_heads=n_embd // 4) for _ in range(n_layer)],
         }
 
 ########################################################################################################
