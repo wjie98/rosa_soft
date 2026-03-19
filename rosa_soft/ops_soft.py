@@ -173,12 +173,14 @@ def rosa_native_proxy(
     if n_rep > 1:
         xv = xv[:, :, None, :, :].expand(bsz, num_v_heads, n_rep, seq_len, num_v_bits)
         xv = xv.reshape(bsz, num_q_heads, seq_len, num_v_bits)
+    
+    ## pad key to predict next token
+    xk = F.pad(xk, (0, 0, 1, -1))
 
     ## dynamic programming attention
     ss = xq @ xk.transpose(-1, -2)
     ss = ss * (10.0 / num_q_bits)
-    ss = torch.sigmoid(ss).tril(-1)
-    ss = F.pad(ss, (1, -1), value=0.0) # predict next token
+    ss = torch.sigmoid(ss).tril()
 
     r = torch.arange(seq_len, dtype=torch.long, device=ss.device)
 
