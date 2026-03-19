@@ -1,6 +1,9 @@
 import torch
 
-from rosa_soft import RosaContext, rosa_soft_ops, rosa_sufa_ops, rosa_scan_ops
+from rosa_soft import RosaContext, RosaCache
+from rosa_soft import rosa_soft_ops
+from rosa_soft import rosa_sufa_ops
+from rosa_soft import rosa_scan_ops
 
 
 def samx_qkv_slow(qqq, kkk, vvv): # slow, only for reference
@@ -38,33 +41,34 @@ if __name__ == "__main__":
 
             o1 = torch.tensor(samx_qkv_slow(q, k, v))
 
-            query = (torch.tensor([q]).view(1, 1, -1, 1) >> torch.arange(4)) & 1
-            key   = (torch.tensor([k]).view(1, 1, -1, 1) >> torch.arange(4)) & 1
-            value = (torch.tensor([v]).view(1, 1, -1, 1) >> torch.arange(4)) & 1
+            query = (torch.tensor([q]).view(1, -1, 1, 1) >> torch.arange(4)) & 1
+            key   = (torch.tensor([k]).view(1, -1, 1, 1) >> torch.arange(4)) & 1
+            value = (torch.tensor([v]).view(1, -1, 1, 1) >> torch.arange(4)) & 1
+
+            query = query.repeat(1, 1, H, 1)
+            key   = key.repeat(1, 1, H, 1)
+            value = value.repeat(1, 1, H, 1)
 
             query = query.float()
             key   = key.float()
             value = value.float()
-            # print(query.size(), key.size(), value.size())
+            print(query.size(), key.size(), value.size())
 
-            o2, _ = RosaContext().update(query, key, value)
-            o2 = ((o2 > 0) << torch.arange(4)).sum(dim=-1).squeeze()
-            
-            o3 = rosa_scan_ops(query, key, value)
-            o3 = ((o3 > 0) << torch.arange(4)).sum(dim=-1).squeeze()
-
-            # o4 = RosaContext().update(query, key, value, 0, thresh=-0.1)
-            # o4 = ((o4 > 0) << torch.arange(4)).sum(dim=-1).squeeze()
+            o2, _, _ = RosaContext(1, H).update(query, key, value)
+            o2 = ((o2 > 0) << torch.arange(4)).sum(dim=-1)[:, :, -1:].squeeze()
 
             print(o1)
             print(o2)
-            print(o3)
-            # print(o4)
-            print()
-            
             assert (o1 == o2).all()
-            assert (o1 == o3).all()
-            # assert (o1 == o4).all()
+
+            for ops in [rosa_soft_ops, rosa_sufa_ops, rosa_scan_ops]:
+                o3 = rosa_soft_ops(query, key, value)
+                o3 = ((o3 > 0) << torch.arange(4)).sum(dim=-1)[:, :, -1:].squeeze()
+
+                print(o3)
+                assert (o1 == o3).all()
+
+            print()
 
         print("✅ Forward Pass Passed!")
     except AssertionError as e:
@@ -75,24 +79,25 @@ if __name__ == "__main__":
 
     try:    
         for _ in range(10):
-            q = torch.randint(0, 2, size=(8, 2)).float().cuda().view(1, 1, -1, 2).requires_grad_()
-            k = torch.randint(0, 2, size=(8, 2)).float().cuda().view(1, 1, -1, 2).requires_grad_()
-            v = torch.randint(0, 2, size=(8, 2)).float().cuda().view(1, 1, -1, 2).requires_grad_()
+            for ops in [rosa_soft_ops, rosa_sufa_ops, rosa_scan_ops]:
+                q = torch.randint(0, 2, size=(8, 2)).float().cuda().view(1, -1, 1, 2).requires_grad_()
+                k = torch.randint(0, 2, size=(8, 2)).float().cuda().view(1, -1, 1, 2).requires_grad_()
+                v = torch.randint(0, 2, size=(8, 2)).float().cuda().view(1, -1, 1, 2).requires_grad_()
 
-            o = rosa_scan_ops(q, k, v)
-            o.sum().backward()
+                o = ops(q, k, v)
+                o.sum().backward()
 
-            # print(q.grad.size())
-            # print(k.grad.size())
-            # print(v.grad.size())
+                # print(q.grad.size())
+                # print(k.grad.size())
+                # print(v.grad.size())
 
-            assert not q.grad.isnan().any()
-            assert not k.grad.isnan().any()
-            assert not v.grad.isnan().any()
+                assert not q.grad.isnan().any()
+                assert not k.grad.isnan().any()
+                assert not v.grad.isnan().any()
 
-            assert not q.grad.isinf().any()
-            assert not k.grad.isinf().any()
-            assert not v.grad.isinf().any()
+                assert not q.grad.isinf().any()
+                assert not k.grad.isinf().any()
+                assert not v.grad.isinf().any()
 
         print("✅ Backward Pass Passed!")
     except AssertionError as e:

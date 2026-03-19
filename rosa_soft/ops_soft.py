@@ -6,42 +6,15 @@ import math
 from torch import Tensor
 from typing import *
 
-from .rosa_sam import RosaContext, RosaWork
-from .utils import QuantizeFunction, repeat_kv, unfold_qk, decay_qk, gather_x
+from .sam import RosaContext
+from .future import RosaSoftWork
+
+from .utils import quantize
 
 
 __all__ = [
-    "RosaSoftWork",
     "rosa_soft_ops",
 ]
-
-
-class RosaSoftWork:
-    def __init__(self):
-        self._future: RosaWork
-        self._params: Any
-        self._function_apply: Callable[[Tensor, Tensor, Tensor, Any], Tensor]
-        self._query_key_value: Tuple[Tensor, Tensor, Tensor]
-
-    def wait(self):
-        if self._future is None:
-            raise RuntimeError("wait() called twice")
-        
-        work = self._future
-        params = self._params
-        function_apply = self._function_apply
-        query, key, value = self._query_key_value
-
-        x_hard, info = work.wait()
-        params.info["x_hard"] = x_hard
-        params.info.update(info)
-
-        self._future = None
-        self._params = None
-        self._function_apply = None
-        self._query_key_value = None
-
-        return function_apply(query, key, value, params)
 
 
 def rosa_soft_ops(
@@ -54,7 +27,7 @@ def rosa_soft_ops(
     schmitt_trigger: float = 0.0,
     async_op: bool = False,
 ) -> Union[Tensor, RosaSoftWork]:
-    """ROSA Soft Dynamic Programming operator (Baseline).
+    f"""ROSA Soft Dynamic Programming operator (Baseline).
 
     Exact softening of suffix matching via recurrent gated accumulation.
     Forward uses discrete ROSA (hard SAM), backward uses soft DP gradients
@@ -63,10 +36,10 @@ def rosa_soft_ops(
     Complexity: O(T^2) time, O(T^2) space.
 
     Args:
-        query: (B, H, T, D) Query logits.
-        key: (B, H, T, D) Key logits.
-        value: (B, H, T, D_v) Value logits.
-        scale: Attention scale factor. Defaults to 1/D.
+        query: (B, T, H, D) Query logits.
+        key: (B, T, H, D) Key logits.
+        value: (B, T, H_v, D_v) Value logits.
+        scale: Attention scale factor.
         quant_mode: Quantization mode ("tanh" or "soft").
         quant_scale: Quantization scale factor.
         schmitt_trigger: Threshold for noise filtering.
@@ -76,8 +49,14 @@ def rosa_soft_ops(
         Tensor if async_op=False, RosaSoftWork if async_op=True.
     """
 
+    batch_size, _, num_heads, _ = query.size()
+
     work = RosaSoftWork()
-    work._future = RosaContext().update(
+
+    work._future = RosaContext(
+        batch_size=batch_size,
+        num_heads=num_heads,
+    ).update(
         query=query, key=key, value=value,
         schmitt_trigger=schmitt_trigger,
         async_op=True,
@@ -111,26 +90,19 @@ class RosaSoftParams:
         self.schmitt_trigger = schmitt_trigger
 
         self.info: Dict[str, Tensor] = {}
-        self._ctx: Optional[RosaContext] = None
 
 
 class RosaSoftFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, query: Tensor, key: Tensor, value: Tensor, params: RosaSoftParams):
-        if "x_hard" in params.info:
-            x_hard = params.info.pop("x_hard")
-        else:
-            x_hard, info = RosaContext().update(
-                query=query, key=key, value=value,
-                schmitt_trigger=params.schmitt_trigger,
-            )
-            params.info.update(info)
+        x_hard = params.info.pop("x_hard")
 
         ctx.save_for_backward(
             query.detach(),
             key.detach(),
             value.detach(),
         )
+
         ctx.saved_params = params
 
         return x_hard
@@ -139,15 +111,15 @@ class RosaSoftFunction(torch.autograd.Function):
     def backward(ctx, grad_output: Tensor):
         query, key, value = cast(Tuple[Tensor, ...], ctx.saved_tensors)
         params: RosaSoftParams = ctx.saved_params
-
+        
         length = params.info.pop("length")
         endpos = params.info.pop("endpos")
 
-        with torch.enable_grad():
-            query.requires_grad_(True)
-            key.requires_grad_(True)
-            value.requires_grad_(True)
+        query.requires_grad_(True)
+        key.requires_grad_(True)
+        value.requires_grad_(True)
 
+        with torch.enable_grad():
             x_soft = rosa_native_proxy(
                 query, key, value,
                 scale=params.scale,
@@ -155,13 +127,14 @@ class RosaSoftFunction(torch.autograd.Function):
                 quant_scale=params.quant_scale,
             )
 
-            grad_query, grad_key, grad_value = torch.autograd.grad(
-                outputs=x_soft,
-                inputs=(query, key, value),
-                grad_outputs=grad_output,
-                retain_graph=False,
-                only_inputs=True,
-            )
+        grad_query, grad_key, grad_value = torch.autograd.grad(
+            outputs=x_soft,
+            inputs=(query, key, value),
+            grad_outputs=grad_output,
+            retain_graph=False,
+            only_inputs=True,
+        )
+
         return grad_query, grad_key, grad_value, None
 
 
@@ -170,12 +143,16 @@ def rosa_native_proxy(
         scale: Optional[float],
         quant_mode: str, quant_scale: Optional[float],
 ):
-    bsz, num_heads, seq_len, num_q_bits = query.size()
-    bsz, num_kv_heads, seq_len, num_k_bits = key.size()
-    bsz, num_kv_heads, seq_len, num_v_bits = value.size()
+    bsz, seq_len, num_q_heads, num_q_bits = query.size()
+    bsz, seq_len, num_k_heads, num_k_bits = key.size()
+    bsz, seq_len, num_v_heads, num_v_bits = value.size()
 
-    num_qk_bits = num_q_bits
-    assert num_q_bits == num_k_bits, "query and key must have the same number of bits"
+    assert num_q_heads == num_k_heads, "num_q_heads must be equal to num_k_heads"
+    assert num_q_heads % num_v_heads == 0, "num_q_heads must be divisible by num_v_heads"
+
+    query = query.permute(0, 2, 1, 3)
+    key   = key.permute(0, 2, 1, 3)
+    value = value.permute(0, 2, 1, 3)
 
     # q = torch.linspace(0, 1, 10, device=query.device)
     # qq = torch.quantile(query.flatten(), q, dim=0)
@@ -186,42 +163,28 @@ def rosa_native_proxy(
     # print(qv.tolist())
 
     ## quantize query, key, value
-
-    if quant_scale is not None:
-        assert quant_scale >= 1.0, "quant_scale must be >= 1.0"
-        query = query * quant_scale
-        key = key * quant_scale
-        value = value * quant_scale
-    else:
-        quant_scale = 1.0
-        
-    if quant_mode == "tanh":
-        xq = torch.tanh(query)
-        xk = torch.tanh(key)
-        xv = torch.tanh(value)
-    elif quant_mode == "soft":
-        xq = F.softsign(query)
-        xk = F.softsign(key)
-        xv = F.softsign(value)
-    else:
-        raise ValueError(f"Unsupported quant_mode: {quant_mode}, expected 'tanh' or 'soft'")
+    xq, xk, xv = quantize(
+        query=query, key=key, value=value,
+        quant_mode=quant_mode, quant_scale=quant_scale,
+    )
     
-    ## repeat key and value for multi-head attention
-    n_rep = num_heads // num_kv_heads
-    xk = repeat_kv(xk, n_rep)
-    xv = repeat_kv(xv, n_rep)
+    ## repeat value for multi-head attention
+    n_rep = num_q_heads // num_v_heads
+    if n_rep > 1:
+        xv = xv[:, :, None, :, :].expand(bsz, num_v_heads, n_rep, seq_len, num_v_bits)
+        xv = xv.reshape(bsz, num_q_heads, seq_len, num_v_bits)
 
     ## dynamic programming attention
     ss = xq @ xk.transpose(-1, -2)
-    ss = ss * quant_scale - (num_qk_bits - 1) * (quant_scale - 1)
+    ss = ss * (10.0 / num_q_bits)
     ss = torch.sigmoid(ss).tril(-1)
-    
     ss = F.pad(ss, (1, -1), value=0.0) # predict next token
+
     r = torch.arange(seq_len, dtype=torch.long, device=ss.device)
 
     ### diagonals to columns
     c = (r.view(-1, 1) + r.view(1, -1) + 1) % seq_len
-    ss = ss.gather(-1, c.expand(bsz, num_heads, seq_len, seq_len))
+    ss = ss.gather(-1, c.expand(bsz, num_q_heads, seq_len, seq_len))
 
     ### dynamic programming
     dp = ss.cumsum(dim=-2)
@@ -229,7 +192,7 @@ def rosa_native_proxy(
 
     ### columns to diagonals
     c = (r.view(1, -1) - r.view(-1, 1) + seq_len - 1) % seq_len
-    ss = ss.gather(-1, c.expand(bsz, num_heads, seq_len, seq_len))
+    ss = ss.gather(-1, c.expand(bsz, num_q_heads, seq_len, seq_len))
 
     ### apply causal mask
     causal_mask = torch.ones((1, 1, seq_len, seq_len), dtype=torch.bool, device=ss.device).tril()
@@ -238,13 +201,12 @@ def rosa_native_proxy(
 
     ### softmax attention
     if scale is None:
-        scale = 1.0 / num_qk_bits
+        scale = 1.0 / math.sqrt(num_q_bits)
     else:
         scale = float(scale)
 
     ss = torch.softmax(ss * scale, dim=-1)
     xo = ss @ xv
 
-    return xo
+    return xo.permute(0, 2, 1, 3)
 
-    

@@ -426,44 +426,10 @@ class RWKV_x070(nn.Module):
         return x
     
     def compute_loss(self, idx: Tensor, targets: Tensor, ignore_index: int = -100):
-        logits: Tensor = self(idx)
-        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=ignore_index)
-        return L2Wrap.apply(loss, logits)
+        return self.l2warp_loss(module=self, idx=idx, targets=targets, ignore_index=ignore_index)
     
     def configure_optimizers(self):
-        args = self.args
-        
-        lr_decay = set()
-        lr_1x = set()
-        lr_2x = set()
-        for name, p in self.named_parameters():
-            if ("att.w0" in name):
-                lr_2x.add(name)
-            elif (p.squeeze().dim() >= 2) and (args.weight_decay > 0) and (".weight" in name):
-                lr_decay.add(name)
-            else:
-                lr_1x.add(name)
-
-        lr_decay = sorted(list(lr_decay))
-        lr_1x = sorted(list(lr_1x))
-        lr_2x = sorted(list(lr_2x))
-
-        if os.getenv("LOCAL_RANK", "0") == "0":
-            print(f"decay {lr_decay}\n")
-            print(f"1x {lr_1x}\n")
-            print(f"2x {lr_2x}\n")
-
-        param_dict = {n: p for n, p in self.named_parameters()}
-        
-        optim_groups = [
-            {"params": [param_dict[n] for n in lr_1x], "weight_decay": 0.0, "lr": 1.0 * self.args.lr_init},
-            {"params": [param_dict[n] for n in lr_2x], "weight_decay": 0.0, "lr": 2.0 * self.args.lr_init},
-        ]
-
-        if args.weight_decay > 0:
-            optim_groups += [{"params": [param_dict[n] for n in lr_decay], "weight_decay": args.weight_decay, "lr": 1.0 * self.args.lr_init}]
-
-        return torch.optim.AdamW(optim_groups, lr=self.args.lr_init, betas=self.args.betas, eps=self.args.adam_eps)
+        return self.post_init_optimizers(module=self)
     
     def reset_parameters(self):
         for name, module in self.named_children():
@@ -554,6 +520,49 @@ class RWKV_x070(nn.Module):
                     nn.init.uniform_(p, a=scale, b=-scale)
                 else:
                     nn.init.orthogonal_(p, gain=scale)
+    
+    @staticmethod
+    def post_init_optimizers(module: nn.Module):
+        args = module.args
+        
+        lr_decay = set()
+        lr_1x = set()
+        lr_2x = set()
+        for name, p in module.named_parameters():
+            if ("att.w0" in name):
+                lr_2x.add(name)
+            elif (p.squeeze().dim() >= 2) and (args.weight_decay > 0) and (".weight" in name):
+                lr_decay.add(name)
+            else:
+                lr_1x.add(name)
+
+        lr_decay = sorted(list(lr_decay))
+        lr_1x = sorted(list(lr_1x))
+        lr_2x = sorted(list(lr_2x))
+
+        if os.getenv("LOCAL_RANK", "0") == "0":
+            print(f"decay {lr_decay}\n")
+            print(f"1x {lr_1x}\n")
+            print(f"2x {lr_2x}\n")
+
+        param_dict = {n: p for n, p in module.named_parameters()}
+        
+        optim_groups = [
+            {"params": [param_dict[n] for n in lr_1x], "weight_decay": 0.0, "lr": 1.0 * args.lr_init},
+            {"params": [param_dict[n] for n in lr_2x], "weight_decay": 0.0, "lr": 2.0 * args.lr_init},
+        ]
+
+        if args.weight_decay > 0:
+            optim_groups += [{"params": [param_dict[n] for n in lr_decay], "weight_decay": args.weight_decay, "lr": 1.0 * args.lr_init}]
+
+        return torch.optim.AdamW(optim_groups, lr=args.lr_init, betas=args.betas, eps=args.adam_eps)
+    
+    @staticmethod
+    def l2warp_loss(module: nn.Module, idx: Tensor, targets: Tensor, ignore_index: int = -100):
+        logits: Tensor = module(idx)
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=ignore_index)
+        return L2Wrap.apply(loss, logits)
+
 
 if __name__ == "__main__":
     from rwkv.utils import PIPELINE
