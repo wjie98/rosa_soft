@@ -1,4 +1,3 @@
-#include <torch/extension.h>
 #include <Python.h>
 
 extern "C" {
@@ -20,8 +19,15 @@ extern "C" {
   }
 }
 
+#include <torch/extension.h>
 
-TORCH_LIBRARY(rwkv_cuda, m) {
+TORCH_LIBRARY(rosa_soft, m) {
+    // rosa_cache
+    m.def("rosa_cache_update(Tensor(a!) cache, Tensor batch, Tensor query, Tensor key, Tensor value, Tensor? query_trigger, Tensor? key_trigger, int u) -> (Tensor, Tensor, Tensor)");
+    m.def("rosa_cache_create(Tensor(a!) cache, int num_heads) -> ()");
+    m.def("rosa_cache_delete(Tensor(a!) cache) -> ()");
+
+    // rwkv7_clampw
     m.def("rwkv7_clampw_forward(Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor(a!) y, Tensor s, Tensor(a!) sa) -> ()");
     m.def("rwkv7_clampw_backward(Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor dy, Tensor s, Tensor sa, Tensor(a!) dr, Tensor(a!) dw, Tensor(a!) dk, Tensor(a!) dv, Tensor(a!) da, Tensor(a!) db) -> ()");
 
@@ -31,5 +37,6 @@ TORCH_LIBRARY(rwkv_cuda, m) {
     m.def("rwkv7_statepassing_clampw_forward(Tensor s0, Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor(a!) y, Tensor(a!) sT, Tensor s, Tensor(a!) sa) -> ()");
     m.def("rwkv7_statepassing_clampw_backward(Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor dy, Tensor(a!) dsT, Tensor s, Tensor sa, Tensor(a!) ds0, Tensor(a!) dr, Tensor(a!) dw, Tensor(a!) dk, Tensor(a!) dv, Tensor(a!) da, Tensor(a!) db) -> ()");
 
+    // rwkv7_albatross
     m.def("rwkv7_albatross_forward_w0_fp16_dither(Tensor(a!) s0, Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor(a!) y, Tensor elapsed_t) -> ()");
 }

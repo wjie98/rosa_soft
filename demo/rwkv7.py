@@ -9,7 +9,7 @@ import os
 import math
 from dataclasses import dataclass
 
-from rwkv_cuda.rwkv7 import RWKV7_OP, RWKV7_CLAMPW_CUDA, RWKV7_ALBATROSS_W0_FP16_DITHER
+from rosa_soft.rwkv7 import RWKV7_OP, RWKV7_CLAMPW_CUDA, RWKV7_ALBATROSS_W0_FP16_DITHER
 
 
 class RWKV_CMix_x070(nn.Module):

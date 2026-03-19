@@ -1,32 +1,10 @@
 #include <map>
-#include <sys/types.h>
 #include <tuple>
 #include <vector>
 #include <cstdint>
 #include <cstddef>
 #include <cstdlib>
 #include <cassert>
-
-#include <Python.h>
-
-extern "C" {
-  /* Creates a dummy empty _C module that can be imported from Python.
-     The import from Python will load the .so consisting of this file
-     in this extension, so that the TORCH_LIBRARY static initializers
-     below are run. */
-  PyObject* PyInit__C(void)
-  {
-      static struct PyModuleDef module_def = {
-          PyModuleDef_HEAD_INIT,
-          "_C",   /* name of module */
-          NULL,   /* module documentation, may be NULL */
-          -1,     /* size of per-interpreter state of the module,
-                     or -1 if the module keeps state in global variables. */
-          NULL,   /* methods */
-      };
-      return PyModule_Create(&module_def);
-  }
-}
 
 
 template<typename K, typename V, typename P>
@@ -386,12 +364,6 @@ void torch_rosa_cache_delete(torch::Tensor& cache) {
     }
 }
 
-
-TORCH_LIBRARY(rosa_soft, m) {
-    m.def("rosa_cache_update(Tensor(a!) cache, Tensor batch, Tensor query, Tensor key, Tensor value, Tensor? query_trigger, Tensor? key_trigger, int u) -> (Tensor, Tensor, Tensor)");
-    m.def("rosa_cache_create(Tensor(a!) cache, int num_heads) -> ()");
-    m.def("rosa_cache_delete(Tensor(a!) cache) -> ()");
-}
 
 TORCH_LIBRARY_IMPL(rosa_soft, CPU, m) {
     m.impl("rosa_cache_update", &torch_rosa_cache_update);

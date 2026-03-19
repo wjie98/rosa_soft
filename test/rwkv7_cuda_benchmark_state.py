@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from rwkv_cuda.ops import rwkv7_state_clampw_forward, rwkv7_state_clampw_backward
+from rosa_soft.ops import rwkv7_state_clampw_forward, rwkv7_state_clampw_backward
 
 np.set_printoptions(precision=4, suppress=True, linewidth=200)
 torch.backends.cudnn.allow_tf32 = False

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from typing import Tuple
 
-from rwkv_cuda.ops import *
+from .ops import *
 
 __all__ = [
     "RWKV7_OP",

@@ -70,6 +70,6 @@ void rwkv7_albatross_forward_w0_fp16_dither(at::Tensor& s0, at::Tensor& r, at::T
 }
 
 
-TORCH_LIBRARY_IMPL(rwkv_cuda, CUDA, m) {
+TORCH_LIBRARY_IMPL(rosa_soft, CUDA, m) {
     m.impl("rwkv7_albatross_forward_w0_fp16_dither", &rwkv7_albatross_forward_w0_fp16_dither);
 }
