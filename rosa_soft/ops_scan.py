@@ -245,11 +245,12 @@ def suffix_linear_attention_proxy(
         mask = (endpos >= 0).unsqueeze(-1).type_as(xq)
         inds = (endpos + 1).clamp(0, seq_len - 1).unsqueeze(-1).long()
 
-    sk = torch.gather(xk, dim=1, index=inds) * mask
-    sv = torch.gather(xv, dim=1, index=inds) * mask
+    sk = torch.gather(xk, dim=1, index=inds)
+    sv = torch.gather(xv, dim=1, index=inds)
 
     gg = torch.sum(xq * sk, dim=-1, keepdim=True)
     gg = torch.sigmoid(gg * scale)
     xo = xo * (1 - gg) + sv * gg
+    xo = xo * mask
     
     return xo

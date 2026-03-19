@@ -233,12 +233,13 @@ def suffix_attention_proxy(
         mask = (epos >= 0).unsqueeze(-1).type_as(xq)
         inds = (epos + 1).clamp(0, seq_len - 1).unsqueeze(-1).long()
     
-    sk = torch.gather(xk, dim=2, index=inds) * mask
-    sv = torch.gather(xv, dim=2, index=inds) * mask
+    sk = torch.gather(xk, dim=2, index=inds)
+    sv = torch.gather(xv, dim=2, index=inds)
 
     gg = torch.sum(xq * sk, dim=-1, keepdim=True)
     gg = torch.sigmoid(gg * scale)
     xo = xo * (1 - gg) + sv * gg
+    xo = xo * mask
     
     return xo.permute(0, 2, 1, 3)
 
