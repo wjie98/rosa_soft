@@ -3,17 +3,17 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from rwkv_cuda.ops import rwkv7_statepassing_clampw_forward, rwkv7_statepassing_clampw_backward
+from rosa_soft.ops import rwkv7_clampw_forward, rwkv7_clampw_backward
 
 np.set_printoptions(precision=4, suppress=True, linewidth=200)
 torch.backends.cudnn.allow_tf32 = False
 torch.backends.cuda.matmul.allow_tf32 = False
 
 '''
-cd /mnt/program/_RWKV_/_ref_/RWKV-CUDA/rwkv7_fast_fused; python rwkv7_cuda_benchmark_state_passing.py fp32 0; python rwkv7_cuda_benchmark_state_passing.py fp32 1
-cd /mnt/program/_RWKV_/_ref_/RWKV-CUDA/rwkv7_fast_fused; python rwkv7_cuda_benchmark_state_passing.py bf16 0; python rwkv7_cuda_benchmark_state_passing.py bf16 1
+cd /mnt/program/_RWKV_/_ref_/RWKV-CUDA/rwkv7_fast_fused; python rwkv7_cuda_benchmark.py fp32 0; python rwkv7_cuda_benchmark.py fp32 1
+cd /mnt/program/_RWKV_/_ref_/RWKV-CUDA/rwkv7_fast_fused; python rwkv7_cuda_benchmark.py bf16 0; python rwkv7_cuda_benchmark.py bf16 1
 '''
-print('\n### RWKV7_fused_clamp_w inf-ctx(state-passing) fwd+bwd kernel ###\n')
+print('\n### RWKV7_fused_clamp_w vanilla fwd+bwd kernel ###\n')
 
 DTYPE = torch.float if sys.argv[1].strip()=='fp32' else torch.bfloat16
 BENCHMARK_SPEED = True if int(sys.argv[2].strip()) == 1 else 0
@@ -44,7 +44,7 @@ def err_ratio(x, y):
 
 ######################################################################################################
 
-def RWKV7_STATE_PASSING_CLAMPW_REF(state, r, w, k, v, a, b):
+def RWKV7_CLAMPW_REF(r, w, k, v, a, b):
     r = r.view(B, T, H, N)
     k = k.view(B, T, H, N)
     v = v.view(B, T, H, N)
@@ -55,6 +55,7 @@ def RWKV7_STATE_PASSING_CLAMPW_REF(state, r, w, k, v, a, b):
     w = torch.exp(-torch.exp(w.view(B, T, H, N)))
 
     out = torch.zeros((B, T, H, N), device=DEVICE)
+    state = torch.zeros((B, H, N, N), device=DEVICE)
 
     for t in range(T):
         rr = r[:, t, :]
@@ -66,68 +67,63 @@ def RWKV7_STATE_PASSING_CLAMPW_REF(state, r, w, k, v, a, b):
         state = state * w[: , t, :, None, :] + sab + torch.einsum('bhj,bhi->bhij', kk, vv)
         out[:, t, :] = torch.einsum('bhj,bhij->bhi', rr, state)
 
-    return out.view((B, T, C)), state
+    return out.view((B, T, C))
 
 ######################################################################################################
 
 if DTYPE == torch.bfloat16:
-    class RWKV7_STATE_PASSING_CLAMPW_CUDA_OP(torch.autograd.Function):
+    class RWKV7_CLAMPW_CUDA_OP(torch.autograd.Function):
         @staticmethod
-        def forward(ctx,s0,r,w,k,v,a,b):
-            B,T,H,N = r.shape
-            assert T%CHUNK_LEN == 0
-            assert all(i.dtype==torch.bfloat16 for i in [r,w,k,v,a,b])
-            assert all(i.is_contiguous() for i in [s0,r,w,k,v,a,b])
-            assert s0.dtype==torch.float
-            y = torch.empty_like(v)
-            sT = torch.empty_like(s0)
-            s = torch.empty(B,H,T//CHUNK_LEN,N,N, dtype=torch.float32,device=w.device)
-            sa = torch.empty(B,T,H,N,dtype=torch.float32,device=w.device)
-            rwkv7_statepassing_clampw_forward(s0,r,w,k,v,a,b,y,sT,s,sa)
-            ctx.save_for_backward(r,w,k,v,a,b,s,sa)
-            return y.view(B,T,H*N),sT
-        @staticmethod
-        def backward(ctx,dy,dsT):
-            assert all(i.dtype==torch.bfloat16 for i in [dy])
-            assert all(i.is_contiguous() for i in [dy,dsT])
-            assert dsT.dtype==torch.float
-            r,w,k,v,a,b,s,sa = ctx.saved_tensors
-            B,T,H,N = r.shape
-            ds0,dr,dw,dk,dv,da,db = [torch.empty_like(x) for x in [dsT,r,w,k,v,a,b]]
-            rwkv7_statepassing_clampw_backward(r,w,k,v,a,b,dy,dsT,s,sa,ds0,dr,dw,dk,dv,da,db)
-            return ds0,dr,dw,dk,dv,da,db
-    def RWKV7_STATE_PASSING_CLAMPW_CUDA(s0,r,w,k,v,a,b):
-        B,T,HC = r.shape
-        r,w,k,v,a,b = [i.view(B,T,HC//HEAD_SIZE,HEAD_SIZE) for i in [r,w,k,v,a,b]]
-        return RWKV7_STATE_PASSING_CLAMPW_CUDA_OP.apply(s0,r,w,k,v,a,b)
-
-elif DTYPE == torch.float:
-    class RWKV7_STATE_PASSING_CLAMPW_CUDA_OP(torch.autograd.Function):
-        @staticmethod
-        def forward(ctx,s0,r,w,k,v,a,b):
+        def forward(ctx,r,w,k,v,a,b):
             B,T,H,C = r.shape 
             assert T%CHUNK_LEN == 0
-            assert all(i.dtype==torch.float32 for i in [s0,r,w,k,v,a,b])
-            assert all(i.is_contiguous() for i in [s0,r,w,k,v,a,b])
-            y = torch.empty_like(r)
-            sT = torch.empty_like(s0)
+            assert all(i.dtype==torch.bfloat16 for i in [r,w,k,v,a,b])
+            assert all(i.is_contiguous() for i in [r,w,k,v,a,b])
+            y = torch.empty_like(v)
             s = torch.empty(B,H,T//CHUNK_LEN,C,C, dtype=torch.float32,device=w.device)
             sa = torch.empty(B,T,H,C, dtype=torch.float32,device=w.device)
-            rwkv7_statepassing_clampw_forward(s0,r,w,k,v,a,b,y,sT,s,sa)
+            rwkv7_clampw_forward(r, w, k, v, a, b, y, s, sa)
             ctx.save_for_backward(r,w,k,v,a,b,s,sa)
-            return y.view(B,T,H*N),sT
+            return y
         @staticmethod
-        def backward(ctx,dy,dsT):
-            assert all(i.dtype==torch.float32 for i in [dy,dsT])
-            assert all(i.is_contiguous() for i in [dy,dsT])
+        def backward(ctx,dy):
+            assert all(i.dtype==torch.bfloat16 for i in [dy])
+            assert all(i.is_contiguous() for i in [dy])
             r,w,k,v,a,b,s,sa = ctx.saved_tensors
-            ds0,dr,dw,dk,dv,da,db = [torch.empty_like(x) for x in [dsT,r,w,k,v,a,b]]
-            rwkv7_statepassing_clampw_backward(r,w,k,v,a,b,dy,dsT,s,sa,ds0,dr,dw,dk,dv,da,db)
-            return ds0,dr,dw,dk,dv,da,db
-    def RWKV7_STATE_PASSING_CLAMPW_CUDA(s0,r,w,k,v,a,b):
+            dr,dw,dk,dv,da,db = [torch.empty_like(x) for x in [r,w,k,v,a,b]]
+            rwkv7_clampw_backward(r, w, k, v, a, b, dy, s, sa, dr, dw, dk, dv, da, db)
+            return dr,dw,dk,dv,da,db
+    def RWKV7_CLAMPW_CUDA(r,w,k,v,a,b):
         B,T,HC = r.shape
         r,w,k,v,a,b = [i.view(B,T,HC//HEAD_SIZE,HEAD_SIZE) for i in [r,w,k,v,a,b]]
-        return RWKV7_STATE_PASSING_CLAMPW_CUDA_OP.apply(s0,r,w,k,v,a,b)
+        return RWKV7_CLAMPW_CUDA_OP.apply(r,w,k,v,a,b).view(B,T,HC)
+
+elif DTYPE == torch.float:
+    class RWKV7_CLAMPW_CUDA_OP(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx,r,w,k,v,a,b):
+            B,T,H,C = r.shape 
+            assert T%CHUNK_LEN == 0
+            assert all(i.dtype==torch.float32 for i in [r,w,k,v,a,b])
+            assert all(i.is_contiguous() for i in [r,w,k,v,a,b])
+            y = torch.empty_like(v)
+            s = torch.empty(B,H,T//CHUNK_LEN,C,C, dtype=torch.float32,device=w.device)
+            sa = torch.empty(B,T,H,C, dtype=torch.float32,device=w.device)
+            rwkv7_clampw_forward(r, w, k, v, a, b, y, s, sa)
+            ctx.save_for_backward(r,w,k,v,a,b,s,sa)
+            return y
+        @staticmethod
+        def backward(ctx,dy):
+            assert all(i.dtype==torch.float32 for i in [dy])
+            assert all(i.is_contiguous() for i in [dy])
+            r,w,k,v,a,b,s,sa = ctx.saved_tensors
+            dr,dw,dk,dv,da,db = [torch.empty_like(x) for x in [r,w,k,v,a,b]]
+            rwkv7_clampw_backward(r, w, k, v, a, b, dy, s, sa, dr, dw, dk, dv, da, db)
+            return dr,dw,dk,dv,da,db
+    def RWKV7_CLAMPW_CUDA(r,w,k,v,a,b):
+        B,T,HC = r.shape
+        r,w,k,v,a,b = [i.view(B,T,HC//HEAD_SIZE,HEAD_SIZE) for i in [r,w,k,v,a,b]]
+        return RWKV7_CLAMPW_CUDA_OP.apply(r,w,k,v,a,b).view(B,T,HC)
 
 ######################################################################################################
 
@@ -140,12 +136,11 @@ with torch.no_grad():
     b = torch.empty(B, T, C, device=DEVICE).uniform_(-1, 1) * 2
     a = F.normalize(a, dim=-1, p=2.0)
     b = F.normalize(b, dim=-1, p=2.0)
-    s = torch.empty(B, H, N, N, device=DEVICE).uniform_(-1, 1) * 10
 
-params = (s,r,w,k,v,a,b)
+params = (r,w,k,v,a,b)
 
-def LOSS(y,sT):
-    return ((y * y) - torch.tanh(y)).sum() + 16*(sT*sT+torch.tanh(sT)).sum() # !!! has gradients for state too !!!
+def LOSS(y):
+    return ((y * y) - torch.tanh(y)).sum()
 
 def clear_grad():   
     for t in params:
@@ -157,23 +152,21 @@ def clear_grad():
 
 if not BENCHMARK_SPEED:
     clear_grad()
-    y,sT = RWKV7_STATE_PASSING_CLAMPW_REF(*params)
-    LOSS(y,sT).backward()
+    y = RWKV7_CLAMPW_REF(*params)
+    LOSS(y).backward()
     grad_ref = [t.grad.detach().clone() for t in params]
 
     clear_grad()
     if DTYPE == torch.float:
-        y_cuda,sT_cuda = RWKV7_STATE_PASSING_CLAMPW_CUDA(*params)
+        y_cuda = RWKV7_CLAMPW_CUDA(*params)
     else:
-        ss,rr,ww,kk,vv,aa,bb = s,r.bfloat16(),w.bfloat16(),k.bfloat16(),v.bfloat16(),a.bfloat16(),b.bfloat16()
-        y_cuda,sT_cuda = RWKV7_STATE_PASSING_CLAMPW_CUDA(ss,rr,ww,kk,vv,aa,bb)
-        y_cuda = y_cuda.float()
-    LOSS(y_cuda,sT_cuda).backward()
+        rr,ww,kk,vv,aa,bb = r.bfloat16(),w.bfloat16(),k.bfloat16(),v.bfloat16(),a.bfloat16(),b.bfloat16()
+        y_cuda = RWKV7_CLAMPW_CUDA(rr,ww,kk,vv,aa,bb).float()
+    LOSS(y_cuda).backward()
     grad_cuda = [t.grad.detach().clone() for t in params]
 
     print('!!! y err !!!', err_ratio(y, y_cuda))
-    print('!!! sT err !!!', err_ratio(sT, sT_cuda))
-    for name, g_ref, g_cuda in zip('srwkvab', grad_ref, grad_cuda):
+    for name, g_ref, g_cuda in zip('rwkvab', grad_ref, grad_cuda):
         print(f'!!! g_{name} err !!!', err_ratio(g_ref, g_cuda))
 
 else:
@@ -186,20 +179,20 @@ else:
 
         if DTYPE == torch.float:
             torch.cuda.synchronize(); t0 = time.perf_counter()
-            y_cuda,sT_cuda = RWKV7_STATE_PASSING_CLAMPW_CUDA(*params)
+            y_cuda = RWKV7_CLAMPW_CUDA(*params)
             torch.cuda.synchronize(); fwd_times.append(time.perf_counter() - t0)
 
             torch.cuda.synchronize(); t0 = time.perf_counter()
-            LOSS(y_cuda,sT_cuda).backward()
+            LOSS(y_cuda).backward()
             torch.cuda.synchronize(); bwd_times.append(time.perf_counter() - t0)
         else:
-            ss,rr,ww,kk,vv,aa,bb = s,r.bfloat16(),w.bfloat16(),k.bfloat16(),v.bfloat16(),a.bfloat16(),b.bfloat16()
+            rr,ww,kk,vv,aa,bb = r.bfloat16(),w.bfloat16(),k.bfloat16(),v.bfloat16(),a.bfloat16(),b.bfloat16()
             torch.cuda.synchronize(); t0 = time.perf_counter()
-            y_cuda,sT_cuda = RWKV7_STATE_PASSING_CLAMPW_CUDA(ss,rr,ww,kk,vv,aa,bb)
+            y_cuda = RWKV7_CLAMPW_CUDA(rr,ww,kk,vv,aa,bb)
             torch.cuda.synchronize(); fwd_times.append(time.perf_counter() - t0)
 
             torch.cuda.synchronize(); t0 = time.perf_counter()
-            LOSS(y_cuda,sT_cuda).backward()
+            LOSS(y_cuda).backward()
             torch.cuda.synchronize(); bwd_times.append(time.perf_counter() - t0)
 
     print('fwd time =', min(fwd_times))

@@ -95,7 +95,7 @@ void rwkv7_clampw_backward(
     );
 }
 
-TORCH_LIBRARY_IMPL(rwkv_cuda, CUDA, m) {
+TORCH_LIBRARY_IMPL(rosa_soft, CUDA, m) {
     m.impl("rwkv7_clampw_forward", &rwkv7_clampw_forward);
     m.impl("rwkv7_clampw_backward", &rwkv7_clampw_backward);
 }

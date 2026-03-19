@@ -29,6 +29,10 @@ def get_extensions():
         ],
         "nvcc": [
             "-O3",
+            "-res-usage",
+            "--use_fast_math",
+            "-Xptxas", "-O3",
+            "--extra-device-vectorization",
         ],
     }
 
