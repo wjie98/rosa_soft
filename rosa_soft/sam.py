@@ -115,11 +115,11 @@ class RosaContext:
         if num_bits <= 8:
             dtype = torch.uint8
         elif num_bits <= 16:
-            dtype = torch.uint16
+            dtype = torch.int16
         elif num_bits <= 32:
-            dtype = torch.uint32
+            dtype = torch.int32
         elif num_bits <= 64:
-            dtype = torch.uint64
+            dtype = torch.int64
         else:
             raise ValueError(f"num_bits={num_bits} is not supported")
 
