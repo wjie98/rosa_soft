@@ -141,6 +141,7 @@ class RosaScanFunction(torch.autograd.Function):
             x_soft = suffix_linear_attention_proxy(
                 query, key, value,
                 endpos=endpos,
+                length=length,
                 scale=params.scale,
                 suffix_window=params.suffix_window,
                 suffix_factor=params.suffix_factor,
@@ -162,7 +163,7 @@ class RosaScanFunction(torch.autograd.Function):
 
 def suffix_linear_attention_proxy(
         query: Tensor, key: Tensor, value: Tensor,
-        endpos: Tensor,
+        endpos: Tensor, length: Tensor,
         scale: Optional[float],
         suffix_window: int,
         suffix_factor: Optional[float],
@@ -230,11 +231,13 @@ def suffix_linear_attention_proxy(
     xk = xk * decs.to(xk.dtype)
 
     ## compute linear attention
-    xq = xq.reshape(bsz, seq_len, num_q_heads, 2 * num_q_bits * suffix_window)
-    xk = xk.reshape(bsz, seq_len, num_k_heads, 2 * num_k_bits * suffix_window)
+    head_dim = 2 * num_q_bits * suffix_window
+
+    xq = xq.reshape(bsz, seq_len, num_q_heads, head_dim)
+    xk = xk.reshape(bsz, seq_len, num_k_heads, head_dim)
 
     if scale is None:
-        scale = 1.0 / math.sqrt(num_q_bits * suffix_window)
+        scale = 1.0 / math.sqrt(head_dim)
     else:
         scale = float(scale)
 
@@ -242,15 +245,15 @@ def suffix_linear_attention_proxy(
 
     ## apply gating based value detach
     with torch.no_grad():
+        inds = torch.arange(seq_len, device=endpos.device).view(1, seq_len, 1)
+        inds = torch.where(endpos >= 0, endpos, inds).unsqueeze(-1).long()
         mask = (endpos >= 0).unsqueeze(-1).type_as(xq)
-        inds = (endpos + 1).clamp(0, seq_len - 1).unsqueeze(-1).long()
 
     sk = torch.gather(xk, dim=1, index=inds)
     sv = torch.gather(xv, dim=1, index=inds)
 
     gg = torch.sum(xq * sk, dim=-1, keepdim=True)
-    gg = torch.sigmoid(gg * scale)
+    gg = torch.sigmoid(gg * scale) * mask
     xo = xo * (1 - gg) + sv * gg
-    xo = xo * mask
     
     return xo

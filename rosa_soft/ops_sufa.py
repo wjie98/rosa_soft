@@ -134,6 +134,7 @@ class RosaSufaFunction(torch.autograd.Function):
             x_soft = suffix_attention_proxy(
                 query, key, value,
                 endpos=endpos,
+                length=length,
                 scale=params.scale,
                 suffix_window=params.suffix_window,
                 suffix_factor=params.suffix_factor,
@@ -154,7 +155,7 @@ class RosaSufaFunction(torch.autograd.Function):
 
 def suffix_attention_proxy(
         query: Tensor, key: Tensor, value: Tensor,
-        endpos: Tensor,
+        endpos: Tensor, length: Tensor,
         scale: Optional[float],
         suffix_window: int,
         suffix_factor: float,
@@ -214,11 +215,13 @@ def suffix_attention_proxy(
     xk = xk * decs.to(xk.dtype)
 
     ## compute scaled dot product attention
-    xq = xq.reshape(bsz, num_q_heads, seq_len, num_q_bits * suffix_window)
-    xk = xk.reshape(bsz, num_k_heads, seq_len, num_k_bits * suffix_window)
+    head_dim = num_q_bits * suffix_window
+
+    xq = xq.reshape(bsz, num_q_heads, seq_len, head_dim)
+    xk = xk.reshape(bsz, num_k_heads, seq_len, head_dim)
 
     if scale is None:
-        scale = 1.0 / math.sqrt(num_q_bits * suffix_window)
+        scale = 1.0 / math.sqrt(head_dim)
     else:
         scale = float(scale)
 
@@ -229,17 +232,17 @@ def suffix_attention_proxy(
 
     ## apply gating based value detach
     with torch.no_grad():
-        epos = endpos.permute(0, 2, 1)
-        mask = (epos >= 0).unsqueeze(-1).type_as(xq)
-        inds = (epos + 1).clamp(0, seq_len - 1).unsqueeze(-1).long()
+        endpos = endpos.permute(0, 2, 1)
+        inds = torch.arange(seq_len, device=endpos.device).view(1, 1, seq_len)
+        inds = torch.where(endpos >= 0, endpos, inds).unsqueeze(-1).long()
+        mask = (endpos >= 0).unsqueeze(-1).type_as(xq)
     
     sk = torch.gather(xk, dim=2, index=inds)
     sv = torch.gather(xv, dim=2, index=inds)
 
     gg = torch.sum(xq * sk, dim=-1, keepdim=True)
-    gg = torch.sigmoid(gg * scale)
+    gg = torch.sigmoid(gg * scale) * mask
     xo = xo * (1 - gg) + sv * gg
-    xo = xo * mask
     
     return xo.permute(0, 2, 1, 3)
 

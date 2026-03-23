@@ -303,8 +303,9 @@ class RosaCache:
     def stream(self):
         return self._stream()
 
+    @staticmethod
     @lru_cache(maxsize=None)
-    def _stream(self):
+    def _stream():
         return _RosaStream()
 
 

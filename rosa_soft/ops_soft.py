@@ -123,6 +123,7 @@ class RosaSoftFunction(torch.autograd.Function):
             x_soft = rosa_native_proxy(
                 query, key, value,
                 endpos=endpos,
+                length=length,
                 scale=params.scale,
                 quant_mode=params.quant_mode,
                 quant_scale=params.quant_scale,
@@ -141,7 +142,7 @@ class RosaSoftFunction(torch.autograd.Function):
 
 def rosa_native_proxy(
         query: Tensor, key: Tensor, value: Tensor,
-        endpos: Tensor,
+        endpos: Tensor, length: Tensor,
         scale: Optional[float],
         quant_mode: str, quant_scale: Optional[float],
 ):
@@ -211,13 +212,6 @@ def rosa_native_proxy(
 
     ss = torch.softmax(ss * scale, dim=-1)
     xo = ss @ xv
-
-    ### apply endpos mask
-    with torch.no_grad():
-        epos = endpos.permute(0, 2, 1)
-        mask = (epos >= 0).unsqueeze(-1).type_as(xq)
-
-    xo = xo * mask
 
     return xo.permute(0, 2, 1, 3)
 
