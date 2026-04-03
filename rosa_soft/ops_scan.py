@@ -130,7 +130,6 @@ class RosaScanFunction(torch.autograd.Function):
         query, key, value = cast(Tuple[Tensor, ...], ctx.saved_tensors)
         params: RosaScanParams = ctx.saved_params
 
-        length = params.info.pop("length")
         endpos = params.info.pop("endpos")
 
         query.requires_grad_(True)
@@ -141,7 +140,6 @@ class RosaScanFunction(torch.autograd.Function):
             x_soft = suffix_linear_attention_proxy(
                 query, key, value,
                 endpos=endpos,
-                length=length,
                 scale=params.scale,
                 suffix_window=params.suffix_window,
                 suffix_factor=params.suffix_factor,
@@ -163,8 +161,7 @@ class RosaScanFunction(torch.autograd.Function):
 
 def suffix_linear_attention_proxy(
         query: Tensor, key: Tensor, value: Tensor,
-        endpos: Tensor, length: Tensor,
-        scale: Optional[float],
+        endpos: Tensor, scale: Optional[float],
         suffix_window: int,
         suffix_factor: Optional[float],
         exponent: float,
@@ -225,7 +222,7 @@ def suffix_linear_attention_proxy(
     with torch.no_grad():
         decs = suffix_window - 1 - torch.arange(suffix_window, device=xq.device)
         decs = torch.pow(suffix_factor, decs.float())
-        decs = torch.sqrt(decs / torch.sum(decs)).view(-1, 1)
+        decs = torch.sqrt(decs / decs.sum()).view(-1, 1)
 
     xq = xq * decs.to(xq.dtype)
     xk = xk * decs.to(xk.dtype)
@@ -237,7 +234,8 @@ def suffix_linear_attention_proxy(
     xk = xk.reshape(bsz, seq_len, num_k_heads, head_dim)
 
     if scale is None:
-        scale = 1.0 / math.sqrt(head_dim)
+        # scale = 1.0 / math.sqrt(head_dim)
+        scale = 1.0 / head_dim * 6.0
     else:
         scale = float(scale)
 
@@ -246,14 +244,17 @@ def suffix_linear_attention_proxy(
     ## apply gating based value detach
     with torch.no_grad():
         inds = torch.arange(seq_len, device=endpos.device).view(1, seq_len, 1)
-        inds = torch.where(endpos >= 0, endpos, inds).unsqueeze(-1).long()
-        mask = (endpos >= 0).unsqueeze(-1).type_as(xq)
+        inds = torch.where(endpos >= 0, endpos + 1, inds).unsqueeze(-1)
+        mask = (endpos >= suffix_window).unsqueeze(-1).type_as(xq)
 
-    sk = torch.gather(xk, dim=1, index=inds)
-    sv = torch.gather(xv, dim=1, index=inds)
+    sk = torch.gather(xk, dim=1, index=inds.expand_as(xk))
+    sv = torch.gather(xv, dim=1, index=inds.expand_as(xv))
+
+    gs = 1.0 / head_dim * 6.0
 
     gg = torch.sum(xq * sk, dim=-1, keepdim=True)
-    gg = torch.sigmoid(gg * scale) * mask
+    gg = torch.sigmoid(gg * gs) * 2 - 1 # [0.5, 1.0] -> [0.0, 1.0]
+    gg = gg * mask
     xo = xo * (1 - gg) + sv * gg
     
     return xo

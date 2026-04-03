@@ -9,12 +9,12 @@
 
 template<typename K, typename V, typename P>
 struct rosa_state_t {
-    P length;
+    P maxlen;
     P endpos;
     P suffix_link;
     std::map<K, P> transitions;
 
-    rosa_state_t() : endpos(-1), length(0), suffix_link(-1) {}
+    rosa_state_t() : endpos(-1), maxlen(0), suffix_link(-1) {}
 };
 
 template<typename K, typename V, typename P>
@@ -22,7 +22,7 @@ class rosa_sam {
 public:
     rosa_sam() : last_q_state_(0), last_k_state_(0), last_q_bits_(0), last_k_bits_(0) {}
 
-    V update(K xq, K xk, V xv, K mq, K mk, V u, P& endpos, P& length) {
+    V update(K xq, K xk, V xv, K mq, K mk, V u, P& endpos) {
         xq = (xq & mq) | (last_q_bits_ & ~mq);
         xk = (xk & mk) | (last_k_bits_ & ~mk);
 
@@ -33,13 +33,12 @@ public:
         update_key_value_(xk, xv);
 
         endpos = i;
-        length = states_[last_q_state_].length;
 
         return i != -1 ? values_[i + 1] : u;
     }
 
 private:
-    P update_key_value_(K k, K v) {
+    P update_key_value_(K k, V v) {
         if (states_.empty()) states_.emplace_back();
 
         P i = values_.size();
@@ -47,7 +46,7 @@ private:
 
         P r = states_.size();
         states_.emplace_back();
-        states_[r].length = states_[last_k_state_].length + 1;
+        states_[r].maxlen = states_[last_k_state_].maxlen + 1;
 
         P p = last_k_state_;
         while (p != -1) {
@@ -64,12 +63,12 @@ private:
         } else {
             P c = states_[p].transitions[k];
 
-            if (states_[p].length + 1 == states_[c].length) {
+            if (states_[p].maxlen + 1 == states_[c].maxlen) {
                 states_[r].suffix_link = c;
             } else {
                 P u = states_.size();
                 states_.emplace_back(states_[c]);
-                states_[u].length = states_[p].length + 1;
+                states_[u].maxlen = states_[p].maxlen + 1;
                 states_[c].suffix_link = u;
                 states_[r].suffix_link = u;
 
@@ -110,7 +109,7 @@ private:
         } else {
             r = s = states_[r].transitions[q];
             while (r != -1) {
-                if (states_[r].length > 0 && states_[r].endpos >= 0) {
+                if (states_[r].maxlen > 0 && states_[r].endpos >= 0) {
                     j = states_[r].endpos;
                     break;
                 }
@@ -139,7 +138,7 @@ void rosa_cache_update_kernel(
     rosa_cache** cache, const int64_t* batch,
     const K* query, const K* key, const V* value,
     const K* query_trigger, const K* key_trigger,
-    V* output, int64_t* endpos, int64_t* length
+    V* output, int64_t* endpos
 ) {
     std::vector<int64_t> offset(B + 1);
     for (int64_t b = 0; b < B; ++b) {
@@ -179,13 +178,11 @@ void rosa_cache_update_kernel(
                 uint64_t uv = static_cast<uint64_t>(u);
 
                 int64_t pos = -1;
-                int64_t len = 0;
 
-                V out = r.update(xq, xk, xv, mq, mk, uv, pos, len);
+                V out = r.update(xq, xk, xv, mq, mk, uv, pos);
 
                 output[qk_idx] = static_cast<V>(out);
                 endpos[qk_idx] = pos;
-                length[qk_idx] = len;
             }
         }
     }
@@ -241,7 +238,7 @@ void rosa_cache_update_kernel(
     } while (false)
 
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> torch_rosa_cache_update(
+std::tuple<torch::Tensor, torch::Tensor> torch_rosa_cache_update(
     const torch::Tensor& cache,
     const torch::Tensor& batch,
     const torch::Tensor& query,
@@ -286,7 +283,6 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> torch_rosa_cache_update(
 
     auto output = torch::empty({nqk, ntk}, value.options());
     auto endpos = torch::empty({nqk, ntk}, options);
-    auto length = torch::empty({nqk, ntk}, options);
 
     DISPATCH_KEY_TYPES(
         key.scalar_type(),
@@ -312,14 +308,13 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> torch_rosa_cache_update(
 
                     value_t* output_ptr = output.data_ptr<value_t>();
                     int64_t* endpos_ptr = endpos.data_ptr<int64_t>();
-                    int64_t* length_ptr = length.data_ptr<int64_t>();
 
                     rosa_cache_update_kernel<key_t, value_t>(
                         B, nqk, nvv, static_cast<value_t>(u),
                         cache_vec.data(), batch_vec.data(),
                         query_ptr, key_ptr, value_ptr,
                         query_trigger_ptr, key_trigger_ptr,
-                        output_ptr, endpos_ptr, length_ptr
+                        output_ptr, endpos_ptr
                     );
                 }
             );
@@ -330,7 +325,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> torch_rosa_cache_update(
     //     cache_[i] = (int64_t)cache_vec[i];
     // }
 
-    return {output, endpos, length};
+    return {output, endpos};
 }
 
 void torch_rosa_cache_create(torch::Tensor& cache, int64_t num_heads) {

@@ -26,11 +26,10 @@ class RosaSoftWork:
         function_apply = self._function_apply
         query, key, value = self._query_key_value
 
-        x_hard, endpos, length = work.wait()
+        x_hard, endpos = work.wait()
 
         params.info["x_hard"] = x_hard
         params.info["endpos"] = endpos
-        params.info["length"] = length
 
         self._future = None
         self._params = None

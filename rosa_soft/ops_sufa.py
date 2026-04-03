@@ -123,7 +123,6 @@ class RosaSufaFunction(torch.autograd.Function):
         query, key, value = cast(Tuple[Tensor, ...], ctx.saved_tensors)
         params: RosaSufaParams = ctx.saved_params
 
-        length = params.info.pop("length")
         endpos = params.info.pop("endpos")
 
         query.requires_grad_(True)
@@ -134,7 +133,6 @@ class RosaSufaFunction(torch.autograd.Function):
             x_soft = suffix_attention_proxy(
                 query, key, value,
                 endpos=endpos,
-                length=length,
                 scale=params.scale,
                 suffix_window=params.suffix_window,
                 suffix_factor=params.suffix_factor,
@@ -155,8 +153,7 @@ class RosaSufaFunction(torch.autograd.Function):
 
 def suffix_attention_proxy(
         query: Tensor, key: Tensor, value: Tensor,
-        endpos: Tensor, length: Tensor,
-        scale: Optional[float],
+        endpos: Tensor, scale: Optional[float],
         suffix_window: int,
         suffix_factor: float,
         quant_mode: str,
@@ -181,13 +178,17 @@ def suffix_attention_proxy(
     key   = key.permute(0, 2, 1, 3)
     value = value.permute(0, 2, 1, 3)
 
-    # q = torch.linspace(0, 1, 10, device=query.device)
-    # qq = torch.quantile(query.flatten(), q, dim=0)
-    # qk = torch.quantile(key.flatten(), q, dim=0)
-    # qv = torch.quantile(value.flatten(), q, dim=0)
-    # print(qq.tolist())
-    # print(qk.tolist())
-    # print(qv.tolist())
+    # q = torch.linspace(0, 1, 10, device=query.device).float()
+    # qq = torch.quantile(query.flatten().float(), q, dim=0)
+    # qk = torch.quantile(key.flatten().float(), q, dim=0)
+    # qv = torch.quantile(value.flatten().float(), q, dim=0)
+    # print(qq.tolist(), qk.tolist(), qv.tolist())
+
+    # q = torch.linspace(0, 1, 10, device=query.device).float()
+    # ql = torch.quantile(length.flatten().float(), q, dim=0)
+    # print(ql.tolist())
+    
+    # print(length[0, :, 0].tolist())
 
     ## quantize query, key, value
     xq, xk, xv = quantize(
@@ -209,7 +210,7 @@ def suffix_attention_proxy(
     with torch.no_grad():
         decs = suffix_window - 1 - torch.arange(suffix_window, device=xq.device)
         decs = torch.pow(suffix_factor, decs.float())
-        decs = torch.sqrt(decs / torch.sum(decs)).view(-1, 1)
+        decs = torch.sqrt(decs / decs.sum()).view(-1, 1)
 
     xq = xq * decs.to(xq.dtype)
     xk = xk * decs.to(xk.dtype)
@@ -221,7 +222,8 @@ def suffix_attention_proxy(
     xk = xk.reshape(bsz, num_k_heads, seq_len, head_dim)
 
     if scale is None:
-        scale = 1.0 / math.sqrt(head_dim)
+        # scale = 1.0 / math.sqrt(head_dim)
+        scale = 1.0 / head_dim * 6.0
     else:
         scale = float(scale)
 
@@ -234,15 +236,27 @@ def suffix_attention_proxy(
     with torch.no_grad():
         endpos = endpos.permute(0, 2, 1)
         inds = torch.arange(seq_len, device=endpos.device).view(1, 1, seq_len)
-        inds = torch.where(endpos >= 0, endpos, inds).unsqueeze(-1).long()
-        mask = (endpos >= 0).unsqueeze(-1).type_as(xq)
+        inds = torch.where(endpos >= 0, endpos + 1, inds).unsqueeze(-1)
+        mask = (endpos >= suffix_window).unsqueeze(-1).type_as(xq)
     
-    sk = torch.gather(xk, dim=2, index=inds)
-    sv = torch.gather(xv, dim=2, index=inds)
+    sk = torch.gather(xk, dim=2, index=inds.expand_as(xk))
+    sv = torch.gather(xv, dim=2, index=inds.expand_as(xv))
+
+    gs = 1.0 / head_dim * 6.0
 
     gg = torch.sum(xq * sk, dim=-1, keepdim=True)
-    gg = torch.sigmoid(gg * scale) * mask
+    gg = torch.sigmoid(gg * gs) * mask
     xo = xo * (1 - gg) + sv * gg
+
+    # print(endpos[0, 0, :].tolist(), gg[0, 0, :, 0].tolist())
+    # print([f"[{i}]{{{n}, {p}, ({u}, {m}), {g}}}" for i, (n, p, u, m, g) in enumerate(zip(length[0, :, 0].tolist(), endpos[0, 0, :].tolist(), inds[0, 0, :].tolist(), mask[0, 0, :].tolist(), gg[0, 0, :, 0].tolist()))])
+    
+    # for i, (p, u, m, g) in enumerate(zip(endpos[0, 0, :].tolist(), inds[0, 0, :, 0].tolist(), mask[0, 0, :, 0].tolist(), gg[0, 0, :, 0].tolist())):
+    #     if abs(g - 0.5) < 1e-2:
+    #         _g1 = torch.sum(xq[0, 0, i, :] * sk[0, 0, i, :])
+    #         _g2 = torch.sigmoid(_g1 * scale)
+    #         _g3 = _g2 * m
+    #         print(f"[{i}]{{{p}, ({u}, {m}), {g}, {_g1.item()}, {_g2.item()}, {_g3.item()}}} xq={xq[0, 0, i, :].tolist()}, xk={xk[0, 0, u, :].tolist()}, xv={xv[0, 0, u, :].tolist()} sk={sk[0, 0, i, :].tolist()}, sv={sv[0, 0, i, :].tolist()}")
     
     return xo.permute(0, 2, 1, 3)
 

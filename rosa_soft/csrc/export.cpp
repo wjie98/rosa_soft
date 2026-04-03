@@ -23,7 +23,7 @@ extern "C" {
 
 TORCH_LIBRARY(rosa_soft, m) {
     // rosa_cache
-    m.def("rosa_cache_update(Tensor(a!) cache, Tensor batch, Tensor query, Tensor key, Tensor value, Tensor? query_trigger, Tensor? key_trigger, int u) -> (Tensor, Tensor, Tensor)");
+    m.def("rosa_cache_update(Tensor(a!) cache, Tensor batch, Tensor query, Tensor key, Tensor value, Tensor? query_trigger, Tensor? key_trigger, int u) -> (Tensor, Tensor)");
     m.def("rosa_cache_create(Tensor(a!) cache, int num_heads) -> ()");
     m.def("rosa_cache_delete(Tensor(a!) cache) -> ()");
 

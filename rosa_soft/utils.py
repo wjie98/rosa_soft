@@ -30,6 +30,20 @@ def quantize(
         xv = F.softsign(value)
     else:
         raise ValueError(f"Unsupported quant_mode: {quant_mode}, expected 'tanh' or 'soft'")
+
+    xq = (torch.where(query > 0, 1.0, -1.0) - query).detach() + query
+    xk = (torch.where(key > 0, 1.0, -1.0) - key).detach() + key
+    xv = (torch.where(value > 0, 1.0, -1.0) - value).detach() + value
+
+
+    # xq = query
+    # xk = key
+    # xv = value
+
+    # xq = F.normalize(xq.float(), dim=-1, p=2).type_as(xq) * xq.size(-1)
+    # xk = F.normalize(xk.float(), dim=-1, p=2).type_as(xk) * xk.size(-1)
+    # xv = F.normalize(xv.float(), dim=-1, p=2).type_as(xv) * xv.size(-1)
+
     return xq, xk, xv
 
 # def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
