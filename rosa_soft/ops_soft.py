@@ -22,7 +22,7 @@ def rosa_soft_ops(
     key: Tensor,
     value: Tensor,
     scale: Optional[float] = None,
-    quant_mode: str = "soft",
+    quant_mode: str = "cubic",
     quant_scale: Optional[float] = None,
     schmitt_trigger: float = 0.0,
     async_op: bool = False,

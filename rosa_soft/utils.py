@@ -14,8 +14,10 @@ def quantize(
 ):
     if quant_scale is None:
         quant_scale = 1.0
-    else:
-        assert quant_scale >= 1.0, "quant_scale must be >= 1.0"
+    
+    assert quant_scale >= 1.0, "quant_scale must be >= 1.0"
+    
+    if quant_scale != 1.0:
         query = query * quant_scale
         key = key * quant_scale
         value = value * quant_scale
@@ -28,8 +30,12 @@ def quantize(
         xq = F.softsign(query)
         xk = F.softsign(key)
         xv = F.softsign(value)
+    elif quant_mode == "cubic":
+        xq = torch.tanh(query.pow(3) + 0.1 * query)
+        xk = torch.tanh(key.pow(3) + 0.1 * key)
+        xv = torch.tanh(value.pow(3) + 0.1 * value)
     else:
-        raise ValueError(f"Unsupported quant_mode: {quant_mode}, expected 'tanh' or 'soft'")
+        raise ValueError(f"Unsupported quant_mode: {quant_mode}, expected 'tanh', 'soft' or 'cubic'")
 
     xq = (torch.where(query > 0, 1.0, -1.0) - query).detach() + query
     xk = (torch.where(key > 0, 1.0, -1.0) - key).detach() + key

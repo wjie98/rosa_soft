@@ -24,7 +24,7 @@ def rosa_sufa_ops(
     scale: Optional[float] = None,
     suffix_window: int = 8,
     suffix_factor: Optional[float] = 0.5,
-    quant_mode: str = "soft",
+    quant_mode: str = "cubic",
     quant_scale: Optional[float] = None,
     schmitt_trigger: float = 0.0,
     async_op: bool = False,
@@ -222,8 +222,8 @@ def suffix_attention_proxy(
     xk = xk.reshape(bsz, num_k_heads, seq_len, head_dim)
 
     if scale is None:
-        # scale = 1.0 / math.sqrt(head_dim)
-        scale = 1.0 / head_dim * 6.0
+        scale = 1.0 / math.sqrt(head_dim)
+        # scale = 1.0 / head_dim * 6.0
     else:
         scale = float(scale)
 
