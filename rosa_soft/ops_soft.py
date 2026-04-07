@@ -112,7 +112,6 @@ class RosaSoftFunction(torch.autograd.Function):
         query, key, value = cast(Tuple[Tensor, ...], ctx.saved_tensors)
         params: RosaSoftParams = ctx.saved_params
         
-        length = params.info.pop("length")
         endpos = params.info.pop("endpos")
 
         query.requires_grad_(True)
@@ -123,7 +122,6 @@ class RosaSoftFunction(torch.autograd.Function):
             x_soft = rosa_native_proxy(
                 query, key, value,
                 endpos=endpos,
-                length=length,
                 scale=params.scale,
                 quant_mode=params.quant_mode,
                 quant_scale=params.quant_scale,
@@ -142,8 +140,7 @@ class RosaSoftFunction(torch.autograd.Function):
 
 def rosa_native_proxy(
         query: Tensor, key: Tensor, value: Tensor,
-        endpos: Tensor, length: Tensor,
-        scale: Optional[float],
+        endpos: Tensor, scale: Optional[float],
         quant_mode: str, quant_scale: Optional[float],
 ):
     bsz, seq_len, num_q_heads, num_q_bits = query.size()

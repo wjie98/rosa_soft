@@ -32,8 +32,8 @@ class RosaContextWork:
         work = self._cache_work
         self._cache_work = None
 
-        output, endpos, length = self.context._combine(work, self._value_bits, self._value_type)
-        return output, endpos, length
+        output, endpos = self.context._combine(work, self._value_bits, self._value_type)
+        return output, endpos
 
 
 class RosaContext:
@@ -96,14 +96,14 @@ class RosaContext:
 
     @torch.no_grad()
     def _combine(self, work, num_v_bits: int, dtype: torch.dtype):
-        output, endpos, length = cast(RosaCacheWork, work).wait()
+        output, endpos = cast(RosaCacheWork, work).wait()
 
         output_trigger = torch.zeros_like(output)
-        output_trigger[length > 0] = -1
+        output_trigger[endpos >= 0] = -1
         output = self._dequantize(output, output_trigger, num_bits=num_v_bits)
         
         output = output.to(dtype)
-        return output, endpos, length
+        return output, endpos
 
     @staticmethod
     def _quantize(x: Tensor, schmitt_trigger: float = 0.0) -> Tuple[Tensor, Optional[Tensor]]:
@@ -162,9 +162,9 @@ class RosaCacheWork:
         args = self._args
         self._args = None
         
-        output, endpos, length = self.cache._combine(*args)
+        output, endpos = self.cache._combine(*args)
 
-        return output, endpos, length
+        return output, endpos
 
 class RosaCache:
     def __init__(self, batch_size: int, num_heads: int):
@@ -277,27 +277,24 @@ class RosaCache:
     ):
         self.stream.synchronize()
 
-        output, endpos, length = rosa_cache_update_(self.cache, batch, query, key, value, query_trigger, key_trigger)
+        output, endpos = rosa_cache_update_(self.cache, batch, query, key, value, query_trigger, key_trigger)
 
         with self.stream(prev_wait=False):
             output = output.to(device=device, non_blocking=True)
             endpos = endpos.to(device=device, non_blocking=True)
-            length = length.to(device=device, non_blocking=True)
         
         if len(vshape) == 2:
             ntk, _ = vshape
             output = output.permute(1, 0).reshape(ntk, -1)
             endpos = endpos.permute(1, 0).reshape(ntk, -1)
-            length = length.permute(1, 0).reshape(ntk, -1)
         elif len(vshape) == 3:
             B, N, _ = vshape
             output = output.permute(1, 0).reshape(B, N, -1)
             endpos = endpos.permute(1, 0).reshape(B, N, -1)
-            length = length.permute(1, 0).reshape(B, N, -1)
         else:
             raise ValueError(f"vshape {vshape} is not supported")
         
-        return output, endpos, length
+        return output, endpos
 
     @property
     def stream(self):

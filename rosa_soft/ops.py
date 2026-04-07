@@ -50,8 +50,8 @@ def rosa_cache_update_(
         assert key_trigger.size() == (nqk, ntk), f"key_trigger.size()={key_trigger.size()} != (nqk, ntk)={(nqk, ntk)}"
         assert key_trigger.is_contiguous(), f"key_trigger is not contiguous, key_trigger.size()={key_trigger.size()}, key_trigger.stride()={key_trigger.stride()}"
 
-    output, endpos, length = torch.ops.rosa_soft.rosa_cache_update(cache, batch, query, key, value, query_trigger, key_trigger, 0)
-    return output, endpos, length
+    output, endpos = torch.ops.rosa_soft.rosa_cache_update(cache, batch, query, key, value, query_trigger, key_trigger, 0)
+    return output, endpos
 
 
 # ==== rwkv7_clampw ====
