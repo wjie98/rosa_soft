@@ -56,7 +56,7 @@ def get_extensions():
     else:
         sources = [
             str(extensions_dir / "export.cpp"),
-            str(extensions_dir / "rosa_sam.cpp"),
+            str(extensions_dir / "rosa_runtime.cpp"),
         ]
 
     extensions_cuda_dir = extensions_dir / "cuda"

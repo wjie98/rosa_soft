@@ -6,6 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
+# Local/private research workspaces are intentionally excluded from the public branch.
+/experiments/
+/legacy/
+/.claude/
+
 # Distribution / packaging
 .Python
 build/
