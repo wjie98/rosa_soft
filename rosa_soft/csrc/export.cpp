@@ -22,11 +22,6 @@ extern "C" {
 #include <torch/extension.h>
 
 TORCH_LIBRARY(rosa_soft, m) {
-    // rosa_cache
-    m.def("rosa_cache_update(Tensor(a!) cache, Tensor batch, Tensor query, Tensor key, Tensor value, Tensor? query_trigger, Tensor? key_trigger, int u) -> (Tensor, Tensor)");
-    m.def("rosa_cache_create(Tensor(a!) cache, int num_heads) -> ()");
-    m.def("rosa_cache_delete(Tensor(a!) cache) -> ()");
-
     // rwkv7_clampw
     m.def("rwkv7_clampw_forward(Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor(a!) y, Tensor s, Tensor(a!) sa) -> ()");
     m.def("rwkv7_clampw_backward(Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor dy, Tensor s, Tensor sa, Tensor(a!) dr, Tensor(a!) dw, Tensor(a!) dk, Tensor(a!) dv, Tensor(a!) da, Tensor(a!) db) -> ()");
@@ -39,4 +34,12 @@ TORCH_LIBRARY(rosa_soft, m) {
 
     // rwkv7_albatross
     m.def("rwkv7_albatross_forward_w0_fp16_dither(Tensor(a!) s0, Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor(a!) y, Tensor elapsed_t) -> ()");
+
+    // rosa_anchor
+    m.def("rosa_anchor_forward(Tensor query, Tensor key, Tensor value, float scale, int suffix_window, float logit_epsilon) -> Tensor");
+    m.def("rosa_anchor_forward_with_stats(Tensor query, Tensor key, Tensor value, float scale, int suffix_window, float logit_epsilon) -> (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor)");
+    m.def("rosa_anchor_forward_with_bits(Tensor query, Tensor key, Tensor value, float scale, int suffix_window, float logit_epsilon) -> Tensor[]");
+    m.def("rosa_anchor_backward(Tensor query, Tensor key, Tensor value, Tensor grad_output, float scale, int suffix_window, float logit_epsilon, float qk_damper_strength) -> Tensor[]");
+    m.def("rosa_anchor_backward_with_bits(Tensor query, Tensor key, Tensor value, Tensor grad_output, Tensor q_bits, Tensor k_bits, float scale, int suffix_window, float logit_epsilon, float qk_damper_strength) -> Tensor[]");
+    m.def("rosa_anchor_backward_with_bits_and_stats(Tensor query, Tensor key, Tensor value, Tensor grad_output, Tensor q_bits, Tensor k_bits, Tensor row_max, Tensor row_denom, float scale, int suffix_window, float logit_epsilon, float qk_damper_strength) -> Tensor[]");
 }
