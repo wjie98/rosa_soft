@@ -3,6 +3,5 @@ requires = [
     "setuptools",
     "ninja",
     "torch",
-    "fla-core",
 ]
 build-backend = "setuptools.build_meta"

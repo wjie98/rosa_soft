@@ -1,82 +1,107 @@
+#include <torch/extension.h>
+
+#include <cstdint>
+#include <limits>
 #include <map>
+#include <memory>
+#include <string>
 #include <tuple>
 #include <vector>
-#include <cstdint>
-#include <cstddef>
-#include <cstdlib>
-#include <cassert>
 
+namespace {
 
-template<typename K, typename V, typename P>
-struct rosa_state_t {
-    P maxlen;
-    P endpos;
-    P suffix_link;
-    std::map<K, P> transitions;
-
-    rosa_state_t() : endpos(-1), maxlen(0), suffix_link(-1) {}
+struct SamStats {
+    int64_t states = 0;
+    int64_t edges = 0;
+    int64_t values = 0;
 };
 
-template<typename K, typename V, typename P>
-class rosa_sam {
+enum class Backend {
+    Compact,
+    Map,
+};
+
+class ISam {
 public:
-    rosa_sam() : last_q_state_(0), last_k_state_(0), last_q_bits_(0), last_k_bits_(0) {}
+    virtual ~ISam() = default;
+    virtual uint8_t update(uint8_t query, uint8_t key, uint8_t value, int64_t& endpos) = 0;
+    virtual SamStats stats() const = 0;
+};
 
-    V update(K xq, K xk, V xv, K mq, K mk, V u, P& endpos) {
-        xq = (xq & mq) | (last_q_bits_ & ~mq);
-        xk = (xk & mk) | (last_k_bits_ & ~mk);
+struct MapState {
+    int64_t maxlen = 0;
+    int64_t endpos = -1;
+    int64_t suffix_link = -1;
+    std::map<uint8_t, int64_t> transitions;
+};
 
-        last_q_bits_ = xq;
-        last_k_bits_ = xk;
+class MapSam final : public ISam {
+public:
+    uint8_t update(uint8_t query, uint8_t key, uint8_t value, int64_t& endpos) override {
+        const int64_t pos = update_query(query);
+        update_key_value(key, value);
+        endpos = pos;
+        return pos >= 0 ? values_[static_cast<size_t>(pos + 1)] : uint8_t{0};
+    }
 
-        P i = update_query_(xq, last_q_state_);
-        update_key_value_(xk, xv);
-
-        endpos = i;
-
-        return i != -1 ? values_[i + 1] : u;
+    SamStats stats() const override {
+        int64_t edges = 0;
+        for (const auto& state : states_) {
+            edges += static_cast<int64_t>(state.transitions.size());
+        }
+        return {
+            static_cast<int64_t>(states_.size()),
+            edges,
+            static_cast<int64_t>(values_.size()),
+        };
     }
 
 private:
-    P update_key_value_(K k, V v) {
-        if (states_.empty()) states_.emplace_back();
+    void ensure_root() {
+        if (states_.empty()) {
+            states_.emplace_back();
+        }
+    }
 
-        P i = values_.size();
-        values_.emplace_back(v);
+    void update_key_value(uint8_t key, uint8_t value) {
+        ensure_root();
 
-        P r = states_.size();
+        const int64_t value_pos = static_cast<int64_t>(values_.size());
+        values_.push_back(value);
+
+        const int64_t next_state = static_cast<int64_t>(states_.size());
         states_.emplace_back();
-        states_[r].maxlen = states_[last_k_state_].maxlen + 1;
+        states_[static_cast<size_t>(next_state)].maxlen =
+            states_[static_cast<size_t>(last_key_state_)].maxlen + 1;
 
-        P p = last_k_state_;
+        int64_t p = last_key_state_;
         while (p != -1) {
-            if (states_[p].transitions.count(k)) {
+            auto& transitions = states_[static_cast<size_t>(p)].transitions;
+            if (transitions.count(key) != 0) {
                 break;
             }
-
-            states_[p].transitions[k] = r;
-            p = states_[p].suffix_link;
+            transitions[key] = next_state;
+            p = states_[static_cast<size_t>(p)].suffix_link;
         }
 
         if (p == -1) {
-            states_[r].suffix_link = 0;
+            states_[static_cast<size_t>(next_state)].suffix_link = 0;
         } else {
-            P c = states_[p].transitions[k];
-
-            if (states_[p].maxlen + 1 == states_[c].maxlen) {
-                states_[r].suffix_link = c;
+            const int64_t child = states_[static_cast<size_t>(p)].transitions[key];
+            if (states_[static_cast<size_t>(p)].maxlen + 1 == states_[static_cast<size_t>(child)].maxlen) {
+                states_[static_cast<size_t>(next_state)].suffix_link = child;
             } else {
-                P u = states_.size();
-                states_.emplace_back(states_[c]);
-                states_[u].maxlen = states_[p].maxlen + 1;
-                states_[c].suffix_link = u;
-                states_[r].suffix_link = u;
+                const int64_t clone = static_cast<int64_t>(states_.size());
+                states_.push_back(states_[static_cast<size_t>(child)]);
+                states_[static_cast<size_t>(clone)].maxlen = states_[static_cast<size_t>(p)].maxlen + 1;
+                states_[static_cast<size_t>(child)].suffix_link = clone;
+                states_[static_cast<size_t>(next_state)].suffix_link = clone;
 
                 while (p != -1) {
-                    auto it = states_[p].transitions.find(k);
-                    if (it != states_[p].transitions.end() && it->second == c) {
-                        it->second = u;
-                        p = states_[p].suffix_link;
+                    auto it = states_[static_cast<size_t>(p)].transitions.find(key);
+                    if (it != states_[static_cast<size_t>(p)].transitions.end() && it->second == child) {
+                        it->second = clone;
+                        p = states_[static_cast<size_t>(p)].suffix_link;
                     } else {
                         break;
                     }
@@ -84,284 +109,442 @@ private:
             }
         }
 
-        last_k_state_ = r;
+        last_key_state_ = next_state;
 
+        int64_t r = next_state;
         while (r != -1) {
-            states_[r].endpos = i;
-            r = states_[r].suffix_link;
+            states_[static_cast<size_t>(r)].endpos = value_pos;
+            r = states_[static_cast<size_t>(r)].suffix_link;
         }
-        
-        return r;
     }
 
-    P update_query_(K q, P& s) {
-        if (states_.empty()) states_.emplace_back();
+    int64_t update_query(uint8_t query) {
+        ensure_root();
 
-        P j = -1;
-
-        P r = s;
-        while (r != -1 && !states_[r].transitions.count(q)) {
-            r = states_[r].suffix_link;
+        int64_t r = last_query_state_;
+        while (r != -1) {
+            auto it = states_[static_cast<size_t>(r)].transitions.find(query);
+            if (it != states_[static_cast<size_t>(r)].transitions.end()) {
+                r = it->second;
+                break;
+            }
+            r = states_[static_cast<size_t>(r)].suffix_link;
         }
 
         if (r == -1) {
-            s = 0;
-        } else {
-            r = s = states_[r].transitions[q];
-            while (r != -1) {
-                if (states_[r].maxlen > 0 && states_[r].endpos >= 0) {
-                    j = states_[r].endpos;
-                    break;
-                }
-                r = states_[r].suffix_link;
-            }
+            last_query_state_ = 0;
+            return -1;
         }
-        
-        return j;
+
+        last_query_state_ = r;
+
+        while (r != -1) {
+            const auto& state = states_[static_cast<size_t>(r)];
+            if (state.maxlen > 0 && state.endpos >= 0) {
+                return state.endpos;
+            }
+            r = state.suffix_link;
+        }
+
+        return -1;
     }
 
-    std::vector<V> values_;
-    std::vector<rosa_state_t<K, V, P>> states_;
-    
-    P last_q_state_;
-    P last_k_state_;
-
-    K last_q_bits_;
-    K last_k_bits_;
+    std::vector<uint8_t> values_;
+    std::vector<MapState> states_;
+    int64_t last_query_state_ = 0;
+    int64_t last_key_state_ = 0;
 };
 
-using rosa_cache = std::vector<rosa_sam<int64_t, int64_t, int64_t>>;
+struct CompactState {
+    int32_t maxlen = 0;
+    int32_t endpos = -1;
+    int32_t suffix_link = -1;
+    int32_t first_edge = -1;
+};
 
-template<typename K, typename V>
-void rosa_cache_update_kernel(
-    const int64_t B, const int64_t nqk, const int64_t nvv, const V u,
-    rosa_cache** cache, const int64_t* batch,
-    const K* query, const K* key, const V* value,
-    const K* query_trigger, const K* key_trigger,
-    V* output, int64_t* endpos
-) {
-    std::vector<int64_t> offset(B + 1);
-    for (int64_t b = 0; b < B; ++b) {
-        if (!cache[b]) {
-            throw std::runtime_error("rosa cache is not initialized");
-        } else if (cache[b]->size() != nqk) {
-            throw std::runtime_error("rosa cache size does not match nqk");
-        }
+struct CompactEdge {
+    uint8_t key = 0;
+    int32_t next_state = -1;
+    int32_t next_edge = -1;
+};
 
-        offset[b + 1] = offset[b] + batch[b];
+class CompactSam final : public ISam {
+public:
+    uint8_t update(uint8_t query, uint8_t key, uint8_t value, int64_t& endpos) override {
+        const int32_t pos = update_query(query);
+        update_key_value(key, value);
+        endpos = static_cast<int64_t>(pos);
+        return pos >= 0 ? values_[static_cast<size_t>(pos + 1)] : uint8_t{0};
     }
 
-    const int64_t n_rep = nqk / nvv;
+    SamStats stats() const override {
+        return {
+            static_cast<int64_t>(states_.size()),
+            static_cast<int64_t>(edges_.size()),
+            static_cast<int64_t>(values_.size()),
+        };
+    }
 
-    #pragma omp parallel for collapse(2) schedule(dynamic)
-    for (int64_t h = 0; h < nqk; ++h) {
-        for (int64_t b = 0; b < B; ++b) {
-            auto& r = cache[b]->at(h);
-            for (int64_t t = 0; t < batch[b]; ++t) {
-                int64_t qk_idx = h * offset[B] + offset[b] + t;
-                int64_t vv_idx = h / n_rep * offset[B] + offset[b] + t;
+private:
+    void ensure_root() {
+        if (states_.empty()) {
+            states_.emplace_back();
+        }
+    }
 
-                uint64_t xq = static_cast<uint64_t>(query[qk_idx]);
-                uint64_t xk = static_cast<uint64_t>(key[qk_idx]);
-                uint64_t xv = static_cast<uint64_t>(value[vv_idx]);
+    int32_t find_transition(int32_t state, uint8_t key) const {
+        int32_t edge = states_[static_cast<size_t>(state)].first_edge;
+        while (edge != -1) {
+            const CompactEdge& e = edges_[static_cast<size_t>(edge)];
+            if (e.key == key) {
+                return e.next_state;
+            }
+            edge = e.next_edge;
+        }
+        return -1;
+    }
 
-                uint64_t mq = -1;
-                if (query_trigger) {
-                    mq = static_cast<uint64_t>(query_trigger[qk_idx]);
+    void set_transition(int32_t state, uint8_t key, int32_t next_state) {
+        int32_t edge = states_[static_cast<size_t>(state)].first_edge;
+        while (edge != -1) {
+            CompactEdge& e = edges_[static_cast<size_t>(edge)];
+            if (e.key == key) {
+                e.next_state = next_state;
+                return;
+            }
+            edge = e.next_edge;
+        }
+
+        const int32_t new_edge = static_cast<int32_t>(edges_.size());
+        edges_.push_back({
+            key,
+            next_state,
+            states_[static_cast<size_t>(state)].first_edge,
+        });
+        states_[static_cast<size_t>(state)].first_edge = new_edge;
+    }
+
+    int32_t copy_edges(int32_t first_edge) {
+        if (first_edge == -1) {
+            return -1;
+        }
+
+        int32_t new_first = -1;
+        int32_t prev = -1;
+        int32_t edge = first_edge;
+        while (edge != -1) {
+            const CompactEdge& src = edges_[static_cast<size_t>(edge)];
+            const uint8_t key = src.key;
+            const int32_t next_state = src.next_state;
+            const int32_t next_edge = src.next_edge;
+            const int32_t dst = static_cast<int32_t>(edges_.size());
+            edges_.push_back({key, next_state, -1});
+            if (prev == -1) {
+                new_first = dst;
+            } else {
+                edges_[static_cast<size_t>(prev)].next_edge = dst;
+            }
+            prev = dst;
+            edge = next_edge;
+        }
+        return new_first;
+    }
+
+    void update_key_value(uint8_t key, uint8_t value) {
+        ensure_root();
+        constexpr size_t kMaxInt32 = static_cast<size_t>(std::numeric_limits<int32_t>::max());
+        TORCH_CHECK(states_.size() < kMaxInt32, "ROSA SAM state count exceeded int32 range");
+        TORCH_CHECK(values_.size() < kMaxInt32, "ROSA SAM value count exceeded int32 range");
+
+        const int32_t value_pos = static_cast<int32_t>(values_.size());
+        values_.push_back(value);
+
+        const int32_t next_state = static_cast<int32_t>(states_.size());
+        states_.emplace_back();
+        states_[static_cast<size_t>(next_state)].maxlen =
+            states_[static_cast<size_t>(last_key_state_)].maxlen + 1;
+
+        int32_t p = last_key_state_;
+        while (p != -1) {
+            if (find_transition(p, key) != -1) {
+                break;
+            }
+            set_transition(p, key, next_state);
+            p = states_[static_cast<size_t>(p)].suffix_link;
+        }
+
+        if (p == -1) {
+            states_[static_cast<size_t>(next_state)].suffix_link = 0;
+        } else {
+            const int32_t child = find_transition(p, key);
+            if (states_[static_cast<size_t>(p)].maxlen + 1 == states_[static_cast<size_t>(child)].maxlen) {
+                states_[static_cast<size_t>(next_state)].suffix_link = child;
+            } else {
+                const int32_t clone = static_cast<int32_t>(states_.size());
+                states_.push_back(states_[static_cast<size_t>(child)]);
+                states_[static_cast<size_t>(clone)].maxlen = states_[static_cast<size_t>(p)].maxlen + 1;
+                states_[static_cast<size_t>(clone)].first_edge =
+                    copy_edges(states_[static_cast<size_t>(child)].first_edge);
+                states_[static_cast<size_t>(child)].suffix_link = clone;
+                states_[static_cast<size_t>(next_state)].suffix_link = clone;
+
+                while (p != -1) {
+                    const int32_t dst = find_transition(p, key);
+                    if (dst == child) {
+                        set_transition(p, key, clone);
+                        p = states_[static_cast<size_t>(p)].suffix_link;
+                    } else {
+                        break;
+                    }
                 }
-
-                uint64_t mk = -1;
-                if (key_trigger) {
-                    mk = static_cast<uint64_t>(key_trigger[qk_idx]);
-                }
-
-                uint64_t uv = static_cast<uint64_t>(u);
-
-                int64_t pos = -1;
-
-                V out = r.update(xq, xk, xv, mq, mk, uv, pos);
-
-                output[qk_idx] = static_cast<V>(out);
-                endpos[qk_idx] = pos;
             }
         }
+
+        last_key_state_ = next_state;
+
+        int32_t r = next_state;
+        while (r != -1) {
+            states_[static_cast<size_t>(r)].endpos = value_pos;
+            r = states_[static_cast<size_t>(r)].suffix_link;
+        }
     }
+
+    int32_t update_query(uint8_t query) {
+        ensure_root();
+
+        int32_t r = last_query_state_;
+        int32_t next = find_transition(r, query);
+        while (r != -1 && next == -1) {
+            r = states_[static_cast<size_t>(r)].suffix_link;
+            next = r == -1 ? -1 : find_transition(r, query);
+        }
+
+        if (r == -1) {
+            last_query_state_ = 0;
+            return -1;
+        }
+
+        r = next;
+        last_query_state_ = r;
+
+        while (r != -1) {
+            const CompactState& state = states_[static_cast<size_t>(r)];
+            if (state.maxlen > 0 && state.endpos >= 0) {
+                return state.endpos;
+            }
+            r = state.suffix_link;
+        }
+
+        return -1;
+    }
+
+    std::vector<uint8_t> values_;
+    std::vector<CompactState> states_;
+    std::vector<CompactEdge> edges_;
+    int32_t last_query_state_ = 0;
+    int32_t last_key_state_ = 0;
+};
+
+Backend parse_backend(const std::string& backend) {
+    if (backend == "compact") {
+        return Backend::Compact;
+    }
+    if (backend == "map") {
+        return Backend::Map;
+    }
+    TORCH_CHECK(false, "unknown RosaRuntime backend: ", backend, " (expected 'compact' or 'map')");
 }
 
+const char* backend_name(Backend backend) {
+    return backend == Backend::Compact ? "compact" : "map";
+}
 
-#include <torch/extension.h>
+std::unique_ptr<ISam> make_sam(Backend backend) {
+    if (backend == Backend::Compact) {
+        return std::make_unique<CompactSam>();
+    }
+    return std::make_unique<MapSam>();
+}
 
-#define DISPATCH_KEY_TYPES(TYPE, NAME, ...) \
-    do { \
-        switch (TYPE) { \
-            case at::ScalarType::Char:  { using key_t = int8_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::Byte:  { using key_t = uint8_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::Short:  { using key_t = int16_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::UInt16:  { using key_t = uint16_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::Int:  { using key_t = int32_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::UInt32:  { using key_t = uint32_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::Long:  { using key_t = int64_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::UInt64:  { using key_t = uint64_t;  (__VA_ARGS__)(); break; } \
-            default: TORCH_CHECK(false, #NAME, " not implemented for '", toString(TYPE), "'"); \
-        } \
-    } while (false)
+template <typename scalar_t>
+std::vector<int64_t> read_cu_seqlens(const torch::Tensor& cu_seqlens) {
+    const auto* ptr = cu_seqlens.data_ptr<scalar_t>();
+    std::vector<int64_t> result(static_cast<size_t>(cu_seqlens.numel()));
+    for (int64_t i = 0; i < cu_seqlens.numel(); ++i) {
+        result[static_cast<size_t>(i)] = static_cast<int64_t>(ptr[i]);
+    }
+    return result;
+}
 
-#define DISPATCH_VALUE_TYPES(TYPE, NAME, ...) \
-    do { \
-        switch (TYPE) { \
-            case at::ScalarType::Char:  { using value_t = int8_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::Byte:  { using value_t = uint8_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::Short:  { using value_t = int16_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::UInt16:  { using value_t = uint16_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::Int:  { using value_t = int32_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::UInt32:  { using value_t = uint32_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::Long:  { using value_t = int64_t;  (__VA_ARGS__)(); break; } \
-            case at::ScalarType::UInt64:  { using value_t = uint64_t;  (__VA_ARGS__)(); break; } \
-            default: TORCH_CHECK(false, #NAME, " not implemented for '", toString(TYPE), "'"); \
-        } \
-    } while (false)
+std::vector<int64_t> cu_seqlens_to_vec(const torch::Tensor& cu_seqlens) {
+    TORCH_CHECK(cu_seqlens.device().is_cpu(), "cu_seqlens must be a CPU tensor");
+    TORCH_CHECK(cu_seqlens.dim() == 1, "cu_seqlens must be a 1D tensor");
+    TORCH_CHECK(cu_seqlens.numel() >= 2, "cu_seqlens must contain at least two entries");
+    TORCH_CHECK(cu_seqlens.is_contiguous(), "cu_seqlens must be contiguous");
 
-#define CHECK_QK_TENSOR(x, nqk, ntk) \
-    do { \
-        TORCH_CHECK(x.dim() == 2, #x, " must be 2D tensor"); \
-        TORCH_CHECK(x.size(0) == nqk, #x, " must have size(0) equal to nqk"); \
-        TORCH_CHECK(x.size(1) == ntk, #x, " must have size(1) equal to ntk"); \
-        TORCH_CHECK(x.is_contiguous(), #x, " must be contiguous"); \
-    } while (false)
-
-#define CHECK_VV_TENSOR(x, nvv, ntk) \
-    do { \
-        TORCH_CHECK(x.dim() == 2, #x, " must be 2D tensor"); \
-        TORCH_CHECK(x.size(0) == nvv, #x, " must have size(0) equal to nvv"); \
-        TORCH_CHECK(x.size(1) == ntk, #x, " must have size(1) equal to ntk"); \
-        TORCH_CHECK(x.is_contiguous(), #x, " must be contiguous"); \
-    } while (false)
-
-
-std::tuple<torch::Tensor, torch::Tensor> torch_rosa_cache_update(
-    const torch::Tensor& cache,
-    const torch::Tensor& batch,
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const c10::optional<torch::Tensor>& query_trigger,
-    const c10::optional<torch::Tensor>& key_trigger,
-    int64_t u
-) {
-    auto cache_ = cache.accessor<int64_t, 1>();
-    auto batch_ = batch.accessor<int64_t, 1>();
-
-    int64_t B = cache.numel();
-    int64_t nqk = query.size(0);
-    int64_t nvv = value.size(0);
-
-    if (batch.numel() != cache.numel()) {
-        throw std::runtime_error("batch size must be equal to cache size");
+    std::vector<int64_t> result;
+    if (cu_seqlens.scalar_type() == torch::kInt32) {
+        result = read_cu_seqlens<int32_t>(cu_seqlens);
+    } else if (cu_seqlens.scalar_type() == torch::kInt64) {
+        result = read_cu_seqlens<int64_t>(cu_seqlens);
+    } else {
+        TORCH_CHECK(false, "cu_seqlens must be int32 or int64");
     }
 
-    if (query.size(0) % value.size(0) != 0) {
-        throw std::runtime_error("query heads must be divisible by value heads");
+    TORCH_CHECK(result.front() == 0, "cu_seqlens[0] must be 0");
+    for (size_t i = 1; i < result.size(); ++i) {
+        TORCH_CHECK(result[i] >= result[i - 1], "cu_seqlens must be monotonic");
+    }
+    return result;
+}
+
+void check_packed_tensor(const torch::Tensor& x, const char* name, int64_t total, int64_t heads) {
+    TORCH_CHECK(x.device().is_cpu(), name, " must be a CPU tensor");
+    TORCH_CHECK(x.scalar_type() == torch::kUInt8, name, " must have dtype torch.uint8");
+    TORCH_CHECK(x.dim() == 2, name, " must be shaped [total_tokens, heads]");
+    TORCH_CHECK(x.size(0) == total, name, " has wrong total token dimension");
+    TORCH_CHECK(x.size(1) == heads, name, " has wrong head dimension");
+    TORCH_CHECK(x.is_contiguous(), name, " must be contiguous");
+}
+
+} // namespace
+
+class RosaRuntime : public torch::CustomClassHolder {
+public:
+    RosaRuntime(int64_t num_heads, int64_t num_value_heads, int64_t qk_bits, int64_t value_bits, std::string backend)
+        : num_heads_(num_heads),
+          num_value_heads_(num_value_heads),
+          qk_bits_(qk_bits),
+          value_bits_(value_bits),
+          backend_(parse_backend(backend)) {
+        TORCH_CHECK(num_heads_ > 0, "num_heads must be positive");
+        TORCH_CHECK(num_value_heads_ > 0, "num_value_heads must be positive");
+        TORCH_CHECK(num_heads_ % num_value_heads_ == 0, "num_heads must be divisible by num_value_heads");
+        TORCH_CHECK(qk_bits_ > 0 && qk_bits_ <= 8, "qk_bits must be in [1, 8]");
+        TORCH_CHECK(value_bits_ > 0 && value_bits_ <= 8, "value_bits must be in [1, 8]");
     }
 
-    int64_t ntk = 0; // total tokens
-    std::vector<rosa_cache*> cache_vec(B); // cache pointer vector
-    std::vector<int64_t> batch_vec(B); // batch size vector
-    for (int64_t i = 0; i < B; ++i) {
-        ntk += batch_[i];
-        cache_vec[i] = (rosa_cache*)cache_[i];
-        batch_vec[i] = batch_[i];
-    }
+    std::tuple<torch::Tensor, torch::Tensor> update_packed(
+        const torch::Tensor& cu_seqlens,
+        const torch::Tensor& query,
+        const torch::Tensor& key,
+        const torch::Tensor& value) {
+        TORCH_CHECK(!closed_, "RosaRuntime is closed");
 
-    CHECK_QK_TENSOR(query, nqk, ntk);
-    CHECK_QK_TENSOR(key, nqk, ntk);
-    CHECK_VV_TENSOR(value, nvv, ntk);
+        const std::vector<int64_t> offsets = cu_seqlens_to_vec(cu_seqlens);
+        const int64_t batch = static_cast<int64_t>(offsets.size()) - 1;
+        const int64_t total = offsets.back();
+        TORCH_CHECK(total >= 0, "total token count must be non-negative");
 
-    if (query_trigger.has_value()) { CHECK_QK_TENSOR(query_trigger.value(), nqk, ntk); }
-    if (key_trigger.has_value()) { CHECK_QK_TENSOR(key_trigger.value(), nqk, ntk); }
+        check_packed_tensor(query, "query", total, num_heads_);
+        check_packed_tensor(key, "key", total, num_heads_);
+        check_packed_tensor(value, "value", total, num_value_heads_);
 
-    auto options = torch::TensorOptions().dtype(torch::kInt64).device(value.device());
+        ensure_cache(batch);
 
-    auto output = torch::empty({nqk, ntk}, value.options());
-    auto endpos = torch::empty({nqk, ntk}, options);
+        auto output = torch::empty({total, num_heads_}, value.options());
+        auto endpos = torch::empty({total, num_heads_}, value.options().dtype(torch::kInt64));
 
-    DISPATCH_KEY_TYPES(
-        key.scalar_type(),
-        "rosa_cache_update_",
-        [&] {
-            DISPATCH_VALUE_TYPES(
-                value.scalar_type(),
-                "rosa_cache_update_",
-                [&] {
-                    const key_t* query_ptr = query.data_ptr<key_t>();
-                    const key_t* key_ptr = key.data_ptr<key_t>();
-                    const value_t* value_ptr = value.data_ptr<value_t>();
+        const uint8_t* query_ptr = query.data_ptr<uint8_t>();
+        const uint8_t* key_ptr = key.data_ptr<uint8_t>();
+        const uint8_t* value_ptr = value.data_ptr<uint8_t>();
+        uint8_t* output_ptr = output.data_ptr<uint8_t>();
+        int64_t* endpos_ptr = endpos.data_ptr<int64_t>();
 
-                    const key_t* query_trigger_ptr = nullptr;
-                    if (query_trigger.has_value()) {
-                        query_trigger_ptr = query_trigger.value().data_ptr<key_t>();
-                    }
-                    
-                    const key_t* key_trigger_ptr = nullptr;
-                    if (key_trigger.has_value()) {
-                        key_trigger_ptr = key_trigger.value().data_ptr<key_t>();
-                    }
+        const int64_t group_size = num_heads_ / num_value_heads_;
 
-                    value_t* output_ptr = output.data_ptr<value_t>();
-                    int64_t* endpos_ptr = endpos.data_ptr<int64_t>();
-
-                    rosa_cache_update_kernel<key_t, value_t>(
-                        B, nqk, nvv, static_cast<value_t>(u),
-                        cache_vec.data(), batch_vec.data(),
-                        query_ptr, key_ptr, value_ptr,
-                        query_trigger_ptr, key_trigger_ptr,
-                        output_ptr, endpos_ptr
-                    );
+        #pragma omp parallel for collapse(2) schedule(dynamic)
+        for (int64_t b = 0; b < batch; ++b) {
+            for (int64_t h = 0; h < num_heads_; ++h) {
+                ISam& sam = *cache_[static_cast<size_t>(b * num_heads_ + h)];
+                const int64_t value_head = h / group_size;
+                for (int64_t t = offsets[static_cast<size_t>(b)]; t < offsets[static_cast<size_t>(b + 1)]; ++t) {
+                    int64_t pos = -1;
+                    const uint8_t out = sam.update(
+                        query_ptr[t * num_heads_ + h],
+                        key_ptr[t * num_heads_ + h],
+                        value_ptr[t * num_value_heads_ + value_head],
+                        pos);
+                    output_ptr[t * num_heads_ + h] = out;
+                    endpos_ptr[t * num_heads_ + h] = pos;
                 }
-            );
+            }
         }
-    );
 
-    // for (int64_t i = 0; i < B; ++i) {
-    //     cache_[i] = (int64_t)cache_vec[i];
-    // }
-
-    return {output, endpos};
-}
-
-void torch_rosa_cache_create(torch::Tensor& cache, int64_t num_heads) {
-    auto cache_ = cache.accessor<int64_t, 1>();
-    int64_t B = cache.numel();
-
-    #pragma omp parallel for
-    for (int64_t i = 0; i < B; ++i) {
-        auto r = (rosa_cache*)cache_[i];
-        if (!r) {
-            r = new rosa_cache();
-            r->resize(num_heads);
-        } else if (r->size() != num_heads) {
-            throw std::runtime_error("cache size must be equal to num_heads");
-        }
-        cache_[i] = (int64_t)r;
+        return {output, endpos};
     }
-}
 
-void torch_rosa_cache_delete(torch::Tensor& cache) {
-    auto cache_ = cache.accessor<int64_t, 1>();
-    int64_t B = cache.numel();
-
-    #pragma omp parallel for
-    for (int64_t i = 0; i < B; ++i) {
-        auto r = (rosa_cache*)cache_[i];
-        if (r) {
-            delete r;
-        }
-        cache_[i] = 0;
+    void close() {
+        cache_.clear();
+        batch_size_ = -1;
+        closed_ = true;
     }
-}
 
+    int64_t num_heads() const {
+        return num_heads_;
+    }
 
-TORCH_LIBRARY_IMPL(rosa_soft, CPU, m) {
-    m.impl("rosa_cache_update", &torch_rosa_cache_update);
-    m.impl("rosa_cache_create", &torch_rosa_cache_create);
-    m.impl("rosa_cache_delete", &torch_rosa_cache_delete);
+    int64_t num_value_heads() const {
+        return num_value_heads_;
+    }
+
+    int64_t qk_bits() const {
+        return qk_bits_;
+    }
+
+    int64_t value_bits() const {
+        return value_bits_;
+    }
+
+    std::string backend() const {
+        return backend_name(backend_);
+    }
+
+    std::tuple<int64_t, int64_t, int64_t> stats() const {
+        int64_t states = 0;
+        int64_t edges = 0;
+        int64_t values = 0;
+        for (const auto& sam : cache_) {
+            const SamStats s = sam->stats();
+            states += s.states;
+            edges += s.edges;
+            values += s.values;
+        }
+        return {states, edges, values};
+    }
+
+private:
+    void ensure_cache(int64_t batch) {
+        if (batch_size_ == -1) {
+            batch_size_ = batch;
+            cache_.reserve(static_cast<size_t>(batch_size_ * num_heads_));
+            for (int64_t i = 0; i < batch_size_ * num_heads_; ++i) {
+                cache_.push_back(make_sam(backend_));
+            }
+            return;
+        }
+        TORCH_CHECK(batch == batch_size_, "RosaRuntime batch size is fixed after the first update");
+    }
+
+    int64_t num_heads_;
+    int64_t num_value_heads_;
+    int64_t qk_bits_;
+    int64_t value_bits_;
+    int64_t batch_size_ = -1;
+    Backend backend_;
+    bool closed_ = false;
+    std::vector<std::unique_ptr<ISam>> cache_;
+};
+
+TORCH_LIBRARY_FRAGMENT(rosa_soft, m) {
+    m.class_<RosaRuntime>("RosaRuntime")
+        .def(torch::init<int64_t, int64_t, int64_t, int64_t, std::string>())
+        .def("update_packed", &RosaRuntime::update_packed)
+        .def("close", &RosaRuntime::close)
+        .def("num_heads", &RosaRuntime::num_heads)
+        .def("num_value_heads", &RosaRuntime::num_value_heads)
+        .def("qk_bits", &RosaRuntime::qk_bits)
+        .def("value_bits", &RosaRuntime::value_bits)
+        .def("backend", &RosaRuntime::backend)
+        .def("stats", &RosaRuntime::stats);
 }

@@ -1,336 +1,344 @@
-import torch
+from __future__ import annotations
 
-from torch import Tensor
-from typing import *
-
+import os
+from concurrent.futures import Future, ThreadPoolExecutor
 from functools import lru_cache
-from contextlib import contextmanager
+from typing import Optional, Tuple
 
-from .ops import *
+import torch
+from torch import Tensor
 
+from . import _C  # noqa: F401 - import registers torch.classes.rosa_soft.RosaRuntime
 
-__all__ = [
-    "RosaContext",
-    "RosaContextWork",
-    "RosaCache",
-    "RosaCacheWork",
-]
+__all__ = ["RosaRuntime", "RosaRuntimeWork"]
 
 
-
-class RosaContextWork:
-    def __init__(self) -> None:
-        self.context: RosaContext
-        self._cache_work: Optional[RosaCacheWork]
-        self._value_bits: int
-        self._value_type: torch.dtype
-    
-    def wait(self) -> Tuple[Tensor, Tensor, Tensor]:
-        if self._cache_work is None:
-            raise RuntimeError("wait() called twice on the same work")
-        
-        work = self._cache_work
-        self._cache_work = None
-
-        output, endpos = self.context._combine(work, self._value_bits, self._value_type)
-        return output, endpos
+@lru_cache(maxsize=1)
+def _runtime_executor() -> ThreadPoolExecutor:
+    workers = max(1, min(4, os.cpu_count() or 1))
+    return ThreadPoolExecutor(max_workers=workers, thread_name_prefix="rosa-runtime")
 
 
-class RosaContext:
-    def __init__(self, batch_size: int, num_heads: int) -> None:
-        self.cache = RosaCache(batch_size, num_heads)
-    
-    def destroy(self):
-        self.cache.destroy()
-    
-    def update(
-            self,
-            query: Tensor,
-            key: Tensor,
-            value: Tensor,
-            varlen: Optional[Tensor] = None,
-            schmitt_trigger: float = 0.0,
-            async_op: bool = False,
-    ):
-        assert query.size(-1) <= 64, "query must have at most 64 bits"
-        assert value.size(-1) <= 64, "value must have at most 64 bits"
-        assert query.size(-1) == key.size(-1), "query and key must have the same head dimension"
+def _make_cpu_cu_seqlens(batch: int, tokens: int) -> Tensor:
+    return torch.arange(0, (batch + 1) * tokens, tokens, dtype=torch.int64, device="cpu")
 
-        work = RosaContextWork()
-        work.context = self
-        work._value_bits = value.size(-1)
-        work._value_type = value.dtype
-        work._cache_work = self._dispatch(
-            query=query,
-            key=key,
-            value=value,
-            varlen=varlen,
-            schmitt_trigger=schmitt_trigger,
-        )
 
-        if async_op:
-            return work
-        return work.wait()
-    
-    @torch.no_grad()
-    def _dispatch(
-        self,
-        query: Tensor,
-        key: Tensor,
-        value: Tensor,
-        varlen: Optional[Tensor],
-        schmitt_trigger: float,
-    ):
-        query, query_trigger = self._quantize(query, schmitt_trigger=schmitt_trigger)
-        key,   key_trigger   = self._quantize(key, schmitt_trigger=schmitt_trigger)
-        value, value_trigger = self._quantize(value)
+def _normalize_cu_seqlens(cu_seqlens: Tensor) -> Tensor:
+    if cu_seqlens.dim() != 1:
+        raise ValueError("cu_seqlens must be a 1D tensor")
+    if cu_seqlens.dtype not in (torch.int32, torch.int64):
+        raise TypeError("cu_seqlens must have dtype int32 or int64")
+    if cu_seqlens.device.type != "cpu":
+        cu_seqlens = cu_seqlens.to(device="cpu", non_blocking=False)
+    return cu_seqlens.contiguous()
 
-        return self.cache._dispatch(
-            query=query,
-            key=key,
-            value=value,
-            query_trigger=query_trigger,
-            key_trigger=key_trigger,
-            varlen=varlen,
-        )
 
-    @torch.no_grad()
-    def _combine(self, work, num_v_bits: int, dtype: torch.dtype):
-        output, endpos = cast(RosaCacheWork, work).wait()
-
-        output_trigger = torch.zeros_like(output)
-        output_trigger[endpos >= 0] = -1
-        output = self._dequantize(output, output_trigger, num_bits=num_v_bits)
-        
-        output = output.to(dtype)
-        return output, endpos
-
-    @staticmethod
-    def _quantize(x: Tensor, schmitt_trigger: float = 0.0) -> Tuple[Tensor, Optional[Tensor]]:
-        assert x.is_floating_point()
-
-        num_bits = x.size(-1)
-        r = torch.arange(num_bits, device=x.device)
-
-        if num_bits <= 8:
-            dtype = torch.uint8
-        elif num_bits <= 16:
-            dtype = torch.int16
-        elif num_bits <= 32:
-            dtype = torch.int32
-        elif num_bits <= 64:
-            dtype = torch.int64
-        else:
-            raise ValueError(f"num_bits={num_bits} is not supported")
-
-        if schmitt_trigger > 0.0:
-            m = (torch.abs(x) > schmitt_trigger).to(dtype)
-            m = torch.sum(m << r, dim=-1)
-        else:
-            m = None
-
-        x = (x > 0).to(dtype)
-        x = torch.sum(x << r, dim=-1)
-
-        return x, m
-    
-    @staticmethod
-    def _dequantize(x: Tensor, m: Optional[Tensor], num_bits: int) -> Tensor:
-        assert not x.is_floating_point()
-
-        r = torch.arange(num_bits, device=x.device)
-        x = (x.unsqueeze(-1) >> r) & 1
-        x = torch.where(x != 0, 1.0, -1.0)
-
-        if isinstance(m, Tensor):
-            assert not m.is_floating_point()
-            m = (m.unsqueeze(-1) >> r) & 1
-            x = torch.where(m != 0, x, 0.0)
-
-        return x
-    
-
-class RosaCacheWork:
-    def __init__(self):
-        self.cache: RosaCache
-        self._args: Optional[Tuple[Tensor, ...]]
-    
-    def wait(self) -> Tuple[Tensor, ...]:
-        if self._args is None:
-            raise RuntimeError("wait() called twice on the same work")
-        
-        args = self._args
-        self._args = None
-        
-        output, endpos = self.cache._combine(*args)
-
-        return output, endpos
-
-class RosaCache:
-    def __init__(self, batch_size: int, num_heads: int):
-        self.cache = torch.zeros(batch_size, dtype=torch.int64, device="cpu")
-        rosa_cache_create_(self.cache, num_heads)
-    
-    def __del__(self):
-        self.destroy()
-    
-    def destroy(self):
+def _copy_to_cpu(x: Tensor, *, pin_memory: bool = False, non_blocking: bool = False) -> Tensor:
+    if x.device.type == "cpu":
+        return x.contiguous()
+    if pin_memory:
         try:
-            rosa_cache_delete_(self.cache)
-        except Exception:
+            out = torch.empty(x.shape, dtype=x.dtype, device="cpu", pin_memory=True)
+            out.copy_(x.contiguous(), non_blocking=non_blocking)
+            return out
+        except RuntimeError:
             pass
-    
-    def update(
-            self,
-            query: Tensor,
-            key: Tensor,
-            value: Tensor,
-            query_trigger: Optional[Tensor] = None,
-            key_trigger: Optional[Tensor] = None,
-            varlen: Optional[Tensor] = None,
-            async_op: bool = False,
-    ):
-        work = self._dispatch(
-            query=query,
-            key=key,
-            value=value,
-            query_trigger=query_trigger,
-            key_trigger=key_trigger,
-            varlen=varlen,
+    return x.contiguous().to(device="cpu", non_blocking=non_blocking)
+
+
+def _pin_cpu(x: Tensor) -> Tensor:
+    if x.device.type != "cpu":
+        raise ValueError("_pin_cpu expects a CPU tensor")
+    try:
+        out = torch.empty(x.shape, dtype=x.dtype, device="cpu", pin_memory=True)
+        out.copy_(x)
+        return out
+    except RuntimeError:
+        return x
+
+
+def _pack_bits(x: Tensor) -> Tensor:
+    if not x.is_floating_point():
+        raise TypeError("unpacked RosaRuntime inputs must be floating-point logits")
+    bits = x.size(-1)
+    if bits <= 0 or bits > 8:
+        raise ValueError(f"RosaRuntime supports 1..8 bits, got {bits}")
+    weights = (1 << torch.arange(bits, device=x.device, dtype=torch.int16)).view(
+        *([1] * (x.dim() - 1)), bits
+    )
+    return ((x > 0).to(torch.int16) * weights).sum(dim=-1).to(torch.uint8).contiguous()
+
+
+def _unpack_bits(x: Tensor, bits: int, dtype: torch.dtype) -> Tensor:
+    shifts = torch.arange(bits, device=x.device, dtype=torch.int16).view(
+        *([1] * x.dim()), bits
+    )
+    out = ((x.to(torch.int16).unsqueeze(-1) >> shifts) & 1).to(dtype)
+    return torch.where(out != 0, torch.ones((), dtype=dtype, device=x.device), -torch.ones((), dtype=dtype, device=x.device))
+
+
+def _flatten_packed(
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    cu_seqlens: Optional[Tensor],
+) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tuple[int, ...], bool]:
+    if query.dtype != torch.uint8 or key.dtype != torch.uint8 or value.dtype != torch.uint8:
+        raise TypeError("packed RosaRuntime inputs must have dtype torch.uint8")
+    if query.shape != key.shape:
+        raise ValueError(f"query/key shape mismatch: {query.shape} vs {key.shape}")
+    if query.device != key.device or query.device != value.device:
+        raise ValueError("query, key, and value must be on the same device")
+
+    dense = cu_seqlens is None
+    if dense:
+        if query.dim() != 3 or value.dim() != 3:
+            raise ValueError("dense packed inputs must be shaped [B, T, H] and [B, T, H_v]")
+        if query.size(0) != value.size(0) or query.size(1) != value.size(1):
+            raise ValueError("dense query/value batch and token dimensions must match")
+        B, T, _ = query.shape
+        cu = _make_cpu_cu_seqlens(B, T)
+        return (
+            query.reshape(B * T, query.size(2)).contiguous(),
+            key.reshape(B * T, key.size(2)).contiguous(),
+            value.reshape(B * T, value.size(2)).contiguous(),
+            cu,
+            tuple(value.shape),
+            True,
         )
 
-        if async_op:
-            return work
-        return work.wait()
-    
-    def _dispatch(
-            self,
-            query: Tensor,
-            key: Tensor,
-            value: Tensor,
-            query_trigger: Optional[Tensor],
-            key_trigger: Optional[Tensor],
-            varlen: Optional[Tensor],
-    ):
-        device = value.device
-        vshape = value.shape
+    if query.dim() != 2 or value.dim() != 2:
+        raise ValueError("varlen packed inputs must be shaped [total, H] and [total, H_v]")
+    if query.size(0) != value.size(0):
+        raise ValueError("varlen query/value token dimensions must match")
+    return (
+        query.contiguous(),
+        key.contiguous(),
+        value.contiguous(),
+        _normalize_cu_seqlens(cu_seqlens),
+        tuple(value.shape),
+        False,
+    )
 
-        if isinstance(varlen, Tensor):
-            ntk, nqk = query.size()
-            ntk, nvv = value.size()
 
-            batch = varlen[1:] - varlen[:-1] # [B]
-
-            query = query.permute(1, 0).reshape(nqk, ntk).contiguous()
-            key   = key.permute(1, 0).reshape(nqk, ntk).contiguous()
-            value = value.permute(1, 0).reshape(nvv, ntk).contiguous()
-
-            if isinstance(query_trigger, Tensor):
-                query_trigger = query_trigger.permute(1, 0).reshape(nqk, ntk).contiguous()
-
-            if isinstance(key_trigger, Tensor):
-                key_trigger = key_trigger.permute(1, 0).reshape(nqk, ntk).contiguous()
-        else:
-            B, N, nqk = query.size()
-            _, _, nvv = value.size()
-            
-            batch = torch.empty(B, dtype=torch.int64, device="cpu").fill_(N)
-
-            query = query.permute(2, 0, 1).reshape(nqk, B * N).contiguous()
-            key   = key.permute(2, 0, 1).reshape(nqk, B * N).contiguous()
-            value = value.permute(2, 0, 1).reshape(nvv, B * N).contiguous()
-
-            if isinstance(query_trigger, Tensor):
-                query_trigger = query_trigger.permute(2, 0, 1).reshape(nqk, B * N).contiguous()
-
-            if isinstance(key_trigger, Tensor):
-                key_trigger = key_trigger.permute(2, 0, 1).reshape(nqk, B * N).contiguous()
-        
-        with self.stream(post_wait=False):
-            batch = batch.to(device="cpu", non_blocking=True)
-            query = query.to(device="cpu", non_blocking=True)
-            key   = key.to(device="cpu", non_blocking=True)
-            value = value.to(device="cpu", non_blocking=True)
-            
-            if isinstance(query_trigger, Tensor):
-                query_trigger = query_trigger.to(device="cpu", non_blocking=True)
-
-            if isinstance(key_trigger, Tensor):
-                key_trigger = key_trigger.to(device="cpu", non_blocking=True)
-        
-        work = RosaCacheWork()
-        work.cache = self
-        work._args = (batch, query, key, value, query_trigger, key_trigger, device, vshape)
-        
-        return work
-
-    def _combine(
+class RosaRuntimeWork:
+    def __init__(
         self,
-        batch: Tensor,
+        runtime: "RosaRuntime",
+        future: Future,
+        device: torch.device,
+        output_shape: Tuple[int, ...],
+        dense: bool,
+        return_packed: bool,
+        value_bits: int,
+        output_dtype: torch.dtype,
+        stream: Optional[torch.cuda.Stream],
+    ) -> None:
+        self._runtime = runtime
+        self._future: Optional[Future] = future
+        self._device = device
+        self._output_shape = output_shape
+        self._dense = dense
+        self._return_packed = return_packed
+        self._value_bits = value_bits
+        self._output_dtype = output_dtype
+        self._stream = stream
+
+    def wait(self):
+        if self._future is None:
+            raise RuntimeError("wait() called twice on the same RosaRuntimeWork")
+        future = self._future
+        self._future = None
+        output_cpu, endpos_cpu = future.result()
+        return self._runtime._finish_output(
+            output_cpu,
+            endpos_cpu,
+            self._device,
+            self._output_shape,
+            self._dense,
+            self._return_packed,
+            self._value_bits,
+            self._output_dtype,
+            self._stream,
+        )
+
+
+class RosaRuntime:
+    """Stateful CPU suffix-automaton runtime with optional CUDA staging.
+
+    The runtime stores state in a PyTorch custom class and must be closed
+    explicitly when deterministic release is needed. It also supports context
+    manager usage.
+    """
+
+    def __init__(
+        self,
+        num_heads: int,
+        num_value_heads: Optional[int] = None,
+        qk_bits: int = 8,
+        value_bits: int = 8,
+        backend: str = "compact",
+    ) -> None:
+        if num_value_heads is None:
+            num_value_heads = num_heads
+        self.num_heads = int(num_heads)
+        self.num_value_heads = int(num_value_heads)
+        self.qk_bits = int(qk_bits)
+        self.value_bits = int(value_bits)
+        self.backend = backend
+        self._runtime = torch.classes.rosa_soft.RosaRuntime(
+            self.num_heads,
+            self.num_value_heads,
+            self.qk_bits,
+            self.value_bits,
+            backend,
+        )
+        self._closed = False
+
+    def close(self) -> None:
+        if not self._closed:
+            self._runtime.close()
+            self._closed = True
+
+    def __enter__(self) -> "RosaRuntime":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def stats(self) -> Tuple[int, int, int]:
+        return tuple(int(x) for x in self._runtime.stats())
+
+    def update(
+        self,
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        query_trigger: Optional[Tensor],
-        key_trigger: Optional[Tensor],
-        device: torch.device,
-        vshape: Tuple[int, ...],
+        cu_seqlens: Optional[Tensor] = None,
+        *,
+        stream: Optional[torch.cuda.Stream] = None,
+        async_op: bool = False,
+        return_packed: bool = False,
     ):
-        self.stream.synchronize()
+        if query.shape != key.shape:
+            raise ValueError(f"query/key shape mismatch: {query.shape} vs {key.shape}")
+        if query.size(-1) != self.qk_bits or key.size(-1) != self.qk_bits:
+            raise ValueError("query/key last dimension must match qk_bits")
+        if value.size(-1) != self.value_bits:
+            raise ValueError("value last dimension must match value_bits")
 
-        output, endpos = rosa_cache_update_(self.cache, batch, query, key, value, query_trigger, key_trigger)
+        expected_dim = 4 if cu_seqlens is None else 3
+        if query.dim() != expected_dim or value.dim() != expected_dim:
+            layout = "dense" if cu_seqlens is None else "varlen"
+            raise ValueError(f"{layout} inputs have wrong rank for RosaRuntime")
 
-        with self.stream(prev_wait=False):
-            output = output.to(device=device, non_blocking=True)
-            endpos = endpos.to(device=device, non_blocking=True)
-        
-        if len(vshape) == 2:
-            ntk, _ = vshape
-            output = output.permute(1, 0).reshape(ntk, -1)
-            endpos = endpos.permute(1, 0).reshape(ntk, -1)
-        elif len(vshape) == 3:
-            B, N, _ = vshape
-            output = output.permute(1, 0).reshape(B, N, -1)
-            endpos = endpos.permute(1, 0).reshape(B, N, -1)
-        else:
-            raise ValueError(f"vshape {vshape} is not supported")
-        
-        return output, endpos
+        return self.update_packed(
+            _pack_bits(query),
+            _pack_bits(key),
+            _pack_bits(value),
+            cu_seqlens=cu_seqlens,
+            stream=stream,
+            async_op=async_op,
+            return_packed=return_packed,
+            output_dtype=value.dtype,
+        )
 
-    @property
-    def stream(self):
-        return self._stream()
+    def update_packed(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        cu_seqlens: Optional[Tensor] = None,
+        *,
+        stream: Optional[torch.cuda.Stream] = None,
+        async_op: bool = False,
+        return_packed: bool = True,
+        output_dtype: torch.dtype = torch.float32,
+    ):
+        if self._closed:
+            raise RuntimeError("RosaRuntime is closed")
+        query, key, value, cu, output_shape, dense = _flatten_packed(query, key, value, cu_seqlens)
+        if query.size(1) != self.num_heads or key.size(1) != self.num_heads:
+            raise ValueError("packed query/key head dimension must match num_heads")
+        if value.size(1) != self.num_value_heads:
+            raise ValueError("packed value head dimension must match num_value_heads")
 
-    @staticmethod
-    @lru_cache(maxsize=None)
-    def _stream():
-        return _RosaStream()
+        device = value.device
+        if stream is not None and device.type != "cuda":
+            raise ValueError("stream can only be used with CUDA inputs")
+        if stream is not None and not async_op:
+            async_op = True
 
+        if stream is None:
+            q_cpu = _copy_to_cpu(query)
+            k_cpu = _copy_to_cpu(key)
+            v_cpu = _copy_to_cpu(value)
+            output_cpu, endpos_cpu = self._runtime.update_packed(cu, q_cpu, k_cpu, v_cpu)
+            return self._finish_output(
+                output_cpu,
+                endpos_cpu,
+                device,
+                output_shape,
+                dense,
+                return_packed,
+                self.value_bits,
+                output_dtype,
+                stream=None,
+            )
 
-class _RosaStream:
-    def __init__(self):
-        if torch.cuda.is_available():
-            self.stream = torch.cuda.Stream()
-        else:
-            self.stream = None
-    
-    def synchronize(self):
-        if self.stream is not None:
-            self.stream.synchronize()
-    
-    @contextmanager
-    def __call__(
+        stream.wait_stream(torch.cuda.current_stream(device))
+        with torch.cuda.stream(stream):
+            q_cpu = _copy_to_cpu(query, pin_memory=True, non_blocking=True)
+            k_cpu = _copy_to_cpu(key, pin_memory=True, non_blocking=True)
+            v_cpu = _copy_to_cpu(value, pin_memory=True, non_blocking=True)
+            event = torch.cuda.Event()
+            event.record(stream)
+
+        def run_cpu():
+            event.synchronize()
+            output_cpu, endpos_cpu = self._runtime.update_packed(cu, q_cpu, k_cpu, v_cpu)
+            return _pin_cpu(output_cpu), _pin_cpu(endpos_cpu)
+
+        work = RosaRuntimeWork(
             self,
-            prev_wait: bool = True,
-            post_wait: bool = True,
-    ):
-        if self.stream is None:
-            yield
-        else:
-            if prev_wait:
-                self.stream.wait_stream(torch.cuda.current_stream())
+            _runtime_executor().submit(run_cpu),
+            device,
+            output_shape,
+            dense,
+            return_packed,
+            self.value_bits,
+            output_dtype,
+            stream,
+        )
+        if async_op:
+            return work
+        return work.wait()
 
-            with torch.cuda.stream(self.stream):
-                yield self.stream
-        
-            if post_wait:
-                torch.cuda.current_stream().wait_stream(self.stream)
+    def _finish_output(
+        self,
+        output_cpu: Tensor,
+        endpos_cpu: Tensor,
+        device: torch.device,
+        output_shape: Tuple[int, ...],
+        dense: bool,
+        return_packed: bool,
+        value_bits: int,
+        output_dtype: torch.dtype,
+        stream: Optional[torch.cuda.Stream],
+    ):
+        if stream is None or device.type == "cpu":
+            output = output_cpu.to(device=device, non_blocking=False)
+            endpos = endpos_cpu.to(device=device, non_blocking=False)
+        else:
+            current = torch.cuda.current_stream(device)
+            with torch.cuda.stream(stream):
+                output = output_cpu.to(device=device, non_blocking=True)
+                endpos = endpos_cpu.to(device=device, non_blocking=True)
+            current.wait_stream(stream)
+
+        if dense:
+            output = output.reshape(output_shape[0], output_shape[1], self.num_heads)
+            endpos = endpos.reshape(output_shape[0], output_shape[1], self.num_heads)
+        if not return_packed:
+            output = _unpack_bits(output, value_bits, output_dtype)
+        return output, endpos
