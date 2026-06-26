@@ -1,98 +1,135 @@
-# Softened ROSA Operators
+# rosa_soft
 
-[![Status: Experimental](https://img.shields.io/badge/status-experimental-orange.svg)](https://github.com/your-username/rosa_soft)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+`rosa_soft` contains the current ROSA training proxy and a stateful ROSA
+suffix-automaton runtime for PyTorch.
 
-**rosa_soft** provides a robust, end-to-end trainable implementation of the **ROSA (Rapid Online Suffix Automaton)** operator for next-generation LLMs.
+The public package intentionally exposes only the production path:
 
-> **Note:** This project makes the discrete, non-differentiable ROSA mechanism compatible with gradient-based optimization using a **Straight-Through Estimator (STE)** framework.
-> For a deep dive into the theoretical background, the Suffix Attention (SUFA) proxy, and our design philosophy, please read **[The ROSA Concept & Method](./docs/CONCEPT.md)**.
+- `rosa_anchor_ops`: CUDA autograd operator used as the current ROSA soft
+  training proxy.
+- `RosaRuntime`: CPU suffix-automaton runtime with packed `uint8` state,
+  standard `cu_seqlens` varlen input, optional CUDA staging, and explicit
+  resource management.
 
-## 📂 Project Structure
+Historical proxy experiments, legacy snapshots, and internal ablation assets
+are not part of this release branch.
 
-* **`rosa_soft/`**: The core Python package containing the C++ kernel for the ROSA operator.
-* **`legacy/`**: Historical snapshots of the operator evolution.
-* **`demo/`**: PyTorch implementations of ROSA layers and reference models (e.g., RWKV7).
-
-## 🚀 Installation
-
-Prerequisites: **PyTorch** and **CUDA** toolkit.
-
-You can install the core `rosa_soft` operator directly from GitHub:
+## Installation
 
 ```bash
-$ pip install --no-build-isolation git+https://github.com/wjie98/rosa_soft.git
+pip install --no-build-isolation git+https://github.com/wjie98/rosa_soft.git
 ```
 
-## 🛠 Usage
+Set `USE_CUDA=0` to build only CPU extension pieces.
 
-### Using the ROSA Operator
+For low-memory build environments, keep extension parallelism conservative:
 
-Two operators are exported:
-- **`rosa_soft_ops`**: Uses softened dynamic programming as the gradient proxy.
-- **`rosa_sufa_ops`**: Uses suffix attention as the gradient proxy.
-- **`rosa_scan_ops`** (experimental): Uses linear attention as the gradient proxy (currently under fine-tuning).
+```bash
+MAX_JOBS=1 pip install --no-build-isolation .
+```
+
+## RosaAnchor Training Proxy
 
 ```python
 import torch
-from rosa_soft import *
+from rosa_soft import rosa_anchor_ops
 
-# B: Batch, T: Sequence Length, H: Heads, D: Bits
-# Inputs are usually logits (before tanh or sign)
-query = torch.randn(2, 1024, 64, 8).cuda()
-key   = torch.randn(2, 1024, 64, 8).cuda()
-value = torch.randn(2, 1024, 16, 32).cuda()
+query = torch.randn(2, 1024, 64, 8, device="cuda", dtype=torch.float16)
+key = torch.randn_like(query)
+value = torch.randn(2, 1024, 16, 8, device="cuda", dtype=torch.float16)
 
-# For softened dynamic programming proxy
-output: Tensor = rosa_soft_ops(
-    query, key, value,
-    schmitt_trigger=0.1     # Threshold to prevent noise toggling
+output = rosa_anchor_ops(
+    query,
+    key,
+    value,
+    window_size=128,
+    scale=None,
+    logit_epsilon=1e-3,
+    qk_damper_strength=0.2,
 )
-
-# For suffix attention proxy:
-output: Tensor = rosa_sufa_ops(
-    query, key, value,
-    suffix_window=8,        # Lookback window for fingerprinting
-    suffix_factor=0.5,      # Decay factor for the window
-    schmitt_trigger=0.1     # Threshold to prevent noise toggling
-)
-
-# For suffix linear attention proxy (experimental):
-output: Tensor = rosa_scan_ops(
-    query, key, value,
-    suffix_window=8,        # Lookback window for fingerprinting
-    suffix_factor=0.5,      # Decay factor for the window
-    schmitt_trigger=0.1     # Threshold to prevent noise toggling
-)
-
 ```
 
-### API Reference: `rosa_soft_ops` & `rosa_sufa_ops` & `rosa_scan_ops`
+### `rosa_anchor_ops`
 
 | Parameter | Type | Description |
 | --- | --- | --- |
-| `query` | `Tensor` | (B, T, H, D) Logits for Query bits. |
-| `key` | `Tensor` | (B, T, H, D) Logits for Key bits. |
-| `value` | `Tensor` | (B, T, H_v, D_v) Logits for Value bits. |
-| `suffix_window` | `int` | Size of the lookback window for geometric decay fingerprinting (SUFA proxy). |
-| `suffix_factor` | `float` | Decay factor for the window. |
-| `schmitt_trigger` | `float` | Hysteresis threshold to stabilize bit flipping against noise. |
+| `query` | `Tensor` | `[B, T, H, D]` Q bit logits. |
+| `key` | `Tensor` | `[B, T, H, D]` K bit logits. |
+| `value` | `Tensor` | `[B, T, H_v, D_v]` V bit logits. `H % H_v == 0`. |
+| `window_size` | `int` | Maximum suffix window. CUDA backward supports up to 512. |
+| `scale` | `float | None` | Selector logit scale. `None` uses the built-in shape estimate. |
+| `return_telemetry` | `bool` | Return lightweight selector statistics for scale tracking. |
+| `logit_epsilon` | `float` | Early-stop threshold. `0` runs the full suffix scan. |
+| `qk_damper_strength` | `float` | Optional Q/K gradient direction damper in `[0, 1]`. |
 
-## 🧩 Reference Demo Modules
+## RosaRuntime Inference Runtime
 
-The `demo/` directory contains experimental integrations of the ROSA layer into modern architectures.
+`RosaRuntime` is stateful. Use `close()` or a context manager when deterministic
+resource release matters; it does not rely on Python `__del__`.
 
-* **`rwkv7.py`**: PyTorch implementation of the RWKV-7 model.
-* **`rwkv7rosa.py`**: A hybrid architecture combining RWKV-7 with the ROSA token mixing layer.
+```python
+import torch
+from rosa_soft import RosaRuntime
 
-> **Warning:** The architectures in `demo/` are subject to change as we refine the best practices for placing the ROSA layer.
+B, T, H, D = 2, 16, 8, 4
+Hv = 2
+q = torch.randn(B, T, H, D, device="cuda")
+k = torch.randn_like(q)
+v = torch.randn(B, T, Hv, D, device="cuda")
 
-## 📅 Roadmap & History
+with RosaRuntime(num_heads=H, num_value_heads=Hv, qk_bits=D, value_bits=D) as rt:
+    out, endpos = rt.update(q, k, v, return_packed=False)
+```
 
-* **2026-02**: Adopted **Suffix Linear Attention** as the gradient proxy. This formulation achieves **O(T)** training time and space complexity and demonstrates superior stability compared to the standard dot-product attention version.
-* **2026-01**: Implemented **Gated Value Detach**. This mechanism balances the QK matching signal with the V semantic signal, ensuring smoother convergence compared to the previous hard detach method.
-* **2025-12**: Initial implementation of the STE framework and SUFA proxy.
+Packed dense input is also supported:
 
-## Acknowledgments
+```python
+q = torch.randint(0, 16, (B, T, H), device="cuda", dtype=torch.uint8)
+k = torch.randint(0, 16, (B, T, H), device="cuda", dtype=torch.uint8)
+v = torch.randint(0, 16, (B, T, Hv), device="cuda", dtype=torch.uint8)
 
-This project is built upon and inspired by the groundbreaking research of **Peng Bo (BlinkDL)** in the [RWKV-LM](https://github.com/BlinkDL/RWKV-LM/tree/main/RWKV-v8) project. We extend our sincere appreciation for the innovative work that has significantly influenced our approach.
+rt = RosaRuntime(H, Hv, qk_bits=4, value_bits=4)
+out_packed, endpos = rt.update_packed(q, k, v)
+rt.close()
+```
+
+Varlen input uses FlashAttention-style cumulative sequence lengths:
+
+```python
+cu_seqlens = torch.tensor([0, 5, 13, 21], dtype=torch.int32)
+q = torch.randint(0, 16, (21, H), dtype=torch.uint8)
+k = torch.randint(0, 16, (21, H), dtype=torch.uint8)
+v = torch.randint(0, 16, (21, Hv), dtype=torch.uint8)
+
+out, endpos = rt.update_packed(q, k, v, cu_seqlens=cu_seqlens)
+```
+
+For CUDA overlap, pass an explicit stream:
+
+```python
+stream = torch.cuda.Stream()
+work = rt.update(q, k, v, stream=stream, async_op=True)
+out, endpos = work.wait()
+```
+
+If no stream is supplied, the call is blocking and uses the caller's current
+device semantics. The runtime does not create hidden CUDA streams.
+
+### `RosaRuntime`
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `num_heads` | `int` | Number of Q/K heads. |
+| `num_value_heads` | `int | None` | Number of V heads. Defaults to `num_heads`; `num_heads % num_value_heads == 0`. |
+| `qk_bits` | `int` | Q/K bit width, `1..8`. |
+| `value_bits` | `int` | V bit width, `1..8`. |
+| `backend` | `str` | `"compact"` default, or `"map"` for semantic/benchmark comparison. |
+
+`stats()` returns `(states, edges, values)` for runtime memory diagnostics.
+
+## Validation
+
+```bash
+python test/rosa_sam_cpp.py
+python test/rosa_runtime_benchmark.py --B 4 --T 256 --H 8 --Hv 2 --bits 4
+```
