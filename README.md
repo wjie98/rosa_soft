@@ -44,18 +44,8 @@ q = torch.randn(B, T, H, D, device="cuda", dtype=torch.float16, requires_grad=Tr
 k = torch.randn_like(q)
 v = torch.randn(B, T, Hv, Dv, device="cuda", dtype=torch.float16, requires_grad=True)
 
-y, telemetry = rosa_anchor_ops(
-    q,
-    k,
-    v,
-    window_size=128,
-    scale=None,
-    return_telemetry=True,
-    logit_epsilon=0.0,
-    qk_damper_strength=0.0,
-)
+y = rosa_anchor_ops(q, k, v, window_size=128)
 y.float().sum().backward()
-print(telemetry.as_float_dict())
 ```
 
 ## Scale Control During Training
@@ -132,16 +122,16 @@ parameters and Q/K/V projection ranges.
 
 ### `rosa_anchor_ops`
 
-| Parameter | Description |
-| --- | --- |
-| `query` | `[B, T, H, D]` CUDA tensor, `D in [1, 32]`. |
-| `key` | `[B, T, H, D]` CUDA tensor. |
-| `value` | `[B, T, H_v, D_v]` CUDA tensor, `H % H_v == 0`. |
-| `window_size` | Suffix window. Backward supports up to 512. |
-| `scale` | Selector scale. `None` uses the built-in shape estimate. |
-| `return_telemetry` | Return `AttentionTelemetry` for calibration. |
-| `logit_epsilon` | Early-stop threshold. `0` is exact within the window. |
-| `qk_damper_strength` | Optional Q/K saturation guardrail in `[0, 1]`. |
+| Parameter | Default | Recommendation |
+| --- | ---: | --- |
+| `query` | required | `[B, T, H, D]` CUDA tensor, `D in [1, 32]`. |
+| `key` | required | `[B, T, H, D]` CUDA tensor. |
+| `value` | required | `[B, T, H_v, D_v]` CUDA tensor, `H % H_v == 0`. |
+| `window_size` | `32` | Main semantic knob. Use the smallest suffix horizon that captures the task; CUDA backward supports up to `512`. |
+| `scale` | `None` | Keep `None` first. It uses the built-in shape estimate; use `RosaAnchorScaleController` for periodic calibration. |
+| `return_telemetry` | `False` | Leave off in the hot path. The scale controller enables it only on probe steps. |
+| `logit_epsilon` | `0.0` | Exact full-window scoring. Try `1e-3` only after checking task metrics and `truncated_fraction`. |
+| `qk_damper_strength` | `0.0` | No damping by default. If Q/K magnitudes saturate and route entropy collapses, try `0.1` to `0.3`. |
 
 ### `RosaRuntime`
 
@@ -171,7 +161,8 @@ examples/
   rwkv7_rosa_overlap.py     RWKV7+ROSA overlap example
   train_rosa_anchor_scale.py
 docs/
-  ROSA_ANCHOR_DESIGN.md     Developer report and formulas
+  CONCEPT.md                User-facing technical report and design history
+  ROSA_ANCHOR_DESIGN.md     RosaAnchor operator report
 tests/
   rosa_runtime_cpp.py       Runtime correctness tests
   rosa_runtime_benchmark.py Compact-vs-map benchmark
@@ -179,13 +170,27 @@ tests/
 
 ## Developer Documentation
 
-Read [docs/ROSA_ANCHOR_DESIGN.md](docs/ROSA_ANCHOR_DESIGN.md) for:
+Read [docs/CONCEPT.md](docs/CONCEPT.md) for the full user-facing report:
 
-- per-step RosaAnchor formulas;
-- design motivation for sink/null, recency tie-break, and weighted mismatch;
-- backward surrogate details;
-- telemetry definitions;
-- parameter tuning and scale-control guidance.
+- why ROSA needs a training proxy;
+- the path from bitflip perturbation to soft-DP, suffix attention, and
+  RosaAnchor;
+- the current RosaAnchor formulas and parameter guidance;
+- the local validation snapshots.
+
+Read [docs/ROSA_ANCHOR_DESIGN.md](docs/ROSA_ANCHOR_DESIGN.md) for a shorter
+operator-focused reference.
+
+## Validation Snapshot
+
+The current RosaAnchor mainline was selected from hard-forward next-token
+experiments: the forward path uses hard ROSA, while the backward path changes
+between proxy-gradient methods.
+
+| Check | Result |
+| --- | --- |
+| Hard-limit scale sweep | Mean absolute error vs hard ROSA fell from `0.2468` at scale `4` to `1.15e-6` at scale `64`, and was numerically zero by scale `256` on the recorded random probe. |
+| Single-sample next-token fit | On a tiny repeated-motif LM task, the original bitflip proxy reached hard-forward CE `1.61e-4`; current RosaAnchor CUDA reached `2.71e-4`. Both reached `100%` train accuracy. |
 
 ## Validation
 
@@ -200,3 +205,10 @@ For CUDA build validation:
 ```bash
 CUDA_HOME=/path/to/cuda MAX_JOBS=1 python setup.py build_ext --inplace
 ```
+
+## Acknowledgements
+
+This project is built upon and inspired by the research of **Peng Bo
+(BlinkDL)** in the [RWKV-LM](https://github.com/BlinkDL/RWKV-LM/tree/main/RWKV-v8)
+project. We extend our sincere appreciation for the innovative work that has
+significantly influenced this project.

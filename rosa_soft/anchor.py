@@ -8,6 +8,8 @@ from torch import Tensor
 
 __all__ = [
     "AttentionTelemetry",
+    "ROSA_ANCHOR_DEFAULT_LOGIT_EPSILON",
+    "ROSA_ANCHOR_DEFAULT_QK_DAMPER_STRENGTH",
     "estimate_rosa_anchor_scale",
     "resolve_rosa_anchor_scale",
     "rosa_anchor_lambda",
@@ -17,6 +19,8 @@ __all__ = [
 
 AUTO_SCALE_TARGET_TOP_PROB = 0.50
 ROSA_ANCHOR_LAMBDA_POWER = 1.5
+ROSA_ANCHOR_DEFAULT_LOGIT_EPSILON = 0.0
+ROSA_ANCHOR_DEFAULT_QK_DAMPER_STRENGTH = 0.0
 
 _ROSA_ANCHOR_AUTO_SCALE_INTERCEPT = -0.293063
 _ROSA_ANCHOR_AUTO_SCALE_SEQ_EXP = 0.176767
@@ -343,13 +347,18 @@ def rosa_anchor_ops(
     window_size: int = 32,
     scale: Optional[float] = None,
     return_telemetry: bool = False,
-    logit_epsilon: float = 0.0,
-    qk_damper_strength: float = 0.0,
+    logit_epsilon: float = ROSA_ANCHOR_DEFAULT_LOGIT_EPSILON,
+    qk_damper_strength: float = ROSA_ANCHOR_DEFAULT_QK_DAMPER_STRENGTH,
 ) -> Union[Tensor, Tuple[Tensor, AttentionTelemetry]]:
     """Production RosaAnchor CUDA proxy.
 
     Inputs use `(B, T, H, D)` layout. Q/K bits must be in `[1, 32]`, and value
     heads may be grouped-query style as long as `H_q % H_v == 0`.
+
+    Default recommendations:
+        logit_epsilon=0.0 keeps exact full-window scoring.
+        qk_damper_strength=0.0 leaves Q/K gradients unchanged; try 0.1..0.3
+        only if route entropy collapses because Q/K activations saturate.
     """
 
     _validate_inputs(query, key, value, int(window_size), float(logit_epsilon))
