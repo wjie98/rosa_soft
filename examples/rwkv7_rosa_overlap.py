@@ -157,7 +157,7 @@ class RWKV7RosaStateSpec:
     head_size: int = 64
     rosa_qk_bits: int = 4
     rosa_value_bits: int = 4
-    backend: str = "compact"
+    max_suffix_length: int = 32
 
 
 def make_rwkv7_rosa_state(
@@ -190,7 +190,7 @@ def make_rwkv7_rosa_state(
                 rosa_value_heads,
                 qk_bits=spec.rosa_qk_bits,
                 value_bits=spec.rosa_value_bits,
-                backend=spec.backend,
+                max_suffix_length=spec.max_suffix_length,
             )
             for _ in range(spec.n_layer)
         ],

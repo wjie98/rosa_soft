@@ -35,11 +35,7 @@ TORCH_LIBRARY(rosa_soft, m) {
     // rwkv7_albatross
     m.def("rwkv7_albatross_forward_w0_fp16_dither(Tensor(a!) s0, Tensor r, Tensor w, Tensor k, Tensor v, Tensor a, Tensor b, Tensor(a!) y, Tensor elapsed_t) -> ()");
 
-    // rosa_anchor
-    m.def("rosa_anchor_forward(Tensor query, Tensor key, Tensor value, float scale, int suffix_window, float logit_epsilon) -> Tensor");
-    m.def("rosa_anchor_forward_with_stats(Tensor query, Tensor key, Tensor value, float scale, int suffix_window, float logit_epsilon) -> (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor)");
-    m.def("rosa_anchor_forward_with_bits(Tensor query, Tensor key, Tensor value, float scale, int suffix_window, float logit_epsilon) -> Tensor[]");
-    m.def("rosa_anchor_backward(Tensor query, Tensor key, Tensor value, Tensor grad_output, float scale, int suffix_window, float logit_epsilon, float qk_damper_strength) -> Tensor[]");
-    m.def("rosa_anchor_backward_with_bits(Tensor query, Tensor key, Tensor value, Tensor grad_output, Tensor q_bits, Tensor k_bits, float scale, int suffix_window, float logit_epsilon, float qk_damper_strength) -> Tensor[]");
-    m.def("rosa_anchor_backward_with_bits_and_stats(Tensor query, Tensor key, Tensor value, Tensor grad_output, Tensor q_bits, Tensor k_bits, Tensor row_max, Tensor row_denom, float scale, int suffix_window, float logit_epsilon, float qk_damper_strength) -> Tensor[]");
+    // rosa_soft
+    m.def("soft_forward(Tensor query_logits, Tensor key_logits, Tensor payload_logits, int max_suffix_length) -> Tensor[]");
+    m.def("soft_backward(Tensor query_logits, Tensor key_logits, Tensor payload_logits, Tensor grad_output, Tensor query_symbols, Tensor key_symbols, Tensor rng_seed, int max_suffix_length, float route_temperature, float mismatch_penalty) -> Tensor[]");
 }

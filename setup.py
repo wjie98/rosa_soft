@@ -14,6 +14,32 @@ from torch.utils.cpp_extension import (
 
 library_name = "rosa_soft"
 
+CPU_SOURCES = [
+    "export.cpp",
+    "rosa_runtime.cpp",
+]
+
+CUDA_CPP_SOURCES = [
+    "rosa_soft.cpp",
+    "rwkv7_albatross.cpp",
+    "rwkv7_clampw.cpp",
+    "rwkv7_state_clampw.cpp",
+    "rwkv7_statepassing_clampw.cpp",
+]
+
+CUDA_SOURCES = [
+    "cuda/rosa_soft_kernels.cu",
+    "cuda/rwkv7_albatross.cu",
+    "cuda/rwkv7_clampw.cu",
+    "cuda/rwkv7_state_clampw.cu",
+    "cuda/rwkv7_statepassing_clampw.cu",
+]
+
+
+def wants_extension_build():
+    value = os.getenv("ROSA_BUILD_EXTENSION", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
 
 def wants_cuda_build():
     value = os.getenv("USE_CUDA", "1").strip().lower()
@@ -21,6 +47,8 @@ def wants_cuda_build():
 
 
 def get_extensions():
+    if not wants_extension_build():
+        return []
     use_cuda = wants_cuda_build()
     if use_cuda and CUDA_HOME is None:
         raise RuntimeError(
@@ -51,19 +79,14 @@ def get_extensions():
         ]
 
     extensions_dir = Path(__file__).parent / library_name / "csrc"
+    source_names = list(CPU_SOURCES)
     if use_cuda:
-        sources = list(str(p) for p in extensions_dir.glob("*.cpp"))
-    else:
-        sources = [
-            str(extensions_dir / "export.cpp"),
-            str(extensions_dir / "rosa_runtime.cpp"),
-        ]
-
-    extensions_cuda_dir = extensions_dir / "cuda"
-    cuda_sources = list(str(p) for p in extensions_cuda_dir.glob("*.cu"))
-
-    if use_cuda:
-        sources += cuda_sources
+        source_names += CUDA_CPP_SOURCES
+        source_names += CUDA_SOURCES
+    sources = [
+        str(extensions_dir / source_name)
+        for source_name in source_names
+    ]
 
     ext_modules = [
         extension(

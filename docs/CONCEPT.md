@@ -1,547 +1,335 @@
-# ROSA and RosaAnchor Technical Report
+# ROSA and RosaSoft Technical Report
 
-This document explains the training proxy used by `rosa_soft`. It is written
-for users who want to understand why the current operator looks the way it
-does, not for kernel developers who need every CUDA detail.
+This document explains why `rosa_soft` separates a hard ROSA forward path from
+a stochastic surrogate backward path.
 
 The short version:
 
-- `RosaRuntime` is the hard ROSA inference path.
-- `rosa_anchor_ops` is the differentiable training proxy.
-- The current proxy is the result of several failed or partial routes:
-  bitflip perturbation, soft dynamic programming, suffix attention, and finally
-  RosaAnchor.
+- `RosaRuntime` is the stateful hard suffix-automaton inference path.
+- `rosa_soft` is the dense CUDA training operator.
+- `rosa_soft_reference` is its PyTorch semantic oracle.
+- Training and inference observe the same hard Q/K/V route output.
+- Softness exists only in the custom backward estimator.
 
 ## Design Ladder
 
-The methods below are not independent alternatives. They form a sequence of
-repairs. Each step keeps the useful property of the previous step and tries to
-remove the bottleneck that made it unsuitable as the main training path.
+The current operator came from a sequence of partial solutions:
 
-| Step | Main idea | What it fixed | What still failed |
-| --- | --- | --- | --- |
-| Hard ROSA | Exact discrete suffix route. | Gives the desired inference behavior. | Almost no useful gradient for Q/K. |
-| Bitflip perturbation | Probe hard-route sensitivity by flipping bits. | Keeps hard forward and gives meaningful route gradients. | Too many hard probes; expensive and discontinuous. |
-| Soft-DP | Replace exact suffix equality with a differentiable recurrence. | Gives dense gradients to all candidate routes in one soft model. | `O(T^2)`, recurrence-heavy, and too soft compared with hard inference. |
-| Suffix attention | Flatten recent suffixes into attention-style fingerprints. | Makes the proxy much more GPU-friendly. | Additive scoring can hide early mismatches and drifts from longest-suffix semantics. |
-| RosaAnchor | Use weighted mismatches plus multiplicative suffix decay. | Keeps finite-scale gradients while preserving the hard ROSA limit. | Current production proxy. |
+| Step | Useful property | Blocking problem |
+| --- | --- | --- |
+| Hard ROSA | Exact discrete suffix retrieval and compact inference state. | Q/K comparisons and route changes have no ordinary gradient. |
+| Bitflip perturbation | Measures route sensitivity while keeping hard forward. | Requires many hard re-evaluations and has high variance. |
+| Soft dynamic programming | Gives dense credit to candidate suffixes. | Quadratic state, sequential recurrence, and a hackable soft forward. |
+| Suffix attention | Maps suffix comparison to GPU-friendly candidate rows. | Additive evidence lets older matches compensate for an early mismatch. |
+| RosaSoft | Hard forward plus multiplicative stochastic suffix credit in backward. | Dense training still enumerates all causal candidates. |
 
 ## 1. Hard ROSA
 
-ROSA routes by discrete suffix matching. Q/K activations are converted into
-bits:
+ROSA turns Q/K activations into symbols:
 
 ```math
-b(x)=\mathbf{1}[x>0]
-```
-
-For a query suffix ending at position `i` and a key suffix ending at position
-`j`, hard ROSA prefers the longest exact suffix match. A simple way to write
-the hard suffix length is:
-
-```math
-L_{i,j}^{\mathrm{hard}}
-=
+s(x)=
 \begin{cases}
-1 + L_{i-1,j-1}^{\mathrm{hard}}, & b(q_i)=b(k_j) \\
-0, & b(q_i)\ne b(k_j)
++1,&x>0\\
+-1,&x\le 0.
 \end{cases}
 ```
 
-The route selects a historical value from the best matching suffix:
+For a query suffix ending at `i` and a key suffix ending at `j`, the hard
+matching length follows:
 
 ```math
-y_i = v_{r(i)}
+L_{i,j}^{hard}=
+\begin{cases}
+1+L_{i-1,j-1}^{hard},&s(q_i)=s(k_j)\\
+0,&\text{otherwise}.
+\end{cases}
 ```
 
-where `r(i)` is the selected hard route. This is attractive for inference
-because the state can be maintained by a suffix automaton. The training problem
-is that bit comparisons and route selection are step functions, so ordinary
-backpropagation has little useful signal for learning Q/K.
+Inference chooses a historical value associated with the longest exact suffix.
+A suffix automaton can maintain this state without storing an attention-style
+matrix. The training difficulty is that symbolization and winner selection are
+step functions.
 
-This is the starting point: the forward semantics are exactly what we want, but
-there is no practical gradient. The first repair is therefore not to soften the
-forward, but to ask how the hard forward would change if one bit changed.
+## 2. Bitflip Perturbation
 
-## 2. Attempt One: Bitflip Perturbation
-
-The most direct proxy is to keep the hard forward path and estimate the effect
-of changing one bit at a time.
-
-Let `F(B,V)` be the hard ROSA output from a packed bit state `B` and value
-state `V`. Given upstream gradient `g_i` at output position `i`, flipping one
-route bit `u` gives a directional score:
+Let `F(B,V)` be hard ROSA from packed route bits `B` and values `V`. Flipping
+one bit `u` gives a directional signal:
 
 ```math
-\Delta_u
-=
+\Delta_u=
 \left\langle
-  g,\,
-  F(\mathrm{flip}_u(B),V)-F(B,V)
-\right\rangle
+g,\,
+F(\operatorname{flip}_u(B),V)-F(B,V)
+\right\rangle.
 ```
 
-That score is then used as a surrogate gradient for the activation that
-produced bit `u`, usually with a straight-through estimator around the sign
-boundary.
+This is a strong local oracle because it asks the actual discrete operator what
+would change. It also scales with the number of probes and inherits large
+route jumps. The historical tiny fitting task showed that hard-forward
+learning is possible, but bitflip is not an economical full-model primitive.
 
-This method is conceptually clean:
+## 3. Soft Dynamic Programming
 
-- the forward path is exactly hard ROSA;
-- it directly asks whether a bit decision matters to the current upstream
-  gradient;
-- it has strong local exploration because every bit can be probed.
-
-But it is expensive. A useful bitflip gradient needs many hard-operator probes,
-and each probe changes a discontinuous route. In small next-token fitting tests
-it is a strong oracle, but it is not a practical production training operator.
-
-What bitflip improved over plain hard ROSA:
-
-- it keeps the true hard forward path;
-- it turns an upstream activation gradient into a route-bit sensitivity signal;
-- it can escape some local route mistakes because it actively probes nearby
-  bit decisions.
-
-What still blocks it:
-
-- cost scales with the number of probed bits and positions;
-- probes are hard-route executions, not one fused dense GPU pass;
-- the perturbation signal is useful as an oracle but awkward as a stable,
-  scalable training primitive.
-
-The next repair is soft-DP: instead of probing one changed route at a time, make
-all candidate routes differentiable at once.
-
-## 3. Attempt Two: Soft Dynamic Programming
-
-Soft-DP relaxes exact equality into a differentiable match score. Let
-`m(i,j)` be a soft match between the current Q/K symbols:
+A differentiable local match `m(i,j)` can define:
 
 ```math
-0 \le m(i,j) \le 1
+S_{i,j}=m(i,j)(1+S_{i-1,j-1}),
 ```
 
-A natural soft version of suffix length is:
+followed by a softmax over candidates. This gives every candidate a gradient in
+one graph, but introduces three problems:
+
+- `O(T^2)` score state;
+- diagonal recurrence that is difficult to tile;
+- a soft weighted-value forward that can carry information unavailable to
+  hard inference.
+
+The last issue is fundamental. If training can exploit probability tails or
+value amplitudes, it need not learn a useful discrete route.
+
+## 4. Suffix Attention
+
+Suffix attention flattens a recent window into features and scores them with an
+attention-like dot product:
 
 ```math
-S_{i,j}
-=
-m(i,j)\left(1 + S_{i-1,j-1}\right)
-```
-
-Then candidate routes can be selected with a softmax:
-
-```math
-a_{i,j}
-=
-\frac{\exp(\alpha S_{i,j})}
-{\sum_r \exp(\alpha S_{i,r})}
-```
-
-and the output is:
-
-```math
-y_i=\sum_j a_{i,j}v_j
-```
-
-This is the most faithful differentiable relaxation of longest suffix matching.
-Its problem is practical:
-
-- it needs an `O(T^2)` score table;
-- the diagonal recurrence is awkward for GPU parallelism;
-- the soft forward path can leak information through probability tails;
-- training can optimize the soft objective without learning routes that work
-  well under hard inference.
-
-Soft-DP remains a useful reference idea, but it is too slow and too soft for
-the main path.
-
-What soft-DP improved over bitflip:
-
-- it gives every candidate route a gradient in one forward/backward pass;
-- it replaces discrete bit probes with a smooth route distribution;
-- it directly models suffix length instead of relying on finite-difference
-  perturbations.
-
-What still blocks it:
-
-- the full candidate table is quadratic in sequence length;
-- the diagonal recurrence is hard to schedule efficiently on modern GPUs;
-- the soft forward objective can be optimized in ways that do not survive the
-  switch back to hard ROSA.
-
-The next repair is suffix attention: keep the idea of comparing suffixes, but
-remove the recurrence and express the comparison in a GPU-friendly attention
-shape.
-
-## 4. Attempt Three: Suffix Attention
-
-Suffix attention tries to keep the "compare recent suffixes" idea while using
-an attention-like layout. For a suffix window `W`, define windowed features:
-
-```math
-\phi_q(i)=
-\left[
-q_i,\,
-\eta q_{i-1},\,
-\eta^2 q_{i-2},\,
-\ldots,\,
-\eta^{W-1}q_{i-W+1}
-\right]
+\phi_q(i)=[q_i,\eta q_{i-1},\ldots,\eta^{W-1}q_{i-W+1}],
 ```
 
 ```math
-\phi_k(j)=
-\left[
-k_j,\,
-\eta k_{j-1},\,
-\eta^2 k_{j-2},\,
-\ldots,\,
-\eta^{W-1}k_{j-W+1}
-\right]
+s_{i,j}=\frac{\langle\phi_q(i),\phi_k(j)\rangle}{\sqrt{WD}}.
 ```
 
-The route score is an attention score over suffix fingerprints:
+This is parallel and kernel-friendly. Its score is additive, however, so a
+mismatch at the most recent symbol can be offset by older similarities. Hard
+longest-suffix matching terminates at that mismatch. The objective is
+therefore structurally different even before hard inference is considered.
+
+## 5. Current Path: RosaSoft
+
+RosaSoft keeps:
+
+- hard Q/K/V signs in forward;
+- exact longest-suffix selection with latest-action ties;
+- a finite suffix window for the dense training oracle;
+- dense candidate credit only in backward;
+- multiplicative local gates so an early mismatch suppresses later offsets;
+- stochastic exploration that cannot alter the hard forward;
+- soft distributed V gradients.
+
+### Hard Forward
+
+For row `i`, action `a` compares `q_i` to `k_{a-1}` and continues backward
+until the first unequal complete symbol or `max_suffix_length`. The action with the
+longest exact suffix wins; latest action resolves equal lengths. If every
+candidate mismatches immediately, the null action returns exact zero.
+
+The returned value is one hard signed `V[a]`. No soft score, probability, or
+weighted value is visible to the model.
+
+### Straight-Through Boundary
+
+Backward uses:
 
 ```math
-s_{i,j}^{\mathrm{sufa}}
-=
-\frac{\left\langle\phi_q(i),\phi_k(j)\right\rangle}
-{\sqrt{WD}}
+\hat s(x)=\operatorname{stopgrad}
+\left(s(x)-\frac{x}{1+|x|}\right)
++\frac{x}{1+|x|},
 ```
 
-and the output is again a soft weighted sum:
+with derivative:
 
 ```math
-y_i=\sum_j \mathrm{softmax}_j(\alpha s_{i,j}^{\mathrm{sufa}})v_j
+\frac{\partial\hat s}{\partial x}=\frac{1}{(1+|x|)^2}.
 ```
 
-This is much more GPU-friendly than soft-DP and resembles FlashAttention in
-shape. The drawback is semantic: the score is mostly additive. A strong
-mismatch at the newest position can still be compensated by other offsets, so
-the proxy does not naturally behave like hard longest-suffix matching. In our
-small hard-forward training checks, this family was easier to optimize as a
-soft model than as a hard ROSA proxy.
+Numerically `hat s(x)` is still the hard sign.
 
-What suffix attention improved over soft-DP:
+### Independent Mismatch Exploration
 
-- it removes the diagonal DP dependency;
-- it can be implemented with attention-like tiled kernels;
-- the suffix window `W` gives a clear cost/semantic knob.
-
-What still blocks it:
-
-- the score is additive across offsets;
-- a mismatch near the current token can be compensated by older offsets;
-- therefore the proxy can assign high confidence to routes that are not the
-  hard longest-suffix route.
-
-The next repair is RosaAnchor: keep the windowed suffix comparison, but replace
-the additive score with a multiplicative recurrence so early mismatches suppress
-the rest of the suffix.
-
-## 5. Current Path: RosaAnchor
-
-RosaAnchor keeps the useful parts:
-
-- hard sign bits in the route definition;
-- a finite-scale soft distribution for gradients;
-- multiplicative suffix decay, so an early mismatch suppresses the rest of the
-  suffix;
-- V gradients kept enabled;
-- one main semantic knob, `window_size`.
-
-RosaAnchor is therefore not "soft-DP plus optimizations" or "attention with a
-different score." It is the smallest form that kept the useful properties we
-needed:
-
-- from bitflip: stay aligned with hard signs and hard-route sensitivity;
-- from soft-DP: expose dense gradients over candidate routes;
-- from suffix attention: use a fixed suffix window and GPU-friendly candidate
-  parallelism;
-- new in RosaAnchor: make mismatch effects multiplicative so the hard ROSA
-  limit is recovered as scale grows.
-
-### Route Bits and Values
-
-Q/K route bits use hard signs:
+For hard mismatch bit `delta_d`, sample an independent `u_d` and use:
 
 ```math
-b(x)=\mathbf{1}[x>0]
+\alpha_d=1-\frac{u_d^3}{2}.
 ```
 
-V uses signed values in the proxy:
+The relaxed Hamming distance is:
 
 ```math
-s_v(x)=
-\begin{cases}
-+1, & x>0 \\
--1, & x\le 0
-\end{cases}
+H=\sum_d\delta_d\alpha_d.
 ```
 
-The backward path uses a fixed softsign-style straight-through derivative:
+The local numerical gate is:
 
 ```math
-\frac{\partial s_v(x)}{\partial x}
-\approx
-\frac{1}{(1+|x|)^2}
+\mu=e^{-\lambda H}.
 ```
 
-### Weighted Mismatch
+Every exact symbol match remains `1`. Every mismatching symbol is strictly
+below `1`. Non-exact candidates may reorder, which is intentional exploration;
+only the exact/non-exact boundary must remain invariant.
 
-For candidate `j` and suffix offset `l`, the hard bit mismatch is:
+A detach-based Jacobian anchor uses the local derivative scale:
 
 ```math
-\delta_{l,d}(i,j)
-=
-b(q_{i-l,d}) \oplus b(k_{j-1-l,d})
+\lambda e^{-\lambda h},
+\qquad h=\sum_d\delta_d,
 ```
 
-RosaAnchor uses magnitude only as reliability for mismatched bits. The
-confidence of a scalar is:
-
-```math
-c(x)=\tanh(|x|)
-```
-
-The per-bit mismatch weight is:
-
-```math
-w_{l,d}(i,j)
-=
-0.25 + 0.75\min(c(q_{i-l,d}),c(k_{j-1-l,d}))
-```
-
-The weighted mismatch cost is:
-
-```math
-h_l(i,j)
-=
-\sum_d w_{l,d}(i,j)\delta_{l,d}(i,j)
-```
-
-Exact sign matches still contribute no mismatch. Because the minimum mismatch
-weight is positive, any sign mismatch disappears as scale grows.
+rather than a random exponential scale based on `H`.
 
 ### Multiplicative Suffix Score
 
-The local match term is:
+For action `a`, let `mu_r` be the local gate at suffix offset `r`:
 
 ```math
-\mu_l(i,j)=\exp(-\lambda h_l(i,j))
-```
-
-The suffix score is a product recurrence:
-
-```math
-p_0(i,j)=1
+p_0=1,\qquad p_{r+1}=p_r\mu_r,
 ```
 
 ```math
-p_{l+1}(i,j)=p_l(i,j)\mu_l(i,j)
+R(i,a)=\sum_r p_{r+1}.
 ```
 
-```math
-R(i,j)=\sum_{l=0}^{L(i,j)-1}p_{l+1}(i,j)
-```
-
-where:
-
-```math
-L(i,j)=\min(W,i+1,j)
-```
-
-This is the main difference from suffix attention. In suffix attention, offsets
-mostly add evidence. In RosaAnchor, the product term means one strong mismatch
-reduces the influence of all later offsets.
-
-This fixes the core suffix-attention failure. A route can no longer hide a
-nearby mismatch by accumulating enough weak matches farther back in the window.
-That is the behavior needed to approach hard longest-suffix routing.
-
-The mismatch sharpness is tied to selector scale:
-
-```math
-\lambda=\log W+1.5\log(1+|\alpha|)
-```
-
-where `alpha` is the route scale.
+An early mismatch is present in every later product. This is the key property
+missing from additive suffix attention.
 
 ### Candidate Distribution
 
-RosaAnchor includes a null candidate with zero value contribution. This is
-similar in spirit to an attention sink: it gives the model a way to say that no
-history route is useful.
-
-The non-null candidate logit is:
+The null score is fixed at `0.5`; every valid action uses `R(i,a)`:
 
 ```math
-z(i,j)
-=
-\alpha
-\left(
-R(i,j)-0.5+\rho(i,j)
-\right)
+P(a|i)=\operatorname{softmax}_a
+\left(\frac{z(i,a)}{\text{route_temperature}}\right).
 ```
 
-The recency term is intentionally weak:
+There is no recency term or current-winner bonus in backward. Temperature
+controls how widely route credit is distributed. It does not change the hard
+forward or the maximum learnable suffix length.
 
-```math
-\rho(i,j)=0.25\frac{j}{\max(i,1)}
-```
+`mismatch_penalty` controls mismatch leakage and its anchored local Jacobian.
+It is independent of route_temperature and `max_suffix_length`. A configured window may be
+only a loose upper bound, so deriving lambda from that bound is unjustified.
 
-It only breaks near ties in favor of recent matches. It should not dominate the
-suffix score.
+### Value Credit
 
-The distribution over candidates is:
+Q/K route gradients use probabilities against detached hard V symbols. V
+gradients use detached probabilities and the softsign Jacobian. Consequently,
+non-winning actions and hard-null rows can still train V, while no weighted
+value leaks into forward.
 
-```math
-P(j|i)
-=
-\frac{\exp(z(i,j))}
-{1+\sum_{1\le r\le i}\exp(z(i,r))}
-```
+## 6. Public Controls
 
-The null candidate probability is:
+The operator intentionally exposes only:
 
-```math
-P(\varnothing|i)
-=
-\frac{1}
-{1+\sum_{1\le r\le i}\exp(z(i,r))}
-```
-
-The output is:
-
-```math
-y_i
-=
-\sum_{j=1}^{i}P(j|i)s_v(v_j)
-```
-
-As `scale` grows, the distribution becomes sharper. With a large enough window
-and a unique best route, RosaAnchor approaches hard ROSA.
-
-This fixes the soft-DP failure mode at the other end of training: the proxy can
-be soft at finite scale for gradients, but it has a clear hard limit. The model
-does not need to learn a separate behavior for inference.
-
-## 6. Scale and Telemetry
-
-`scale=None` is the recommended starting point. It uses a shape-based estimate.
-For longer training runs, use `RosaAnchorScaleController`, which periodically
-measures route confidence and adjusts scale toward a target top probability.
-The default target is `0.8`.
-
-If `p_t` is the observed top probability and `bar_p_t` is its EMA:
-
-```math
-\bar{p}_t
-=
-\beta\bar{p}_{t-1}+(1-\beta)p_t
-```
-
-the controller updates scale in logit space:
-
-```math
-\alpha
-\leftarrow
-\alpha
-\exp\left(
-  \eta
-  \left[
-    \mathrm{logit}(p_{\mathrm{target}})
-    -
-    \mathrm{logit}(\bar{p}_t)
-  \right]
-\right)
-```
-
-Telemetry is not meant for every call. The ordinary user path should look like:
-
-```python
-y = rosa_anchor_ops(q, k, v, window_size=128)
-```
-
-The controller enables telemetry only at probe steps.
-
-## 7. Parameter Guide
-
-| Parameter | Default | Recommendation |
+| Parameter | Default | Meaning |
 | --- | ---: | --- |
-| `window_size` | `32` | Main semantic knob. Increase for longer suffix behavior. CUDA backward currently supports up to `512`. |
-| `scale` | `None` | Keep `None` first. Use the controller for calibration instead of manual tuning. |
-| `return_telemetry` | `False` | Keep off in the hot path. Sample periodically for scale control. |
-| `logit_epsilon` | `0.0` | Exact within the selected window. Try `1e-3` only after validating task metrics. |
-| `qk_damper_strength` | `0.0` | No damping by default. Try `0.1..0.3` only if Q/K saturation collapses route entropy. |
+| `max_suffix_length` | `32` | Hard and proxy suffix horizon. |
+| `route_temperature` | `1.0` | Backward action-allocation route_temperature. |
+| `mismatch_penalty` | `3.0` | Backward mismatch leakage and Jacobian scale. |
 
-## 8. Validation Snapshot
+These are fixed run-level values. The operator does not schedule or infer them
+from context length, code width, training step, diagnostics, or each other.
 
-These checks focus on the operator contract: hard ROSA forward with different
-surrogate backward rules.
+Removed mechanisms include magnitude confidence, winner margins, recency
+biases, optional perturbation width, hard/soft V modes, early-stop epsilon, Q/K
+dampers, and hot-path telemetry. Each either changed the estimator, duplicated
+optimizer policy, or added state without sufficient evidence.
 
-### Hard-Limit Check
+## 7. Reference and CUDA
 
-On a random Q/K/V probe with `window_size=12`, increasing scale made RosaAnchor
-approach hard ROSA:
-
-| Scale | MAE vs hard output | Max error |
-| ---: | ---: | ---: |
-| `4` | `0.24676017` | `0.75562179` |
-| `16` | `0.02811864` | `0.15165848` |
-| `64` | `0.00000115` | `0.00005531` |
-| `256` | `0.00000000` | `0.00000000` |
-| `1024` | `0.00000000` | `0.00000000` |
-
-### Single-Sample Next-Token Fit
-
-The fitting test used a tiny repeated-motif next-token task:
+The PyTorch reference materializes candidate matrices and independent samples:
 
 ```text
-tokens -> embedding -> Q/K/V projections -> hard ROSA forward
-       -> output projection -> LM head -> cross entropy
+mismatch_uniform: [B,H,T,T-1,D]
 ```
 
-The forward path was hard ROSA for every method. Only the backward proxy
-changed.
+CUDA stores one seed and reconstructs each `u` from the index
+`(b,h,q_pos,k_pos,bit)`. A local gate keeps only `h` and `H`
+accumulators. This removes quadratic random memory while preserving exact
+sample-level parity with the reference.
 
-| Method | Train hard CE | Train hard acc |
+The current CUDA kernel still scans every causal action. Counter randomness
+solves memory state, not candidate complexity:
+
+```text
+persistent estimator state: O(B H T)
+dense candidate compute:    O(B H T^2 W D)
+```
+
+This full action support is intentional. RosaSoft's advantage is precisely
+that it trains a sparse hard route with dense proxy gradients. Pruning the
+backward candidate set according to the current hard route, a learned index,
+top-k scores, ANN/LSH retrieval, thresholds, or sampled negatives changes the
+estimator. In particular, an undiscovered route can receive no gradient,
+remain undiscovered, and create a self-reinforcing collapse.
+
+Hard `RosaRuntime` uses bounded compact suffix state for inference, and an exact
+index may optimize training forward. Neither may choose the actions included
+in the default backward pass. Long-context training optimization must preserve
+all causal actions while reducing redundant work through online softmax,
+dense tiling, exact diagonal recurrences, caching, and checkpointed
+recomputation.
+
+## 8. Validation
+
+The test suite covers hard suffix semantics, latest ties, null rows,
+static-control isolation, cubic mismatch gates, Jacobian anchoring, dense
+low-rank route discovery, exact
+diagonal-recurrence adjoints, all three CUDA execution plans, grouped heads,
+`D=32`, non-contiguous inputs, FP16/BF16, and exact counter reconstruction.
+
+With identical reconstructed samples, CUDA is bit-exact in forward and the
+recorded FP32 maximum absolute VJP error is `5.96e-8`.
+
+On the default repeated-motif fit at 1000 steps:
+
+| Method | Final hard CE | Accuracy |
 | --- | ---: | ---: |
-| bitflip perturbation | `0.000161` | `1.000` |
-| current weighted RosaAnchor CUDA | `0.000271` | `1.000` |
+| Historical bitflip | `1.61e-4` | `100%` |
+| Current PyTorch reference | `4.78e-4` | `100%` |
+| Current CUDA kernel, seed 0 | `3.83e-4` | `100%` |
+| Current CUDA kernel, seed 2 | `3.39e-4` | `100%` |
 
-Readout: the current weighted RosaAnchor path gets close to the bitflip oracle
-on this fitting problem while remaining a single CUDA training operator.
+On an RTX 3070 with FP32 `B=1,H=4,D=8,H_v=2,D_v=8,W=32`, CUDA
+forward+backward takes `1.528/6.002/20.426 ms` at `T=256/512/1024` in the
+final long-run probe. This is about 42-49% faster than the pre-pass dense
+kernel while retaining every causal candidate. Quadratic growth remains and
+does not justify reducing gradient support.
 
-## 9. Why This Is the Mainline
+## 9. Runtime Contract
 
-| Method | What it taught us | Why it is not the current public path |
-| --- | --- | --- |
-| Bitflip perturbation | Hard-forward gradients can solve small route/value tasks. | Too many hard probes for production training. |
-| Soft-DP | The closest differentiable suffix formulation. | `O(T^2)`, recurrence-heavy, and too soft under hard inference. |
-| Suffix attention | A GPU-friendly suffix fingerprint view. | Additive scores do not enforce hard longest-suffix behavior well enough. |
-| RosaAnchor | Multiplicative mismatch decay preserves the hard limit and trains efficiently. | Current mainline. |
-
-The design goal is not to make the smoothest possible soft model. The goal is
-to train parameters that will still work when inference uses hard ROSA.
-
-## 10. Runtime Contract
-
-Training uses `rosa_anchor_ops`:
+Training:
 
 ```python
-y = rosa_anchor_ops(q, k, v, window_size=128)
+y = rosa_soft(
+    q,
+    k,
+    v,
+    max_suffix_length=128,
+    route_temperature=1.0,
+    mismatch_penalty=3.0,
+)
 ```
 
-Inference uses `RosaRuntime`:
+Inference:
 
 ```python
-with RosaRuntime(num_heads, num_value_heads, qk_bits=4, value_bits=4) as rt:
+with RosaRuntime(
+    num_heads,
+    num_value_heads,
+    qk_bits=4,
+    value_bits=4,
+    max_suffix_length=128,
+) as rt:
     out, endpos = rt.update(q, k, v, return_packed=False)
 ```
 
-`RosaRuntime` stores the hard suffix state explicitly. It supports packed
-Q/K/V symbols and an optional CUDA-to-CPU staging path for overlap with GPU
-work.
+`RosaRuntime` uses the same finite suffix horizon, latest-match tie rule, and
+exact null value as the training forward. Latest end positions are propagated
+only through suffix classes reachable within that horizon, so repeated-symbol
+updates are `O(max_suffix_length)` instead of quadratic in accumulated context.
+One per-instance executor serializes state transitions, asynchronous work, and
+close. The current packed runtime stores one byte per head, so Q/K and payload
+widths are `1..8`; the training Q/K contract remains `1..32`. Packed calls
+ignore byte bits above the declared widths.
