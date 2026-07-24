@@ -1,4 +1,4 @@
-"""Time and memory probe for RosaSoft training operators."""
+"""Standalone time and memory probe for RosaSoft training operators."""
 
 from __future__ import annotations
 
@@ -16,33 +16,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import rosa_soft
-
-
-def _backward_plan(
-    seq_len: int,
-    symbol_dim: int,
-    payload_dim: int,
-    max_suffix_length: int,
-) -> str:
-    block_threads = 128
-    max_shared_words = 48 * 1024 // 4
-    suffix_length = min(seq_len, max_suffix_length)
-    common_words = 3 * block_threads + payload_dim + suffix_length
-    score_words = common_words + seq_len
-    key_words = common_words + (
-        block_threads + suffix_length - 1
-    ) * symbol_dim
-    score_fits = score_words <= max_shared_words
-    key_fits = key_words <= max_shared_words
-    if score_fits and (
-        not key_fits
-        or seq_len
-        <= (block_threads + suffix_length - 1) * symbol_dim
-    ):
-        return "ScoreCached"
-    if key_fits:
-        return "KeyReduced"
-    return "Generic"
 
 
 def _dtype(name: str) -> torch.dtype:
@@ -85,11 +58,11 @@ def benchmark(
             requires_grad=True,
         )
         key = torch.randn_like(query, requires_grad=True)
-    value = torch.randn(
+    payload = torch.randn(
         args.batch,
         seq_len,
-        args.value_heads,
-        args.value_dim,
+        args.payload_heads,
+        args.payload_dim,
         device=device,
         dtype=dtype,
         generator=generator,
@@ -99,18 +72,18 @@ def benchmark(
         args.batch,
         seq_len,
         args.heads,
-        args.value_dim,
+        args.payload_dim,
         device=device,
         dtype=dtype,
         generator=generator,
     )
 
     def train_step() -> None:
-        _clear_gradients(query, key, value)
+        _clear_gradients(query, key, payload)
         output = operator(
             query,
             key,
-            value,
+            payload,
             max_suffix_length=args.max_suffix_length,
             route_temperature=args.route_temperature,
             mismatch_penalty=args.mismatch_penalty,
@@ -122,7 +95,7 @@ def benchmark(
             operator(
                 query,
                 key,
-                value,
+                payload,
                 max_suffix_length=args.max_suffix_length,
                 route_temperature=args.route_temperature,
                 mismatch_penalty=args.mismatch_penalty,
@@ -134,7 +107,7 @@ def benchmark(
     if device.type == "cuda":
         torch.cuda.synchronize(device)
 
-    _clear_gradients(query, key, value)
+    _clear_gradients(query, key, payload)
     gc.collect()
     peak_mib = float("nan")
     if device.type == "cuda":
@@ -163,12 +136,6 @@ def benchmark(
         "sequence_length": seq_len,
         "mode": args.mode,
         "pattern": args.pattern,
-        "backward_plan": _backward_plan(
-            seq_len,
-            args.bits,
-            args.value_dim,
-            args.max_suffix_length,
-        ),
         "step_ms": step_ms,
         "peak_operator_mib": peak_mib,
     }
@@ -206,8 +173,8 @@ def main() -> None:
     parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--heads", type=int, default=4)
     parser.add_argument("--bits", type=int, default=8)
-    parser.add_argument("--value-heads", type=int, default=2)
-    parser.add_argument("--value-dim", type=int, default=8)
+    parser.add_argument("--payload-heads", type=int, default=2)
+    parser.add_argument("--payload-dim", type=int, default=8)
     parser.add_argument("--max-suffix-length", type=int, default=32)
     parser.add_argument(
         "--route-temperature",
@@ -224,8 +191,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=123)
     args = parser.parse_args()
 
-    if args.heads % args.value_heads != 0:
-        raise ValueError("--heads must be divisible by --value-heads")
+    if args.heads % args.payload_heads != 0:
+        raise ValueError("--heads must be divisible by --payload-heads")
     if args.operator in {"cuda", "both"}:
         if torch.device(args.device).type != "cuda":
             raise ValueError("CUDA operator requires --device cuda")

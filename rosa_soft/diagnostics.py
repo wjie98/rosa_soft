@@ -18,43 +18,45 @@ __all__ = ["RosaSoftDiagnostics", "summarize_rosa_soft"]
 class RosaSoftDiagnostics:
     route_temperature: float
     mismatch_penalty: float
-    rows: int
-    competitive_candidates: int
+    route_rows: int
+    competitive_route_count: int
     selected_route_probability: Tensor
     effective_route_count: Tensor
-    proxy_hard_error_mean: Tensor
-    proxy_hard_error_quantile: Tensor
-    proxy_winner_agreement: Tensor
-    nonnull_fraction: Tensor
-    longest_hard_suffix: Tensor
+    proxy_exact_length_error_mean: Tensor
+    proxy_exact_length_error_quantile: Tensor
+    proxy_hard_route_agreement: Tensor
+    hard_nonnull_route_fraction: Tensor
+    max_exact_suffix_length: Tensor
 
     def as_float_dict(self) -> Dict[str, float]:
         values = {
             "route_temperature": self.route_temperature,
             "mismatch_penalty": self.mismatch_penalty,
-            "rows": float(self.rows),
-            "competitive_candidates": float(self.competitive_candidates),
+            "route_rows": float(self.route_rows),
+            "competitive_route_count": float(
+                self.competitive_route_count
+            ),
         }
         for name in (
             "selected_route_probability",
             "effective_route_count",
-            "proxy_hard_error_mean",
-            "proxy_hard_error_quantile",
-            "proxy_winner_agreement",
-            "nonnull_fraction",
-            "longest_hard_suffix",
+            "proxy_exact_length_error_mean",
+            "proxy_exact_length_error_quantile",
+            "proxy_hard_route_agreement",
+            "hard_nonnull_route_fraction",
+            "max_exact_suffix_length",
         ):
             value = getattr(self, name)
             values[name] = float(value.detach().float().cpu())
         return values
 
 
-def _competitive_mask(
+def _competitive_route_mask(
     inspection: RosaSoftInspection,
     top_k: int,
 ) -> Tensor:
     seq_len = inspection.proxy_scores.size(-1)
-    action = torch.arange(
+    route_index = torch.arange(
         seq_len,
         device=inspection.proxy_scores.device,
     ).view(
@@ -63,13 +65,16 @@ def _competitive_mask(
         1,
         seq_len,
     )
-    valid = inspection.valid_actions.view(1, 1, seq_len, seq_len) & (
-        action > 0
+    valid = inspection.valid_routes.view(1, 1, seq_len, seq_len) & (
+        route_index > 0
     )
     valid = valid.expand_as(inspection.proxy_scores)
     selected = torch.zeros_like(valid)
     count = min(int(top_k), max(seq_len - 1, 1))
-    for scores in (inspection.hard_lengths, inspection.proxy_scores):
+    for scores in (
+        inspection.exact_suffix_lengths,
+        inspection.proxy_scores,
+    ):
         indices = scores.masked_fill(~valid, -torch.inf).topk(count, dim=-1).indices
         selected.scatter_(-1, indices, True)
     return selected & valid
@@ -86,9 +91,9 @@ def summarize_rosa_soft(
     if not 0.0 <= float(quantile) <= 1.0:
         raise ValueError("quantile must be in [0, 1]")
 
-    competitive = _competitive_mask(inspection, int(top_k))
+    competitive = _competitive_route_mask(inspection, int(top_k))
     errors = (
-        inspection.proxy_scores - inspection.hard_lengths
+        inspection.proxy_scores - inspection.exact_suffix_lengths
     ).abs().masked_select(competitive)
     if errors.numel() == 0:
         error_mean = torch.full(
@@ -106,7 +111,7 @@ def summarize_rosa_soft(
     selected_route_probability = torch.gather(
         inspection.route_probabilities,
         -1,
-        inspection.selected_actions.unsqueeze(-1),
+        inspection.selected_routes.unsqueeze(-1),
     ).mean()
     effective_route_count = (
         inspection.route_probabilities.square()
@@ -114,31 +119,34 @@ def summarize_rosa_soft(
         .reciprocal()
         .mean()
     )
-    best_proxy_score = inspection.route_scores.amax(
+    route_scores = inspection.route_scores
+    best_proxy_score = route_scores.amax(
         dim=-1,
         keepdim=True,
     )
-    action = torch.arange(
-        inspection.route_scores.size(-1),
-        device=inspection.route_scores.device,
+    route_index = torch.arange(
+        route_scores.size(-1),
+        device=route_scores.device,
     )
     proxy_winner = torch.where(
-        inspection.route_scores == best_proxy_score,
-        action,
+        route_scores == best_proxy_score,
+        route_index,
         0,
     ).amax(dim=-1)
     return RosaSoftDiagnostics(
         route_temperature=inspection.route_temperature,
         mismatch_penalty=inspection.mismatch_penalty,
-        rows=inspection.selected_actions.numel(),
-        competitive_candidates=int(competitive.sum().item()),
+        route_rows=inspection.selected_routes.numel(),
+        competitive_route_count=int(competitive.sum().item()),
         selected_route_probability=selected_route_probability,
         effective_route_count=effective_route_count,
-        proxy_hard_error_mean=error_mean,
-        proxy_hard_error_quantile=error_quantile,
-        proxy_winner_agreement=(
-            proxy_winner == inspection.selected_actions
+        proxy_exact_length_error_mean=error_mean,
+        proxy_exact_length_error_quantile=error_quantile,
+        proxy_hard_route_agreement=(
+            proxy_winner == inspection.selected_routes
         ).float().mean(),
-        nonnull_fraction=(inspection.selected_actions != 0).float().mean(),
-        longest_hard_suffix=inspection.hard_lengths.max(),
+        hard_nonnull_route_fraction=(
+            inspection.selected_routes != 0
+        ).float().mean(),
+        max_exact_suffix_length=inspection.exact_suffix_lengths.max(),
     )

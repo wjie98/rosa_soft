@@ -36,27 +36,27 @@ def test_diagnostics_summarize_detached_inspection():
 
     assert diagnostics.route_temperature == 1.25
     assert diagnostics.mismatch_penalty == 4.5
-    assert diagnostics.rows == 24
-    assert diagnostics.competitive_candidates > 0
-    assert diagnostics.nonnull_fraction == torch.tensor(5 / 6)
-    assert diagnostics.longest_hard_suffix == torch.tensor(3.0)
-    assert diagnostics.proxy_hard_error_mean == 0
-    assert diagnostics.proxy_hard_error_quantile == 0
+    assert diagnostics.route_rows == 24
+    assert diagnostics.competitive_route_count > 0
+    assert diagnostics.hard_nonnull_route_fraction == torch.tensor(5 / 6)
+    assert diagnostics.max_exact_suffix_length == torch.tensor(3.0)
+    assert diagnostics.proxy_exact_length_error_mean == 0
+    assert diagnostics.proxy_exact_length_error_quantile == 0
     assert 0 < diagnostics.selected_route_probability <= 1
     assert diagnostics.effective_route_count >= 1
-    assert diagnostics.proxy_winner_agreement == 1
+    assert diagnostics.proxy_hard_route_agreement == 1
     assert set(values) == {
         "route_temperature",
         "mismatch_penalty",
-        "rows",
-        "competitive_candidates",
+        "route_rows",
+        "competitive_route_count",
         "selected_route_probability",
         "effective_route_count",
-        "proxy_hard_error_mean",
-        "proxy_hard_error_quantile",
-        "proxy_winner_agreement",
-        "nonnull_fraction",
-        "longest_hard_suffix",
+        "proxy_exact_length_error_mean",
+        "proxy_exact_length_error_quantile",
+        "proxy_hard_route_agreement",
+        "hard_nonnull_route_fraction",
+        "max_exact_suffix_length",
     }
     assert all(isinstance(value, float) for value in values.values())
 
@@ -76,9 +76,9 @@ def test_diagnostics_report_approximation_error_for_mismatches():
 
     diagnostics = summarize_rosa_soft(inspection, top_k=8)
 
-    assert diagnostics.competitive_candidates > 0
-    assert diagnostics.proxy_hard_error_mean > 0
-    assert diagnostics.proxy_hard_error_quantile >= diagnostics.proxy_hard_error_mean
+    assert diagnostics.competitive_route_count > 0
+    assert diagnostics.proxy_exact_length_error_mean > 0
+    assert diagnostics.proxy_exact_length_error_quantile >= diagnostics.proxy_exact_length_error_mean
     assert torch.isfinite(diagnostics.selected_route_probability)
     assert torch.isfinite(diagnostics.effective_route_count)
 
@@ -89,13 +89,13 @@ def test_singleton_has_no_competitive_nonnull_candidates():
 
     diagnostics = summarize_rosa_soft(inspection)
 
-    assert diagnostics.rows == 1
-    assert diagnostics.competitive_candidates == 0
-    assert math.isnan(float(diagnostics.proxy_hard_error_mean))
-    assert math.isnan(float(diagnostics.proxy_hard_error_quantile))
+    assert diagnostics.route_rows == 1
+    assert diagnostics.competitive_route_count == 0
+    assert math.isnan(float(diagnostics.proxy_exact_length_error_mean))
+    assert math.isnan(float(diagnostics.proxy_exact_length_error_quantile))
     assert diagnostics.selected_route_probability == 1
     assert diagnostics.effective_route_count == 1
-    assert diagnostics.nonnull_fraction == 0
+    assert diagnostics.hard_nonnull_route_fraction == 0
 
 
 def test_diagnostics_preserve_static_defaults():

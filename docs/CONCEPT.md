@@ -8,7 +8,7 @@ The short version:
 - `RosaRuntime` is the stateful hard suffix-automaton inference path.
 - `rosa_soft` is the dense CUDA training operator.
 - `rosa_soft_reference` is its PyTorch semantic oracle.
-- Training and inference observe the same hard Q/K/V route output.
+- Training and inference observe the same hard Q/K/payload route output.
 - Softness exists only in the custom backward estimator.
 
 ## Design Ladder
@@ -110,20 +110,20 @@ therefore structurally different even before hard inference is considered.
 
 RosaSoft keeps:
 
-- hard Q/K/V signs in forward;
-- exact longest-suffix selection with latest-action ties;
+- hard Q/K/payload signs in forward;
+- exact longest-suffix selection with latest-route ties;
 - a finite suffix window for the dense training oracle;
 - dense candidate credit only in backward;
 - multiplicative local gates so an early mismatch suppresses later offsets;
 - stochastic exploration that cannot alter the hard forward;
-- soft distributed V gradients.
+- distributed soft payload gradients.
 
 ### Hard Forward
 
-For row `i`, action `a` compares `q_i` to `k_{a-1}` and continues backward
-until the first unequal complete symbol or `max_suffix_length`. The action with the
-longest exact suffix wins; latest action resolves equal lengths. If every
-candidate mismatches immediately, the null action returns exact zero.
+For row `i`, route `a` compares `q_i` to `k_{a-1}` and continues backward
+until the first unequal complete symbol or `max_suffix_length`. The route with
+the longest exact suffix wins; the latest route resolves equal lengths. If
+every route mismatches immediately, the null route returns exact zero.
 
 The returned value is one hard signed `V[a]`. No soft score, probability, or
 weighted value is visible to the model.
@@ -170,7 +170,7 @@ Every exact symbol match remains `1`. Every mismatching symbol is strictly
 below `1`. Non-exact candidates may reorder, which is intentional exploration;
 only the exact/non-exact boundary must remain invariant.
 
-A detach-based Jacobian anchor uses the local derivative scale:
+A detach construction makes the local VJP follow hard Hamming distance:
 
 ```math
 \lambda e^{-\lambda h},
@@ -181,7 +181,7 @@ rather than a random exponential scale based on `H`.
 
 ### Multiplicative Suffix Score
 
-For action `a`, let `mu_r` be the local gate at suffix offset `r`:
+For route `a`, let `mu_r` be the local gate at suffix offset `r`:
 
 ```math
 p_0=1,\qquad p_{r+1}=p_r\mu_r,
@@ -196,7 +196,7 @@ missing from additive suffix attention.
 
 ### Candidate Distribution
 
-The null score is fixed at `0.5`; every valid action uses `R(i,a)`:
+The null score is fixed at `0.5`; every valid route uses `R(i,a)`:
 
 ```math
 P(a|i)=\operatorname{softmax}_a
@@ -205,17 +205,21 @@ P(a|i)=\operatorname{softmax}_a
 
 There is no recency term or current-winner bonus in backward. Temperature
 controls how widely route credit is distributed. It does not change the hard
-forward or the maximum learnable suffix length.
+forward or the maximum learnable suffix length. At finite mismatch penalty,
+the proxy winner can differ from the hard latest-longest route, so taking the
+temperature toward zero only selects the proxy winner.
 
-`mismatch_penalty` controls mismatch leakage and its anchored local Jacobian.
+`mismatch_penalty` controls mismatch leakage and its hard-Hamming local VJP.
 It is independent of route_temperature and `max_suffix_length`. A configured window may be
-only a loose upper bound, so deriving lambda from that bound is unjustified.
+only a loose upper bound, so deriving the mismatch penalty from that bound is
+unjustified.
 
-### Value Credit
+### Payload Credit
 
-Q/K route gradients use probabilities against detached hard V symbols. V
+Q/K route gradients use probabilities against detached hard payload symbols.
+Payload
 gradients use detached probabilities and the softsign Jacobian. Consequently,
-non-winning actions and hard-null rows can still train V, while no weighted
+non-winning routes and hard-null rows can still train V, while no weighted
 value leaks into forward.
 
 ## 6. Public Controls
@@ -225,14 +229,15 @@ The operator intentionally exposes only:
 | Parameter | Default | Meaning |
 | --- | ---: | --- |
 | `max_suffix_length` | `32` | Hard and proxy suffix horizon. |
-| `route_temperature` | `1.0` | Backward action-allocation route_temperature. |
+| `route_temperature` | `1.0` | Backward route-allocation temperature. |
 | `mismatch_penalty` | `3.0` | Backward mismatch leakage and Jacobian scale. |
 
 These are fixed run-level values. The operator does not schedule or infer them
 from context length, code width, training step, diagnostics, or each other.
 
 Removed mechanisms include magnitude confidence, winner margins, recency
-biases, optional perturbation width, hard/soft V modes, early-stop epsilon, Q/K
+biases, optional perturbation width, hard/soft payload modes, early-stop
+epsilon, Q/K
 dampers, and hot-path telemetry. Each either changed the estimator, duplicated
 optimizer policy, or added state without sufficient evidence.
 
@@ -249,7 +254,7 @@ CUDA stores one seed and reconstructs each `u` from the index
 accumulators. This removes quadratic random memory while preserving exact
 sample-level parity with the reference.
 
-The current CUDA kernel still scans every causal action. Counter randomness
+The current CUDA kernel still scans every causal route. Counter randomness
 solves memory state, not candidate complexity:
 
 ```text
@@ -257,7 +262,7 @@ persistent estimator state: O(B H T)
 dense candidate compute:    O(B H T^2 W D)
 ```
 
-This full action support is intentional. RosaSoft's advantage is precisely
+This full route support is intentional. RosaSoft's advantage is precisely
 that it trains a sparse hard route with dense proxy gradients. Pruning the
 backward candidate set according to the current hard route, a learned index,
 top-k scores, ANN/LSH retrieval, thresholds, or sampled negatives changes the
@@ -265,47 +270,33 @@ estimator. In particular, an undiscovered route can receive no gradient,
 remain undiscovered, and create a self-reinforcing collapse.
 
 Hard `RosaRuntime` uses bounded compact suffix state for inference, and an exact
-index may optimize training forward. Neither may choose the actions included
+index may optimize training forward. Neither may choose the routes included
 in the default backward pass. Long-context training optimization must preserve
-all causal actions while reducing redundant work through online softmax,
+all causal routes while reducing redundant work through online softmax,
 dense tiling, exact diagonal recurrences, caching, and checkpointed
 recomputation.
 
 ## 8. Validation
 
 The test suite covers hard suffix semantics, latest ties, null rows,
-static-control isolation, cubic mismatch gates, Jacobian anchoring, dense
+static-control isolation, cubic mismatch gates, hard-Hamming local VJPs, dense
 low-rank route discovery, exact
 diagonal-recurrence adjoints, all three CUDA execution plans, grouped heads,
 `D=32`, non-contiguous inputs, FP16/BF16, and exact counter reconstruction.
 
-With identical reconstructed samples, CUDA is bit-exact in forward and the
-recorded FP32 maximum absolute VJP error is `5.96e-8`.
-
-On the default repeated-motif fit at 1000 steps:
-
-| Method | Final hard CE | Accuracy |
-| --- | ---: | ---: |
-| Historical bitflip | `1.61e-4` | `100%` |
-| Current PyTorch reference | `4.78e-4` | `100%` |
-| Current CUDA kernel, seed 0 | `3.83e-4` | `100%` |
-| Current CUDA kernel, seed 2 | `3.39e-4` | `100%` |
-
-On an RTX 3070 with FP32 `B=1,H=4,D=8,H_v=2,D_v=8,W=32`, CUDA
-forward+backward takes `1.528/6.002/20.426 ms` at `T=256/512/1024` in the
-final long-run probe. This is about 42-49% faster than the pre-pass dense
-kernel while retaining every causal candidate. Quadratic growth remains and
-does not justify reducing gradient support.
+Current reproduced tests, fitting gates, and benchmark metadata are recorded
+in `validation/latest.json`. Historical estimator comparisons remain under
+`docs/research/` and are not part of the production test count.
 
 ## 9. Runtime Contract
 
 Training:
 
 ```python
-y = rosa_soft(
-    q,
-    k,
-    v,
+output = rosa_soft(
+    query_logits,
+    key_logits,
+    payload_logits,
     max_suffix_length=128,
     route_temperature=1.0,
     mismatch_penalty=3.0,
@@ -317,12 +308,17 @@ Inference:
 ```python
 with RosaRuntime(
     num_heads,
-    num_value_heads,
+    num_payload_heads,
     qk_bits=4,
-    value_bits=4,
+    payload_bits=4,
     max_suffix_length=128,
 ) as rt:
-    out, endpos = rt.update(q, k, v, return_packed=False)
+    output, end_positions = rt.update(
+        query,
+        key,
+        payload,
+        return_packed=False,
+    )
 ```
 
 `RosaRuntime` uses the same finite suffix horizon, latest-match tie rule, and

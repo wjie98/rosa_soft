@@ -659,6 +659,52 @@ def test_grouped_payload_history_is_stored_once_per_payload_head():
     assert detailed["automata"] == batch * heads
 
 
+def test_long_chunked_history_preserves_global_successor_positions():
+    chunk_tokens = 16_384
+    heads = 2
+    query = torch.zeros(1, chunk_tokens, heads, dtype=torch.uint8)
+    key = torch.zeros_like(query)
+    payload = (
+        torch.arange(chunk_tokens * 2, dtype=torch.int64)
+        .remainder(2)
+        .to(torch.uint8)
+        .view(1, chunk_tokens * 2, 1)
+    )
+
+    with rosa_soft.RosaRuntime(
+        heads,
+        1,
+        qk_bits=1,
+        payload_bits=1,
+        max_suffix_length=32,
+    ) as runtime:
+        first = runtime.update_packed(
+            query,
+            key,
+            payload[:, :chunk_tokens],
+        )
+        second = runtime.update_packed(
+            query,
+            key,
+            payload[:, chunk_tokens:],
+        )
+        stats = runtime.memory_stats()
+
+    output = torch.cat((first[0], second[0]), dim=1)
+    end_positions = torch.cat((first[1], second[1]), dim=1)
+    expected_output = payload.expand(-1, -1, heads).clone()
+    expected_output[:, 0] = 0
+    expected_end_positions = (
+        torch.arange(chunk_tokens * 2, dtype=torch.int64) - 1
+    ).view(1, -1, 1).expand(-1, -1, heads)
+
+    assert torch.equal(output, expected_output)
+    assert torch.equal(end_positions, expected_end_positions)
+    assert stats["payload_symbols"] == chunk_tokens * 2
+    assert stats["sequences"] == 1
+    assert stats["automata"] == heads
+
+
 def test_sequence_ids_enforce_fixed_slot_semantics():
     packed = torch.zeros(2, 3, 1, dtype=torch.uint8)
     with rosa_soft.RosaRuntime(1, 1, 1, 1, 2) as runtime:

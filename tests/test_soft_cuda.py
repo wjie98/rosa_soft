@@ -7,7 +7,7 @@ import torch
 import rosa_soft
 from rosa_soft import rosa_soft_reference
 from rosa_soft.testing import (
-    rosa_soft_reference_with_noise,
+    rosa_soft_reference_with_uniforms,
     rosa_soft_with_seed,
 )
 
@@ -64,27 +64,27 @@ def _seed_tensor(seed):
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 @pytest.mark.parametrize(
-    ("shape", "value_heads", "max_suffix_length"),
+    ("shape", "payload_heads", "max_suffix_length"),
     [
         ((2, 9, 4, 5), 2, 1),
         ((1, 17, 2, 32), 1, 7),
         ((1, 137, 1, 3), 1, 200),
     ],
 )
-def test_cuda_hard_forward_matches_reference(dtype, shape, value_heads, max_suffix_length):
+def test_cuda_hard_forward_matches_reference(dtype, shape, payload_heads, max_suffix_length):
     if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
         pytest.skip("bfloat16 is unavailable on this GPU")
     batch, seq_len, heads, _ = shape
     query = _nonzero_randn(shape, dtype=dtype, seed=1)
     key = _nonzero_randn(shape, dtype=dtype, seed=2)
-    value = _nonzero_randn(
-        (batch, seq_len, value_heads, 3),
+    payload = _nonzero_randn(
+        (batch, seq_len, payload_heads, 3),
         dtype=dtype,
         seed=3,
     )
 
-    expected = rosa_soft_reference(query, key, value, max_suffix_length=max_suffix_length)
-    actual = rosa_soft.rosa_soft(query, key, value, max_suffix_length=max_suffix_length)
+    expected = rosa_soft_reference(query, key, payload, max_suffix_length=max_suffix_length)
+    actual = rosa_soft.rosa_soft(query, key, payload, max_suffix_length=max_suffix_length)
 
     assert torch.equal(actual, expected)
     assert set(actual.float().unique().tolist()) <= {-1.0, 0.0, 1.0}
@@ -95,7 +95,7 @@ def test_cuda_counter_rng_matches_reference_forward_and_vjp():
     shape = (1, 7, 2, 4)
     query = _nonzero_randn(shape, seed=10)
     key = _nonzero_randn(shape, seed=11)
-    value = _nonzero_randn((1, 7, 1, 3), seed=12)
+    payload = _nonzero_randn((1, 7, 1, 3), seed=12)
     seed = 987654321
     uniform = _counter_uniform(query, seed)
     grad_output = torch.randn(
@@ -107,9 +107,9 @@ def test_cuda_counter_rng_matches_reference_forward_and_vjp():
         generator=torch.Generator(device="cuda").manual_seed(13),
     )
 
-    reference_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, value))
-    cuda_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, value))
-    reference = rosa_soft_reference_with_noise(
+    reference_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, payload))
+    cuda_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, payload))
+    reference = rosa_soft_reference_with_uniforms(
         *reference_inputs,
         uniform,
         5,
@@ -153,7 +153,7 @@ def test_cuda_nonfinite_logits_match_exact_reference_vjp():
         ]],
         device="cuda",
     )
-    value = torch.tensor(
+    payload = torch.tensor(
         [[
             [[float("inf"), -1.0]],
             [[-float("inf"), 0.2]],
@@ -166,14 +166,14 @@ def test_cuda_nonfinite_logits_match_exact_reference_vjp():
     grad_output = _nonzero_randn((1, 3, 1, 2), seed=1235)
     reference_inputs = tuple(
         tensor.clone().requires_grad_()
-        for tensor in (query, key, value)
+        for tensor in (query, key, payload)
     )
     cuda_inputs = tuple(
         tensor.clone().requires_grad_()
-        for tensor in (query, key, value)
+        for tensor in (query, key, payload)
     )
 
-    reference = rosa_soft_reference_with_noise(
+    reference = rosa_soft_reference_with_uniforms(
         *reference_inputs,
         uniform,
         3,
@@ -216,8 +216,8 @@ def test_cuda_nonfinite_logits_match_exact_reference_vjp():
 @pytest.mark.parametrize(
     ("seq_len", "bits"),
     [
-        (257, 8),  # Multi-tile ScoreCached.
-        (640, 1),  # Multi-tile KeyReduced.
+        (257, 8),  # Multi-tile CacheRouteScores.
+        (640, 1),  # Multi-tile ReduceKeyGradInShared.
         (1152, 1),
     ],
 )
@@ -225,7 +225,7 @@ def test_cuda_vjp_parity_across_optimized_backward_plans(seq_len, bits):
 
     query = _nonzero_randn((1, seq_len, 1, bits), seed=seq_len)
     key = _nonzero_randn((1, seq_len, 1, bits), seed=seq_len + 1)
-    value = _nonzero_randn((1, seq_len, 1, 1), seed=seq_len + 2)
+    payload = _nonzero_randn((1, seq_len, 1, 1), seed=seq_len + 2)
     grad_output = _nonzero_randn(
         (1, seq_len, 1, 1),
         seed=seq_len + 3,
@@ -233,13 +233,13 @@ def test_cuda_vjp_parity_across_optimized_backward_plans(seq_len, bits):
     seed = 9000 + seq_len
     uniform = _counter_uniform(query, seed)
     reference_inputs = tuple(
-        x.detach().clone().requires_grad_() for x in (query, key, value)
+        x.detach().clone().requires_grad_() for x in (query, key, payload)
     )
     cuda_inputs = tuple(
-        x.detach().clone().requires_grad_() for x in (query, key, value)
+        x.detach().clone().requires_grad_() for x in (query, key, payload)
     )
 
-    reference = rosa_soft_reference_with_noise(
+    reference = rosa_soft_reference_with_uniforms(
         *reference_inputs,
         uniform,
         8,
@@ -278,18 +278,18 @@ def test_cuda_generic_backward_plan_matches_reference():
 
     query = _nonzero_randn((1, 4, 1, 2), seed=120)
     key = _nonzero_randn((1, 4, 1, 2), seed=121)
-    value = _nonzero_randn((1, 4, 1, 12000), seed=122)
+    payload = _nonzero_randn((1, 4, 1, 12000), seed=122)
     grad_output = _nonzero_randn((1, 4, 1, 12000), seed=123)
     seed = 654321
     uniform = _counter_uniform(query, seed)
     reference_inputs = tuple(
-        x.detach().clone().requires_grad_() for x in (query, key, value)
+        x.detach().clone().requires_grad_() for x in (query, key, payload)
     )
     cuda_inputs = tuple(
-        x.detach().clone().requires_grad_() for x in (query, key, value)
+        x.detach().clone().requires_grad_() for x in (query, key, payload)
     )
 
-    reference = rosa_soft_reference_with_noise(
+    reference = rosa_soft_reference_with_uniforms(
         *reference_inputs,
         uniform,
         2,
@@ -337,14 +337,14 @@ def test_cuda_low_precision_vjp_matches_float32_oracle(dtype, rtol, atol):
 
     query = _nonzero_randn((1, 7, 2, 5), dtype=dtype, seed=14)
     key = _nonzero_randn((1, 7, 2, 5), dtype=dtype, seed=15)
-    value = _nonzero_randn((1, 7, 1, 3), dtype=dtype, seed=16)
+    payload = _nonzero_randn((1, 7, 1, 3), dtype=dtype, seed=16)
     grad_output = _nonzero_randn((1, 7, 2, 3), dtype=dtype, seed=17)
     seed = 998877
     uniform = _counter_uniform(query, seed)
-    reference_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, value))
-    cuda_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, value))
+    reference_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, payload))
+    cuda_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, payload))
 
-    reference = rosa_soft_reference_with_noise(
+    reference = rosa_soft_reference_with_uniforms(
         *reference_inputs,
         uniform,
         5,
@@ -367,29 +367,29 @@ def test_cuda_low_precision_vjp_matches_float32_oracle(dtype, rtol, atol):
 
 
 @pytest.mark.parametrize(
-    ("heads", "value_heads", "bits", "value_dim"),
+    ("heads", "payload_heads", "bits", "payload_dim"),
     [(1, 1, 1, 1), (4, 2, 7, 5), (6, 3, 32, 3)],
 )
 def test_cuda_counter_vjp_parity_for_grouped_heads(
     heads,
-    value_heads,
+    payload_heads,
     bits,
-    value_dim,
+    payload_dim,
 ):
 
     query = _nonzero_randn((1, 6, heads, bits), seed=20 + heads)
     key = _nonzero_randn((1, 6, heads, bits), seed=30 + heads)
-    value = _nonzero_randn((1, 6, value_heads, value_dim), seed=40 + heads)
+    payload = _nonzero_randn((1, 6, payload_heads, payload_dim), seed=40 + heads)
     seed = 1234567 + bits
     uniform = _counter_uniform(query, seed)
     grad_output = _nonzero_randn(
-        (1, 6, heads, value_dim),
+        (1, 6, heads, payload_dim),
         seed=50 + heads,
     )
 
-    reference_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, value))
-    cuda_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, value))
-    reference = rosa_soft_reference_with_noise(
+    reference_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, payload))
+    cuda_inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, payload))
+    reference = rosa_soft_reference_with_uniforms(
         *reference_inputs,
         uniform,
         4,
@@ -415,11 +415,11 @@ def test_soft_parameters_and_seed_change_only_backward():
 
     query = _nonzero_randn((1, 10, 2, 5), seed=60)
     key = _nonzero_randn((1, 10, 2, 5), seed=61)
-    value = _nonzero_randn((1, 10, 1, 3), seed=62)
+    payload = _nonzero_randn((1, 10, 1, 3), seed=62)
     grad_output = _nonzero_randn((1, 10, 2, 3), seed=63)
 
     def run(seed, route_temperature, mismatch_penalty):
-        inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, value))
+        inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, payload))
         output = rosa_soft_with_seed(
             *inputs,
             6,
@@ -432,28 +432,28 @@ def test_soft_parameters_and_seed_change_only_backward():
 
     baseline_output, baseline_grads = run(700, 2.0, 3.0)
     cold_output, cold_grads = run(700, 0.7, 3.0)
-    high_lambda_output, high_lambda_grads = run(700, 2.0, 7.0)
+    high_penalty_output, high_penalty_grads = run(700, 2.0, 7.0)
     other_seed_output, other_seed_grads = run(701, 2.0, 3.0)
 
-    for output in (cold_output, high_lambda_output, other_seed_output):
+    for output in (cold_output, high_penalty_output, other_seed_output):
         assert torch.equal(output, baseline_output)
-    for gradients in (cold_grads, high_lambda_grads, other_seed_grads):
+    for gradients in (cold_grads, high_penalty_grads, other_seed_grads):
         assert any(
             not torch.allclose(actual, baseline)
             for actual, baseline in zip(gradients, baseline_grads)
         )
 
 
-def test_dense_backward_gives_value_credit_to_every_causal_action():
+def test_dense_backward_gives_payload_credit_to_every_causal_route():
 
     seq_len = 64
     query = _nonzero_randn((1, seq_len, 1, 4), seed=64).requires_grad_()
     key = _nonzero_randn((1, seq_len, 1, 4), seed=65).requires_grad_()
-    value = _nonzero_randn((1, seq_len, 1, 1), seed=66).requires_grad_()
+    payload = _nonzero_randn((1, seq_len, 1, 1), seed=66).requires_grad_()
     output = rosa_soft_with_seed(
         query,
         key,
-        value,
+        payload,
         8,
         2.0,
         3.0,
@@ -462,10 +462,10 @@ def test_dense_backward_gives_value_credit_to_every_causal_action():
     grad_output = torch.zeros_like(output)
     grad_output[:, -1] = 1
 
-    grad_value = torch.autograd.grad(output, value, grad_output)[0]
+    grad_payload = torch.autograd.grad(output, payload, grad_output)[0]
 
-    assert grad_value[:, 0].count_nonzero() == 0
-    assert torch.all(grad_value[:, 1:] > 0)
+    assert grad_payload[:, 0].count_nonzero() == 0
+    assert torch.all(grad_payload[:, 1:] > 0)
 
 
 @pytest.mark.parametrize("seed", range(8))
@@ -481,12 +481,12 @@ def test_dense_backward_discovers_a_low_rank_useful_route(seed):
         query[0, -1, 0, 0] = route_logit
         key = -torch.ones_like(query)
         key[:, 0] = 1
-        value = -torch.ones_like(query)
-        value[:, 1] = 1
+        payload = -torch.ones_like(query)
+        payload[:, 1] = 1
         output = rosa_soft.rosa_soft(
             query,
             key,
-            value,
+            payload,
             max_suffix_length=1,
             route_temperature=2.0,
             mismatch_penalty=3.0,
@@ -505,7 +505,7 @@ def test_dense_backward_discovers_a_low_rank_useful_route(seed):
         final_output = rosa_soft.rosa_soft(
             query,
             key,
-            value,
+            payload,
             max_suffix_length=1,
         )
     assert final_output[0, -1, 0, 0] == 1
@@ -514,11 +514,11 @@ def test_dense_backward_discovers_a_low_rank_useful_route(seed):
 def test_public_rng_is_numerically_reproducible_and_inference_consumes_no_rng():
     query = _nonzero_randn((1, 8, 2, 4), seed=70)
     key = _nonzero_randn((1, 8, 2, 4), seed=71)
-    value = _nonzero_randn((1, 8, 1, 3), seed=72)
+    payload = _nonzero_randn((1, 8, 1, 3), seed=72)
     grad_output = _nonzero_randn((1, 8, 2, 3), seed=73)
 
     def run():
-        inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, value))
+        inputs = tuple(x.detach().clone().requires_grad_() for x in (query, key, payload))
         torch.cuda.manual_seed(900)
         output = rosa_soft.rosa_soft(*inputs, max_suffix_length=5)
         return output.detach(), torch.autograd.grad(output, inputs, grad_output)
@@ -531,20 +531,20 @@ def test_public_rng_is_numerically_reproducible_and_inference_consumes_no_rng():
 
     rng_before = torch.cuda.get_rng_state()
     with torch.no_grad():
-        rosa_soft.rosa_soft(query, key, value, max_suffix_length=5)
+        rosa_soft.rosa_soft(query, key, payload, max_suffix_length=5)
     assert torch.equal(rng_before, torch.cuda.get_rng_state())
 
 
 def test_cuda_accepts_noncontiguous_inputs_and_returns_finite_gradients():
     query = _nonzero_randn((2, 3, 9, 4), seed=80).transpose(1, 2).requires_grad_()
     key = _nonzero_randn((2, 3, 9, 4), seed=81).transpose(1, 2).requires_grad_()
-    value = _nonzero_randn((2, 1, 9, 5), seed=82).transpose(1, 2).requires_grad_()
+    payload = _nonzero_randn((2, 1, 9, 5), seed=82).transpose(1, 2).requires_grad_()
 
-    output = rosa_soft.rosa_soft(query, key, value, max_suffix_length=7)
+    output = rosa_soft.rosa_soft(query, key, payload, max_suffix_length=7)
     output.backward(torch.randn_like(output))
 
     assert output.shape == (2, 9, 3, 5)
-    for tensor in (query, key, value):
+    for tensor in (query, key, payload):
         assert tensor.grad is not None
         assert torch.isfinite(tensor.grad).all()
 
@@ -552,12 +552,12 @@ def test_cuda_accepts_noncontiguous_inputs_and_returns_finite_gradients():
 def test_cuda_singleton_sequence_is_exact_null_with_finite_backward():
     query = torch.ones(2, 1, 2, 3, device="cuda", requires_grad=True)
     key = torch.ones_like(query, requires_grad=True)
-    value = torch.ones(2, 1, 1, 4, device="cuda", requires_grad=True)
+    payload = torch.ones(2, 1, 1, 4, device="cuda", requires_grad=True)
 
-    output = rosa_soft.rosa_soft(query, key, value)
+    output = rosa_soft.rosa_soft(query, key, payload)
     assert torch.equal(output, torch.zeros_like(output))
     output.sum().backward()
-    for tensor in (query, key, value):
+    for tensor in (query, key, payload):
         assert tensor.grad is not None
         assert torch.isfinite(tensor.grad).all()
 
@@ -565,16 +565,16 @@ def test_cuda_singleton_sequence_is_exact_null_with_finite_backward():
 def test_cuda_normalizes_large_window_and_rejects_nonintegral_window():
     query = _nonzero_randn((1, 7, 1, 3), seed=90)
     key = _nonzero_randn((1, 7, 1, 3), seed=91)
-    value = _nonzero_randn((1, 7, 1, 2), seed=92)
+    payload = _nonzero_randn((1, 7, 1, 2), seed=92)
 
-    full = rosa_soft.rosa_soft(query, key, value, max_suffix_length=7)
-    large = rosa_soft.rosa_soft(query, key, value, max_suffix_length=10**9)
+    full = rosa_soft.rosa_soft(query, key, payload, max_suffix_length=7)
+    large = rosa_soft.rosa_soft(query, key, payload, max_suffix_length=10**9)
     assert torch.equal(full, large)
-    raw_full = torch.ops.rosa_soft.soft_forward(query, key, value, 7)
+    raw_full = torch.ops.rosa_soft.soft_forward(query, key, payload, 7)
     raw_huge = torch.ops.rosa_soft.soft_forward(
         query,
         key,
-        value,
+        payload,
         10**18,
     )
     assert all(
@@ -583,7 +583,7 @@ def test_cuda_normalizes_large_window_and_rejects_nonintegral_window():
     )
     for invalid in (True, 1.5):
         with pytest.raises(TypeError, match="integer"):
-            rosa_soft.rosa_soft(query, key, value, max_suffix_length=invalid)
+            rosa_soft.rosa_soft(query, key, payload, max_suffix_length=invalid)
 
 
 @pytest.mark.parametrize(
@@ -646,12 +646,12 @@ def test_raw_cuda_backward_rejects_unrepresentable_soft_parameters():
 def test_cuda_backward_is_explicitly_once_differentiable():
     query = _nonzero_randn((1, 6, 1, 3), seed=130).requires_grad_()
     key = _nonzero_randn((1, 6, 1, 3), seed=131).requires_grad_()
-    value = _nonzero_randn((1, 6, 1, 2), seed=132).requires_grad_()
+    payload = _nonzero_randn((1, 6, 1, 2), seed=132).requires_grad_()
 
-    output = rosa_soft.rosa_soft(query, key, value, max_suffix_length=4)
+    output = rosa_soft.rosa_soft(query, key, payload, max_suffix_length=4)
     gradients = torch.autograd.grad(
         output.sum(),
-        (query, key, value),
+        (query, key, payload),
         create_graph=True,
     )
 
@@ -659,7 +659,7 @@ def test_cuda_backward_is_explicitly_once_differentiable():
     with pytest.raises(RuntimeError, match="does not require grad"):
         torch.autograd.grad(
             sum(gradient.sum() for gradient in gradients),
-            (query, key, value),
+            (query, key, payload),
         )
 
 
@@ -667,11 +667,11 @@ def test_cuda_torch_compile_fullgraph_forward_and_backward():
 
     seed = _seed_tensor(24680)
 
-    def operator(query, key, value):
+    def operator(query, key, payload):
         return rosa_soft_with_seed(
             query,
             key,
-            value,
+            payload,
             4,
             2.0,
             3.0,
@@ -739,7 +739,7 @@ def test_cuda_uses_the_input_device_and_restores_current_device():
         seed=151,
         device=device,
     ).requires_grad_()
-    value = _nonzero_randn(
+    payload = _nonzero_randn(
         (1, 9, 1, 3),
         seed=152,
         device=device,
@@ -748,7 +748,7 @@ def test_cuda_uses_the_input_device_and_restores_current_device():
     output = rosa_soft.rosa_soft(
         query,
         key,
-        value,
+        payload,
         max_suffix_length=5,
     )
     output.sum().backward()
@@ -758,13 +758,13 @@ def test_cuda_uses_the_input_device_and_restores_current_device():
     assert torch.cuda.current_device() == current_device
     assert all(
         tensor.grad is not None and torch.isfinite(tensor.grad).all()
-        for tensor in (query, key, value)
+        for tensor in (query, key, payload)
     )
     with pytest.raises(RuntimeError, match="same CUDA device"):
         torch.ops.rosa_soft.soft_forward(
             query,
             key.to(f"cuda:{current_device}"),
-            value,
+            payload,
             5,
         )
 
@@ -824,9 +824,9 @@ def test_cuda_rejects_cpu_and_invalid_head_layout():
         rosa_soft.rosa_soft(cpu, cpu, cpu)
 
     query = torch.ones(1, 2, 3, 1, device="cuda")
-    value = torch.ones(1, 2, 2, 1, device="cuda")
+    payload = torch.ones(1, 2, 2, 1, device="cuda")
     with pytest.raises(ValueError, match="divisible"):
-        rosa_soft.rosa_soft(query, query, value)
+        rosa_soft.rosa_soft(query, query, payload)
 
     query64 = query[:, :, :1].double()
     with pytest.raises(ValueError, match="float32"):

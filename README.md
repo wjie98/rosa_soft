@@ -12,17 +12,18 @@ This release contains three public paths:
 
 ## Highlights
 
-- CUDA forward/backward for the RosaSoft soft training proxy.
+- CUDA forward/backward for the RosaSoft training estimator.
 - Exact hard-forward PyTorch reference on CPU and CUDA.
 - Exact hard forward in both training paths; no soft value can leak forward.
 - Explicit static `route_temperature` and `mismatch_penalty` controls.
 - Counter-indexed mismatch sampling in CUDA: backward saves one seed instead of
   an `O(B H T^2 D)` random tensor.
 - Detached reference diagnostics kept outside the training hot path.
-- Hard runtime with packed `uint8` Q/K/V and FlashAttention-style `cu_seqlens`.
+- Hard runtime with packed `uint8` Q/K/payload symbols and
+  FlashAttention-style `cu_seqlens`.
 - Bounded compact suffix automaton with the same finite suffix horizon as
   training and `O(max_suffix_length)` latest-end propagation.
-- RWKV7+ROSA overlap example for inference.
+- Optional RWKV7 kernels and a ROSA overlap example for inference.
 
 ## Installation
 
@@ -30,18 +31,29 @@ This release contains three public paths:
 pip install --no-build-isolation git+https://github.com/wjie98/rosa_soft.git
 ```
 
-For local development:
+The default native build auto-detects CUDA and excludes RWKV7:
 
 ```bash
 CUDA_HOME=/path/to/cuda MAX_JOBS=1 python setup.py build_ext --inplace
 ```
 
-Set `USE_CUDA=0` to build only CPU extension pieces.
-Set `ROSA_BUILD_EXTENSION=0` to install only the pure PyTorch reference path:
+Build selection is explicit:
+
+| Variable | Values | Default | Effect |
+| --- | --- | --- | --- |
+| `ROSA_BUILD_EXTENSION` | `0`, `1` | `1` | Disable all native code for a reference-only install. |
+| `USE_CUDA` | `auto`, `0`, `1` | `auto` | Auto-detect, forbid, or require CUDA compilation. |
+| `ROSA_BUILD_RWKV7` | `0`, `1` | `0` | Include optional RWKV7 kernels; requires CUDA. |
+
+For a pure PyTorch install:
 
 ```bash
 ROSA_BUILD_EXTENSION=0 pip install -e .
 ```
+
+For the CPU hard runtime only, use `USE_CUDA=0`. To include the legacy RWKV7
+kernels, use `USE_CUDA=1 ROSA_BUILD_RWKV7=1`. Native builds must use the
+already installed PyTorch ABI, so pip builds require `--no-build-isolation`.
 
 ## Quick Start: RosaSoft Training Proxy
 
@@ -70,7 +82,7 @@ y = rosa_soft_reference(
 y.square().mean().backward()
 ```
 
-This path materializes quadratic action tensors and is intended for testing and
+This path materializes quadratic route tensors and is intended for testing and
 small training experiments. See
 [docs/ROSA_SOFT_REFERENCE.md](docs/ROSA_SOFT_REFERENCE.md) for its exact
 semantics and kernel mapping.
@@ -104,9 +116,9 @@ y.float().sum().backward()
 ```
 
 Both calls return the exact hard route in forward. In backward they use the
-same fixed softsign STE, cubic mismatch perturbation, Jacobian anchor,
-multiplicative suffix score, null score, action softmax, and soft distributed
-V credit.
+same fixed softsign VJP, cubic mismatch perturbation, hard-Hamming local VJP,
+multiplicative suffix score, null score, route softmax, and distributed soft
+payload credit.
 The CUDA path reconstructs every mismatch sample from one saved seed and its
 `(b, h, q_pos, k_pos, bit)` counter.
 
@@ -117,28 +129,41 @@ import torch
 from rosa_soft import RosaRuntime
 
 B, T, H, bits = 2, 16, 8, 4
-Hv = 2
-q = torch.randn(B, T, H, bits, device="cuda")
-k = torch.randn_like(q)
-v = torch.randn(B, T, Hv, bits, device="cuda")
+payload_heads = 2
+query = torch.randn(B, T, H, bits, device="cuda")
+key = torch.randn_like(query)
+payload = torch.randn(B, T, payload_heads, bits, device="cuda")
 
 with RosaRuntime(
     H,
-    Hv,
+    num_payload_heads=payload_heads,
     qk_bits=bits,
-    value_bits=bits,
+    payload_bits=bits,
     max_suffix_length=32,
 ) as runtime:
-    out, endpos = runtime.update(q, k, v, return_packed=False)
+    output, end_positions = runtime.update(
+        query,
+        key,
+        payload,
+        return_packed=False,
+    )
 ```
 
-For overlap, pass an explicit CUDA stream:
+For overlap, pass an explicit CUDA stream while the runtime is open:
 
 ```python
 stream = torch.cuda.Stream()
-work = runtime.update(q, k, v, stream=stream, async_op=True, return_packed=False)
-# Run other GPU work here.
-out, endpos = work.wait()
+with RosaRuntime(H, payload_heads, bits, bits, 32) as runtime:
+    work = runtime.update(
+        query,
+        key,
+        payload,
+        stream=stream,
+        async_op=True,
+        return_packed=False,
+    )
+    # Run other GPU work here.
+    output, end_positions = work.wait()
 ```
 
 ## RWKV7 + ROSA Example
@@ -146,14 +171,14 @@ out, endpos = work.wait()
 [examples/rwkv7_rosa_overlap.py](examples/rwkv7_rosa_overlap.py) shows an
 RWKV7 block with a ROSA branch parallel to `tmix`:
 
-1. compute ROSA Q/K/V on GPU;
+1. compute ROSA Q/K/payload logits on GPU;
 2. start `RosaRuntime` with an explicit stream, staging packed bits to CPU;
 3. compute RWKV7 `tmix` on GPU;
 4. wait for ROSA output, then run the ROSA output projection;
 5. continue with the channel mix.
 
 The ROSA branch uses official-style RWKV initialization for token-shift
-parameters and Q/K/V projection ranges.
+parameters and Q/K/payload projection ranges.
 
 ## API Summary
 
@@ -186,33 +211,45 @@ summary = summarize_rosa_soft(inspection)
 | `key_logits` | required | `[B, T, H, D]` CUDA tensor. |
 | `payload_logits` | required | `[B, T, H_v, D_v]` CUDA tensor, `H % H_v == 0`. |
 | `max_suffix_length` | `32` | Main semantic knob. Use the smallest suffix horizon that captures the task. |
-| `route_temperature` | `1.0` | Static action-allocation route_temperature; the kernel uses `1 / route_temperature` as its logit scale. |
+| `route_temperature` | `1.0` | Static route-allocation temperature; the kernel uses `1 / route_temperature` as its logit scale. |
 | `mismatch_penalty` | `3.0` | Static local mismatch penalty, independent of route_temperature and window size. |
 
-The current training kernel enumerates every causal action. Its persistent
+The current training kernel enumerates every causal route. Its persistent
 random state is linear in `B H T`, but compute remains quadratic in sequence
 length. This dense coverage is intentional: RosaSoft uses dense backward
 credit to train a sparse hard route. The default training path must not prune
-actions with top-k, ANN/LSH, hard-winner neighborhoods, thresholds, or sampled
+routes with top-k, ANN/LSH, hard-winner neighborhoods, thresholds, or sampled
 candidates, because undiscovered routes would lose their learning signal.
 Long-context inference should use `RosaRuntime`; training optimization must
 instead preserve all candidates through online reductions, dense tiling,
 exact diagonal recurrences, and recomputation/caching tradeoffs.
+
+Lowering `route_temperature` only sharpens the current proxy ordering. With a
+finite mismatch penalty, that ordering can differ from the exact hard
+latest-longest route, so a low-temperature limit is not a proof of hard-route
+equivalence.
 
 ### `RosaRuntime`
 
 | Parameter | Description |
 | --- | --- |
 | `num_heads` | Number of Q/K heads. |
-| `num_value_heads` | Number of value heads. Defaults to `num_heads`. |
+| `num_payload_heads` | Number of payload heads. Defaults to `num_heads`. |
 | `qk_bits` | Packed hard runtime Q/K width, `1..8`. |
-| `value_bits` | Packed hard runtime payload width, `1..8`. |
+| `payload_bits` | Packed hard runtime payload width, `1..8`. |
 | `max_suffix_length` | Exact hard suffix horizon, identical to the training forward meaning. |
 
 `RosaRuntime` currently uses one packed byte per head. Its 8-bit deployment
 limit is explicit and narrower than the training operator's 32-bit Q/K
-contract. `update_packed` reads only the declared low `qk_bits`/`value_bits`;
+contract. `update_packed` reads only the declared low `qk_bits`/`payload_bits`;
 unused upper bits do not affect matching or returned payloads.
+
+The first update fixes the number of sequence slots until `reset()`.
+`sequence_ids` can opt into explicit slot-order checks and must be supplied on
+the first update after construction or reset. An update failure poisons the
+runtime; close it and construct a new instance. Native automaton checkpointing
+has no stable format, so `state_dict()` and `load_state_dict()` explicitly
+raise `NotImplementedError`.
 
 ## Repository Layout
 
@@ -221,10 +258,10 @@ rosa_soft/
   soft.py                   CUDA autograd wrapper for RosaSoft
   soft_contract.py          Shared shape and scalar contract
   soft_reference.py         Pure PyTorch semantic oracle
-  testing.py                Deterministic and inspection hooks
-  diagnostics.py            Read-only inspection summaries
+  testing.py                Development-only deterministic inspection hooks
+  diagnostics.py            Development-only read-only summaries
   runtime.py                Python RosaRuntime wrapper and async staging
-  rwkv7.py                  Low-level RWKV7 CUDA wrappers
+  rwkv7.py                  Optional low-level RWKV7 CUDA wrappers
   csrc/
     rosa_soft.cpp           C++ checks and dispatch
     rosa_runtime.cpp        C++ hard runtime custom class
@@ -238,13 +275,16 @@ docs/
   CONCEPT.md                User-facing technical report and design history
   ROSA_SOFT_DESIGN.md       RosaSoft operator report
   ROSA_SOFT_REFERENCE.md    Hard-forward reference invariants and kernel map
+  research/                 Historical estimator experiments
+benchmarks/
+  rosa_soft.py              Training time and peak-memory probe
+  rosa_runtime.py           Runtime scaling probe
+  legacy/                   Optional historical RWKV7 probes
 tests/
   test_soft_cuda.py         CUDA/reference forward and VJP parity
   test_soft_reference.py    Hard and surrogate invariant coverage
   test_diagnostics.py       Detached diagnostic correctness
   test_runtime.py           Bounded Runtime correctness and lifecycle
-  rosa_soft_benchmark.py    Training time and peak-memory probe
-  rosa_runtime_benchmark.py Runtime scaling probe
 ```
 
 ## Developer Documentation
@@ -260,34 +300,23 @@ Read [docs/CONCEPT.md](docs/CONCEPT.md) for the full user-facing report:
 Read [docs/ROSA_SOFT_DESIGN.md](docs/ROSA_SOFT_DESIGN.md) for a shorter
 operator-focused reference.
 
-## Validation Snapshot
-
-The current RosaSoft mainline was selected from hard-forward next-token
-experiments: the forward path uses hard ROSA, while the backward path changes
-between proxy-gradient methods.
-
-| Check | Result |
-| --- | --- |
-| Production test suite | `116 passed` on SM75 and SM86, including three-plan VJP parity, dense-support route discovery, exhaustive small-state and bounded-runtime oracle parity, lifecycle tests, packed-width and empty-input invariants, nonfinite-logit VJP agreement, exact recurrence adjoints, `D=32`, grouped value heads, non-contiguous tensors, singleton sequences, FP16/BF16, and causal rows larger than one CUDA block. Historical research experiments are isolated from this count. |
-| Counter-exact parity | With the same reconstructed mismatch samples, CUDA and PyTorch forward are bit-exact; FP32 Q/K/V gradient maximum absolute error is `5.96e-8` on the recorded probe. |
-| Single-sample next-token fit | At 1000 steps, the single-branch reference reached hard CE `4.78e-4`; CUDA reached `3.83e-4` on model seed 0 and `3.39e-4` on seed 2, all at `100%` accuracy, versus historical bitflip CE `1.61e-4`. Four perturbation seeds on fixed model seed 0 all reached `100%`. |
-| Backward planner | CUDA profiler probes instantiated `ScoreCached`, `KeyReduced`, and `Generic` kernels. On RTX 3070, representative FP32 steps took `1.17`, `0.46`, and `1.31 ms`; these shapes exercise planner boundaries rather than comparable workloads. |
-| Runtime scaling | For the repeated-symbol worst case with `W=32`, one CPU thread took `3.79/5.62/8.27/13.83/24.81 ms` at `T=8K/16K/32K/64K/128K`, consistent with linear growth after fixed overhead. |
-| Training memory | For FP32 `B=1,H=4,D=8,H_v=2,D_v=8,W=32`, CUDA peak operator memory rose from about `0.03 MiB` at `T=64` to `0.23 MiB` at `T=512`; the materialized reference used `50.55 MiB` at `T=256`. |
-| Training time | On an RTX 3070 for the same shape, the final long-run CUDA probe took `1.528/6.002/20.426 ms` at `T=256/512/1024`; every causal backward action is still evaluated. |
-
 ## Validation
 
 ```bash
 python -m py_compile setup.py rosa_soft/*.py examples/*.py tests/*.py
 python -m pytest -q
-python tests/rosa_soft_benchmark.py \
+python benchmarks/rosa_soft.py \
   --operator cuda --sequence-lengths 64 128 256 \
   --max-suffix-length 32 --route-temperature 1.0 \
   --mismatch-penalty 3.0
-python tests/rosa_runtime_benchmark.py \
+python benchmarks/rosa_runtime.py \
   --B 4 --T 256 --H 8 --Hv 2 --bits 4 --max-suffix-length 32
 ```
+
+The latest locally reproduced environment and results are recorded in
+[`validation/latest.json`](validation/latest.json). Historical estimator
+selection evidence remains under [`docs/research/`](docs/research/); it is not
+part of the production test count.
 
 For CUDA build validation:
 

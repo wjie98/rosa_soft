@@ -1,3 +1,5 @@
+"""Standalone RosaRuntime scaling benchmark."""
+
 import argparse
 import sys
 import time
@@ -10,24 +12,36 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rosa_soft import RosaRuntime
 
 
-def benchmark(q, k, v, qk_bits, value_bits, max_suffix_length, repeats):
+def benchmark(
+    query,
+    key,
+    payload,
+    qk_bits,
+    payload_bits,
+    max_suffix_length,
+    repeats,
+):
     timings = []
     stats = None
     for _ in range(repeats):
         rt = RosaRuntime(
-            num_heads=q.size(-1),
-            num_value_heads=v.size(-1),
+            num_heads=query.size(-1),
+            num_payload_heads=payload.size(-1),
             qk_bits=qk_bits,
-            value_bits=value_bits,
+            payload_bits=payload_bits,
             max_suffix_length=max_suffix_length,
         )
         t0 = time.perf_counter()
-        out, endpos = rt.update_packed(q, k, v)
+        output, end_positions = rt.update_packed(
+            query,
+            key,
+            payload,
+        )
         elapsed = time.perf_counter() - t0
         stats = rt.stats()
         rt.close()
         timings.append(elapsed)
-        del out, endpos
+        del output, end_positions
     timings.sort()
     return timings[len(timings) // 2], stats
 
@@ -44,21 +58,36 @@ def main():
     args = parser.parse_args()
 
     torch.manual_seed(123)
-    q = torch.randint(0, 1 << args.bits, (args.B, args.T, args.H), dtype=torch.uint8)
-    k = torch.randint(0, 1 << args.bits, (args.B, args.T, args.H), dtype=torch.uint8)
-    v = torch.randint(0, 1 << args.bits, (args.B, args.T, args.Hv), dtype=torch.uint8)
+    query = torch.randint(
+        0,
+        1 << args.bits,
+        (args.B, args.T, args.H),
+        dtype=torch.uint8,
+    )
+    key = torch.randint(
+        0,
+        1 << args.bits,
+        (args.B, args.T, args.H),
+        dtype=torch.uint8,
+    )
+    payload = torch.randint(
+        0,
+        1 << args.bits,
+        (args.B, args.T, args.Hv),
+        dtype=torch.uint8,
+    )
 
     elapsed, stats = benchmark(
-        q,
-        k,
-        v,
+        query,
+        key,
+        payload,
         args.bits,
         args.bits,
         args.max_suffix_length,
         args.repeats,
     )
 
-    print("max_suffix_length,time_ms,states,edges,values")
+    print("max_suffix_length,time_ms,states,edges,payload_symbols")
     print(
         f"{args.max_suffix_length},{elapsed * 1000:.3f},"
         f"{stats[0]},{stats[1]},{stats[2]}"

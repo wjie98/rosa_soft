@@ -7,19 +7,19 @@
 #include <vector>
 
 
-std::vector<torch::Tensor> soft_forward_cuda(
+std::vector<torch::Tensor> hard_forward_cuda(
     torch::Tensor query,
     torch::Tensor key,
-    torch::Tensor value,
+    torch::Tensor payload,
     int64_t max_suffix_length);
 
-std::vector<torch::Tensor> soft_backward_cuda(
+std::vector<torch::Tensor> surrogate_vjp_cuda(
     torch::Tensor query,
     torch::Tensor key,
-    torch::Tensor value,
+    torch::Tensor payload,
     torch::Tensor grad_output,
-    torch::Tensor query_symbols,
-    torch::Tensor key_symbols,
+    torch::Tensor packed_query_symbols,
+    torch::Tensor packed_key_symbols,
     torch::Tensor rng_seed,
     int64_t max_suffix_length,
     float inverse_route_temperature,
@@ -28,13 +28,13 @@ std::vector<torch::Tensor> soft_backward_cuda(
 
 namespace {
 
-bool is_supported_dtype(c10::ScalarType dtype) {
+bool is_supported_logit_dtype(c10::ScalarType dtype) {
   return dtype == torch::kFloat32 ||
       dtype == torch::kFloat16 ||
       dtype == torch::kBFloat16;
 }
 
-float positive_normal_float(double value, const char* name) {
+float to_positive_normal_float(double value, const char* name) {
   const float converted = static_cast<float>(value);
   TORCH_CHECK(
       converted > 0.0f && std::isnormal(converted),
@@ -43,42 +43,50 @@ float positive_normal_float(double value, const char* name) {
   return converted;
 }
 
-void check_common(
+void check_common_inputs(
     const torch::Tensor& query,
     const torch::Tensor& key,
-    const torch::Tensor& value,
+    const torch::Tensor& payload,
     int64_t max_suffix_length) {
   TORCH_CHECK(query.is_cuda(), "query must be a CUDA tensor");
   TORCH_CHECK(key.is_cuda(), "key must be a CUDA tensor");
-  TORCH_CHECK(value.is_cuda(), "value must be a CUDA tensor");
+  TORCH_CHECK(payload.is_cuda(), "payload must be a CUDA tensor");
   TORCH_CHECK(
       query.device() == key.device(),
       "query and key must be on the same CUDA device");
   TORCH_CHECK(
-      query.device() == value.device(),
-      "query and value must be on the same CUDA device");
+      query.device() == payload.device(),
+      "query and payload must be on the same CUDA device");
   TORCH_CHECK(
-      is_supported_dtype(query.scalar_type()),
+      is_supported_logit_dtype(query.scalar_type()),
       "query must be float32, float16, or bfloat16");
   TORCH_CHECK(query.scalar_type() == key.scalar_type(), "query/key dtype mismatch");
-  TORCH_CHECK(query.scalar_type() == value.scalar_type(), "query/value dtype mismatch");
+  TORCH_CHECK(
+      query.scalar_type() == payload.scalar_type(),
+      "query/payload dtype mismatch");
   TORCH_CHECK(query.dim() == 4, "query must have shape (B, T, H, D)");
   TORCH_CHECK(key.dim() == 4, "key must have shape (B, T, H, D)");
-  TORCH_CHECK(value.dim() == 4, "value must have shape (B, T, H_v, D_v)");
+  TORCH_CHECK(
+      payload.dim() == 4,
+      "payload must have shape (B, T, H_p, D_p)");
   TORCH_CHECK(query.size(0) > 0, "batch size must be positive");
   TORCH_CHECK(query.size(1) > 0, "sequence length must be positive");
   TORCH_CHECK(query.size(2) > 0, "query head count must be positive");
-  TORCH_CHECK(value.size(2) > 0, "value head count must be positive");
-  TORCH_CHECK(value.size(3) > 0, "value dimension must be positive");
+  TORCH_CHECK(payload.size(2) > 0, "payload head count must be positive");
+  TORCH_CHECK(payload.size(3) > 0, "payload dimension must be positive");
   TORCH_CHECK(query.size(0) == key.size(0), "query/key batch mismatch");
   TORCH_CHECK(query.size(1) == key.size(1), "query/key sequence mismatch");
   TORCH_CHECK(query.size(2) == key.size(2), "query/key head mismatch");
   TORCH_CHECK(query.size(3) == key.size(3), "query/key bit dimension mismatch");
-  TORCH_CHECK(query.size(0) == value.size(0), "query/value batch mismatch");
-  TORCH_CHECK(query.size(1) == value.size(1), "query/value sequence mismatch");
   TORCH_CHECK(
-      query.size(2) % value.size(2) == 0,
-      "query heads must be divisible by value heads");
+      query.size(0) == payload.size(0),
+      "query/payload batch mismatch");
+  TORCH_CHECK(
+      query.size(1) == payload.size(1),
+      "query/payload sequence mismatch");
+  TORCH_CHECK(
+      query.size(2) % payload.size(2) == 0,
+      "query heads must be divisible by payload heads");
   TORCH_CHECK(
       query.size(3) > 0 && query.size(3) <= 32,
       "query/key bit dimension must be in [1, 32]");
@@ -87,39 +95,54 @@ void check_common(
           std::numeric_limits<int>::max(),
       "B * T * H must fit in int32");
   TORCH_CHECK(
-      value.size(3) <= std::numeric_limits<int>::max(),
-      "value dimension must fit in int32");
+      payload.size(3) <= std::numeric_limits<int>::max(),
+      "payload dimension must fit in int32");
   TORCH_CHECK(max_suffix_length >= 1, "max_suffix_length must be >= 1");
 }
 
-void check_symbols(
-    const torch::Tensor& bits,
+void check_packed_symbols(
+    const torch::Tensor& packed_symbols,
     const torch::Tensor& query,
     const char* name) {
-  TORCH_CHECK(bits.is_cuda(), name, " must be a CUDA tensor");
+  TORCH_CHECK(packed_symbols.is_cuda(), name, " must be a CUDA tensor");
   TORCH_CHECK(
-      bits.device() == query.device(),
+      packed_symbols.device() == query.device(),
       name,
       " must be on the same CUDA device as query");
-  TORCH_CHECK(bits.scalar_type() == torch::kInt32, name, " must be int32");
-  TORCH_CHECK(bits.dim() == 3, name, " must have shape (B, T, H)");
-  TORCH_CHECK(bits.size(0) == query.size(0), name, " batch mismatch");
-  TORCH_CHECK(bits.size(1) == query.size(1), name, " sequence mismatch");
-  TORCH_CHECK(bits.size(2) == query.size(2), name, " head mismatch");
+  TORCH_CHECK(
+      packed_symbols.scalar_type() == torch::kInt32,
+      name,
+      " must be int32");
+  TORCH_CHECK(
+      packed_symbols.dim() == 3,
+      name,
+      " must have shape (B, T, H)");
+  TORCH_CHECK(
+      packed_symbols.size(0) == query.size(0),
+      name,
+      " batch mismatch");
+  TORCH_CHECK(
+      packed_symbols.size(1) == query.size(1),
+      name,
+      " sequence mismatch");
+  TORCH_CHECK(
+      packed_symbols.size(2) == query.size(2),
+      name,
+      " head mismatch");
 }
 
-void check_backward(
+void check_surrogate_vjp_inputs(
     const torch::Tensor& query,
     const torch::Tensor& key,
-    const torch::Tensor& value,
+    const torch::Tensor& payload,
     const torch::Tensor& grad_output,
-    const torch::Tensor& query_symbols,
-    const torch::Tensor& key_symbols,
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
     const torch::Tensor& rng_seed,
     int64_t max_suffix_length,
     double route_temperature,
     double mismatch_penalty) {
-  check_common(query, key, value, max_suffix_length);
+  check_common_inputs(query, key, payload, max_suffix_length);
   TORCH_CHECK(grad_output.is_cuda(), "grad_output must be a CUDA tensor");
   TORCH_CHECK(
       grad_output.device() == query.device(),
@@ -130,10 +153,20 @@ void check_backward(
   TORCH_CHECK(
       grad_output.sizes() ==
           torch::IntArrayRef(
-              {query.size(0), query.size(1), query.size(2), value.size(3)}),
+              {
+                  query.size(0),
+                  query.size(1),
+                  query.size(2),
+                  payload.size(3)}),
       "grad_output shape mismatch");
-  check_symbols(query_symbols, query, "query_symbols");
-  check_symbols(key_symbols, query, "key_symbols");
+  check_packed_symbols(
+      packed_query_symbols,
+      query,
+      "packed_query_symbols");
+  check_packed_symbols(
+      packed_key_symbols,
+      query,
+      "packed_key_symbols");
   TORCH_CHECK(rng_seed.is_cuda(), "rng_seed must be a CUDA tensor");
   TORCH_CHECK(
       rng_seed.device() == query.device(),
@@ -151,70 +184,72 @@ void check_backward(
 }  // namespace
 
 
-std::vector<torch::Tensor> soft_forward(
+std::vector<torch::Tensor> hard_forward_op(
     torch::Tensor query,
     torch::Tensor key,
-    torch::Tensor value,
+    torch::Tensor payload,
     int64_t max_suffix_length) {
-  check_common(query, key, value, max_suffix_length);
-  const int64_t normalized_window =
+  check_common_inputs(query, key, payload, max_suffix_length);
+  const int64_t effective_max_suffix_length =
       std::min<int64_t>(max_suffix_length, query.size(1));
-  return soft_forward_cuda(
+  return hard_forward_cuda(
       query.contiguous(),
       key.contiguous(),
-      value.contiguous(),
-      normalized_window);
+      payload.contiguous(),
+      effective_max_suffix_length);
 }
 
 
-std::vector<torch::Tensor> soft_backward(
+std::vector<torch::Tensor> surrogate_vjp_op(
     torch::Tensor query,
     torch::Tensor key,
-    torch::Tensor value,
+    torch::Tensor payload,
     torch::Tensor grad_output,
-    torch::Tensor query_symbols,
-    torch::Tensor key_symbols,
+    torch::Tensor packed_query_symbols,
+    torch::Tensor packed_key_symbols,
     torch::Tensor rng_seed,
     int64_t max_suffix_length,
     double route_temperature,
     double mismatch_penalty) {
-  check_backward(
+  check_surrogate_vjp_inputs(
       query,
       key,
-      value,
+      payload,
       grad_output,
-      query_symbols,
-      key_symbols,
+      packed_query_symbols,
+      packed_key_symbols,
       rng_seed,
       max_suffix_length,
       route_temperature,
       mismatch_penalty);
-  const int64_t normalized_window =
+  const int64_t effective_max_suffix_length =
       std::min<int64_t>(max_suffix_length, query.size(1));
   const float inverse_route_temperature =
-      positive_normal_float(1.0 / route_temperature, "inverse route_temperature");
+      to_positive_normal_float(
+          1.0 / route_temperature,
+          "inverse route_temperature");
   TORCH_CHECK(
       inverse_route_temperature <=
           std::numeric_limits<float>::max() /
-              static_cast<float>(normalized_window),
+              static_cast<float>(effective_max_suffix_length),
       "max_suffix_length / route_temperature must fit in float32");
   const float mismatch_penalty_f =
-      positive_normal_float(mismatch_penalty, "mismatch_penalty");
-  return soft_backward_cuda(
+      to_positive_normal_float(mismatch_penalty, "mismatch_penalty");
+  return surrogate_vjp_cuda(
       query.contiguous(),
       key.contiguous(),
-      value.contiguous(),
+      payload.contiguous(),
       grad_output.contiguous(),
-      query_symbols.contiguous(),
-      key_symbols.contiguous(),
+      packed_query_symbols.contiguous(),
+      packed_key_symbols.contiguous(),
       rng_seed.contiguous(),
-      normalized_window,
+      effective_max_suffix_length,
       inverse_route_temperature,
       mismatch_penalty_f);
 }
 
 
 TORCH_LIBRARY_IMPL(rosa_soft, CUDA, m) {
-  m.impl("soft_forward", &soft_forward);
-  m.impl("soft_backward", &soft_backward);
+  m.impl("soft_forward", &hard_forward_op);
+  m.impl("soft_backward", &surrogate_vjp_op);
 }

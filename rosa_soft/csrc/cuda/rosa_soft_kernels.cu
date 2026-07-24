@@ -23,22 +23,22 @@ constexpr uint64_t kCounterStride = 0x9e3779b97f4a7c15ULL;
 
 
 enum class BackwardPlan {
-  ScoreCached,
-  KeyReduced,
-  Generic,
+  CacheRouteScores,
+  ReduceKeyGradInShared,
+  MinimalSharedMemory,
 };
 
 
 template <BackwardPlan Plan>
-struct BackwardPlanFeatures {
+struct BackwardCacheTraits {
   static constexpr bool kCacheGradOutput =
-      Plan != BackwardPlan::Generic;
+      Plan != BackwardPlan::MinimalSharedMemory;
   static constexpr bool kCacheQuery =
-      Plan != BackwardPlan::Generic;
+      Plan != BackwardPlan::MinimalSharedMemory;
   static constexpr bool kCacheScores =
-      Plan == BackwardPlan::ScoreCached;
+      Plan == BackwardPlan::CacheRouteScores;
   static constexpr bool kCacheGradKey =
-      Plan == BackwardPlan::KeyReduced;
+      Plan == BackwardPlan::ReduceKeyGradInShared;
 };
 
 
@@ -59,17 +59,17 @@ struct BackwardSharedLayout {
 template <BackwardPlan Plan>
 __host__ __device__ BackwardSharedLayout make_backward_shared_layout(
     int seq_len,
-    int dim,
-    int value_dim,
+    int symbol_dim,
+    int payload_dim,
     int max_suffix_length) {
   constexpr bool kCacheGradOutput =
-      BackwardPlanFeatures<Plan>::kCacheGradOutput;
+      BackwardCacheTraits<Plan>::kCacheGradOutput;
   constexpr bool kCacheQuery =
-      BackwardPlanFeatures<Plan>::kCacheQuery;
+      BackwardCacheTraits<Plan>::kCacheQuery;
   constexpr bool kCacheScores =
-      BackwardPlanFeatures<Plan>::kCacheScores;
+      BackwardCacheTraits<Plan>::kCacheScores;
   constexpr bool kCacheGradKey =
-      BackwardPlanFeatures<Plan>::kCacheGradKey;
+      BackwardCacheTraits<Plan>::kCacheGradKey;
   const int cached_query_len =
       max_suffix_length < seq_len ? max_suffix_length : seq_len;
 
@@ -79,7 +79,7 @@ __host__ __device__ BackwardSharedLayout make_backward_shared_layout(
   cursor += 3 * kBlockThreads;
   layout.grad_output_offset = cursor;
   if constexpr (kCacheGradOutput) {
-    cursor += static_cast<size_t>(value_dim);
+    cursor += static_cast<size_t>(payload_dim);
   }
   layout.query_offset = cursor;
   if constexpr (kCacheQuery) {
@@ -94,7 +94,7 @@ __host__ __device__ BackwardSharedLayout make_backward_shared_layout(
     const int key_tile_positions =
         kBlockThreads + cached_query_len - 1;
     cursor += static_cast<size_t>(key_tile_positions) *
-        static_cast<size_t>(dim);
+        static_cast<size_t>(symbol_dim);
   }
   layout.total_words = cursor;
   return layout;
@@ -114,14 +114,14 @@ template <BackwardPlan Plan>
 __device__ __forceinline__ BackwardSharedView bind_backward_shared(
     float* shared,
     int seq_len,
-    int dim,
-    int value_dim,
+    int symbol_dim,
+    int payload_dim,
     int max_suffix_length) {
   const BackwardSharedLayout layout =
       make_backward_shared_layout<Plan>(
           seq_len,
-          dim,
-          value_dim,
+          symbol_dim,
+          payload_dim,
           max_suffix_length);
   return {
       shared + layout.stats_offset,
@@ -186,16 +186,16 @@ __device__ __forceinline__ float contiguous_warp_sum(
 }
 
 
-__device__ __forceinline__ unsigned action_offset_warp_mask(
+__device__ __forceinline__ unsigned route_offset_warp_mask(
     int tile_start,
     int row,
     int offset) {
-  const int warp_action_start =
+  const int warp_route_start =
       tile_start + (threadIdx.x & ~31);
   const int first_lane =
-      max(0, offset + 1 - warp_action_start);
+      max(0, offset + 1 - warp_route_start);
   const int last_lane =
-      min(31, row - warp_action_start);
+      min(31, row - warp_route_start);
   const unsigned through_last = last_lane == 31
       ? 0xffffffffu
       : (1u << (last_lane + 1)) - 1u;
@@ -230,12 +230,13 @@ __device__ __forceinline__ uint64_t mismatch_counter(
     int bit,
     int seq_len,
     int num_heads,
-    int dim) {
+    int symbol_dim) {
   uint64_t index = static_cast<uint64_t>(b);
   index = index * static_cast<uint64_t>(num_heads) + static_cast<uint64_t>(h);
   index = index * static_cast<uint64_t>(seq_len) + static_cast<uint64_t>(q_pos);
   index = index * static_cast<uint64_t>(seq_len) + static_cast<uint64_t>(k_pos);
-  return index * static_cast<uint64_t>(dim) + static_cast<uint64_t>(bit);
+  return index * static_cast<uint64_t>(symbol_dim) +
+      static_cast<uint64_t>(bit);
 }
 
 
@@ -244,15 +245,15 @@ __global__ void pack_sign_bits_kernel(
     const scalar_t* __restrict__ values,
     int32_t* __restrict__ packed,
     int64_t tokens,
-    int dim) {
+    int symbol_dim) {
   const int64_t index =
       static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
   if (index >= tokens) {
     return;
   }
-  const int64_t base = index * dim;
+  const int64_t base = index * symbol_dim;
   uint32_t word = 0u;
-  for (int bit = 0; bit < dim; ++bit) {
+  for (int bit = 0; bit < symbol_dim; ++bit) {
     if (read_float(values, base + bit) > 0.0f) {
       word |= 1u << bit;
     }
@@ -284,43 +285,44 @@ __device__ __forceinline__ uint32_t load_word(
 
 
 __device__ __forceinline__ int exact_suffix_length(
-    const int32_t* __restrict__ query_symbols,
-    const int32_t* __restrict__ key_symbols,
+    const int32_t* __restrict__ packed_query_symbols,
+    const int32_t* __restrict__ packed_key_symbols,
     int b,
     int h,
     int i,
-    int action,
+    int route_index,
     int seq_len,
     int num_heads,
     int max_suffix_length) {
-  const int valid = min(max_suffix_length, min(i + 1, action));
-  for (int offset = 0; offset < valid; ++offset) {
+  const int suffix_steps =
+      min(max_suffix_length, min(i + 1, route_index));
+  for (int offset = 0; offset < suffix_steps; ++offset) {
     const uint32_t q_word =
-        load_word(query_symbols, b, i - offset, h, seq_len, num_heads);
+        load_word(packed_query_symbols, b, i - offset, h, seq_len, num_heads);
     const uint32_t k_word =
-        load_word(key_symbols, b, action - 1 - offset, h, seq_len, num_heads);
+        load_word(packed_key_symbols, b, route_index - 1 - offset, h, seq_len, num_heads);
     if (q_word != k_word) {
       return offset;
     }
   }
-  return valid;
+  return suffix_steps;
 }
 
 
 template <typename scalar_t>
 __global__ void hard_forward_kernel(
-    const int32_t* __restrict__ query_symbols,
-    const int32_t* __restrict__ key_symbols,
-    const scalar_t* __restrict__ value,
+    const int32_t* __restrict__ packed_query_symbols,
+    const int32_t* __restrict__ packed_key_symbols,
+    const scalar_t* __restrict__ payload,
     scalar_t* __restrict__ output,
     int seq_len,
     int num_heads,
-    int num_value_heads,
-    int value_dim,
+    int num_payload_heads,
+    int payload_dim,
     int max_suffix_length) {
   extern __shared__ int shared_int[];
   int* lengths = shared_int;
-  int* actions = lengths + blockDim.x;
+  int* route_indices = lengths + blockDim.x;
 
   const int row = blockIdx.x;
   const int i = row % seq_len;
@@ -329,72 +331,76 @@ __global__ void hard_forward_kernel(
   const int tid = threadIdx.x;
 
   int best_length = 0;
-  int best_action = 0;
-  for (int action = tid + 1; action <= i; action += blockDim.x) {
+  int best_route = 0;
+  for (int route_index = tid + 1; route_index <= i; route_index += blockDim.x) {
     const int length = exact_suffix_length(
-        query_symbols,
-        key_symbols,
+        packed_query_symbols,
+        packed_key_symbols,
         b,
         h,
         i,
-        action,
+        route_index,
         seq_len,
         num_heads,
         max_suffix_length);
     if (length > best_length ||
-        (length > 0 && length == best_length && action > best_action)) {
+        (length > 0 &&
+         length == best_length &&
+         route_index > best_route)) {
       best_length = length;
-      best_action = action;
+      best_route = route_index;
     }
   }
 
   lengths[tid] = best_length;
-  actions[tid] = best_action;
+  route_indices[tid] = best_route;
   __syncthreads();
   for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
     if (tid < stride) {
       const int other_length = lengths[tid + stride];
-      const int other_action = actions[tid + stride];
+      const int other_route = route_indices[tid + stride];
       if (other_length > lengths[tid] ||
           (other_length > 0 &&
            other_length == lengths[tid] &&
-           other_action > actions[tid])) {
+           other_route > route_indices[tid])) {
         lengths[tid] = other_length;
-        actions[tid] = other_action;
+        route_indices[tid] = other_route;
       }
     }
     __syncthreads();
   }
 
-  const int selected = lengths[0] > 0 ? actions[0] : 0;
-  const int value_head = h / (num_heads / num_value_heads);
-  for (int d = tid; d < value_dim; d += blockDim.x) {
+  const int selected_route =
+      lengths[0] > 0 ? route_indices[0] : 0;
+  const int payload_head = h / (num_heads / num_payload_heads);
+  for (int d = tid; d < payload_dim; d += blockDim.x) {
     float result = 0.0f;
-    if (selected > 0) {
-      const int64_t value_idx =
-          ((static_cast<int64_t>(b) * seq_len + selected) *
-               num_value_heads +
-           value_head) *
-              value_dim +
+    if (selected_route > 0) {
+      const int64_t payload_idx =
+          ((static_cast<int64_t>(b) * seq_len + selected_route) *
+               num_payload_heads +
+           payload_head) *
+              payload_dim +
           d;
-      result = read_float(value, value_idx) > 0.0f ? 1.0f : -1.0f;
+      result =
+          read_float(payload, payload_idx) > 0.0f ? 1.0f : -1.0f;
     }
     const int64_t output_idx =
         ((static_cast<int64_t>(b) * seq_len + i) * num_heads + h) *
-            value_dim +
+            payload_dim +
         d;
     output[output_idx] = write_scalar<scalar_t>(result);
   }
 }
 
 
-struct LocalGate {
-  float value;
-  float derivative_ratio;
+struct StochasticMatchGate {
+  float match_value;
+  float hard_hamming_vjp_scale;
 };
 
 
-__device__ __forceinline__ LocalGate local_gate(
+__device__ __forceinline__ StochasticMatchGate stochastic_local_match_gate(
     uint32_t q_word,
     uint32_t k_word,
     uint64_t seed,
@@ -404,11 +410,11 @@ __device__ __forceinline__ LocalGate local_gate(
     int k_pos,
     int seq_len,
     int num_heads,
-    int dim,
+    int symbol_dim,
     float mismatch_penalty) {
   uint32_t mismatch = q_word ^ k_word;
-  if (dim < 32) {
-    mismatch &= (1u << dim) - 1u;
+  if (symbol_dim < 32) {
+    mismatch &= (1u << symbol_dim) - 1u;
   }
   if (mismatch == 0u) {
     return {1.0f, 1.0f};
@@ -426,52 +432,53 @@ __device__ __forceinline__ LocalGate local_gate(
         bit,
         seq_len,
         num_heads,
-        dim);
+        symbol_dim);
     const float uniform = counter_uniform(seed, counter);
-    const float alpha =
+    const float mismatch_weight =
         1.0f - 0.5f * uniform * uniform * uniform;
-    relaxed_hamming += alpha;
+    relaxed_hamming += mismatch_weight;
     ++hard_hamming;
     mismatch &= mismatch - 1u;
   }
 
-  const float gate =
+  const float match_value =
       __expf(-mismatch_penalty * relaxed_hamming);
-  const float derivative_ratio =
+  const float hard_hamming_vjp_scale =
       __expf(
           -mismatch_penalty *
           (static_cast<float>(hard_hamming) - relaxed_hamming));
-  return {gate, derivative_ratio};
+  return {match_value, hard_hamming_vjp_scale};
 }
 
 
 template <bool CacheQuery>
-__device__ __forceinline__ float proxy_score(
-    const int32_t* __restrict__ query_symbols,
-    const int32_t* __restrict__ key_symbols,
+__device__ __forceinline__ float proxy_suffix_score(
+    const int32_t* __restrict__ packed_query_symbols,
+    const int32_t* __restrict__ packed_key_symbols,
     const int32_t* __restrict__ cached_query,
     uint64_t seed,
     int b,
     int h,
     int i,
-    int action,
+    int route_index,
     int seq_len,
     int num_heads,
-    int dim,
+    int symbol_dim,
     int max_suffix_length,
     float mismatch_penalty) {
-  const int valid = min(max_suffix_length, min(i + 1, action));
+  const int suffix_steps =
+      min(max_suffix_length, min(i + 1, route_index));
   float product = 1.0f;
   float score = 0.0f;
-  for (int offset = 0; offset < valid; ++offset) {
+  for (int offset = 0; offset < suffix_steps; ++offset) {
     const int q_pos = i - offset;
-    const int k_pos = action - 1 - offset;
+    const int k_pos = route_index - 1 - offset;
     const uint32_t q_word = CacheQuery
         ? static_cast<uint32_t>(cached_query[offset])
-        : load_word(query_symbols, b, q_pos, h, seq_len, num_heads);
+        : load_word(packed_query_symbols, b, q_pos, h, seq_len, num_heads);
     const uint32_t k_word =
-        load_word(key_symbols, b, k_pos, h, seq_len, num_heads);
-    product *= local_gate(
+        load_word(packed_key_symbols, b, k_pos, h, seq_len, num_heads);
+    product *= stochastic_local_match_gate(
                    q_word,
                    k_word,
                    seed,
@@ -481,9 +488,9 @@ __device__ __forceinline__ float proxy_score(
                    k_pos,
                    seq_len,
                    num_heads,
-                   dim,
+                   symbol_dim,
                    mismatch_penalty)
-                   .value;
+                   .match_value;
     score += product;
   }
   return score;
@@ -564,33 +571,33 @@ __device__ SoftmaxStats block_reduce_softmax_stats(
 
 
 template <typename scalar_t, bool CacheGradOutput>
-__device__ __forceinline__ float candidate_utility(
-    const scalar_t* __restrict__ value,
+__device__ __forceinline__ float route_payload_utility(
+    const scalar_t* __restrict__ payload,
     const scalar_t* __restrict__ grad_output,
     const float* __restrict__ cached_grad_output,
     int b,
     int h,
     int i,
-    int action,
+    int route_index,
     int seq_len,
     int num_heads,
-    int num_value_heads,
-    int value_dim) {
-  const int value_head = h / (num_heads / num_value_heads);
+    int num_payload_heads,
+    int payload_dim) {
+  const int payload_head = h / (num_heads / num_payload_heads);
   float utility = 0.0f;
-  for (int d = 0; d < value_dim; ++d) {
-    const int64_t value_idx =
-        ((static_cast<int64_t>(b) * seq_len + action) *
-             num_value_heads +
-         value_head) *
-            value_dim +
+  for (int d = 0; d < payload_dim; ++d) {
+    const int64_t payload_idx =
+        ((static_cast<int64_t>(b) * seq_len + route_index) *
+             num_payload_heads +
+         payload_head) *
+            payload_dim +
         d;
     const int64_t grad_idx =
         ((static_cast<int64_t>(b) * seq_len + i) * num_heads + h) *
-            value_dim +
+            payload_dim +
         d;
     const float signed_value =
-        read_float(value, value_idx) > 0.0f ? 1.0f : -1.0f;
+        read_float(payload, payload_idx) > 0.0f ? 1.0f : -1.0f;
     const float grad = CacheGradOutput
         ? cached_grad_output[d]
         : read_float(grad_output, grad_idx);
@@ -601,7 +608,7 @@ __device__ __forceinline__ float candidate_utility(
 
 
 template <typename scalar_t, bool CacheGradKey>
-__device__ __forceinline__ void accumulate_qk_vjp(
+__device__ __forceinline__ void accumulate_local_match_qk_vjp(
     const scalar_t* __restrict__ query,
     const scalar_t* __restrict__ key,
     float* __restrict__ grad_query,
@@ -614,18 +621,18 @@ __device__ __forceinline__ void accumulate_qk_vjp(
     int k_pos,
     int seq_len,
     int num_heads,
-    int dim,
+    int symbol_dim,
     uint32_t q_word,
     uint32_t k_word,
-    float common,
+    float local_gate_vjp_scale,
     unsigned active) {
   const int64_t q_base =
-      token_index(b, q_pos, h, seq_len, num_heads) * dim;
+      token_index(b, q_pos, h, seq_len, num_heads) * symbol_dim;
   const int64_t k_base =
-      token_index(b, k_pos, h, seq_len, num_heads) * dim;
+      token_index(b, k_pos, h, seq_len, num_heads) * symbol_dim;
   const int lane = threadIdx.x & 31;
   const int leader = __ffs(static_cast<int>(active)) - 1;
-  for (int bit = 0; bit < dim; ++bit) {
+  for (int bit = 0; bit < symbol_dim; ++bit) {
     const float q_sign = static_cast<float>(sign_from_bit(q_word, bit));
     const float k_sign = static_cast<float>(sign_from_bit(k_word, bit));
     float q_jacobian = 0.0f;
@@ -636,17 +643,19 @@ __device__ __forceinline__ void accumulate_qk_vjp(
     q_jacobian = __shfl_sync(active, q_jacobian, leader);
     const float k_value = read_float(key, k_base + bit);
     const float q_contribution =
-        0.5f * common * k_sign * q_jacobian;
+        0.5f * local_gate_vjp_scale * k_sign * q_jacobian;
     const float q_warp_sum =
         contiguous_warp_sum(q_contribution, active);
     if (lane == leader) {
       atomicAdd(&grad_query[q_base + bit], q_warp_sum);
     }
     const float k_contribution =
-        0.5f * common * q_sign * softsign_derivative(k_value);
+        0.5f * local_gate_vjp_scale * q_sign * softsign_derivative(k_value);
     if constexpr (CacheGradKey) {
       const int key_offset = k_pos - key_tile_start;
-      atomicAdd(&cached_grad_key[key_offset * dim + bit], k_contribution);
+      atomicAdd(
+          &cached_grad_key[key_offset * symbol_dim + bit],
+          k_contribution);
     } else {
       atomicAdd(&grad_key[k_base + bit], k_contribution);
     }
@@ -655,39 +664,39 @@ __device__ __forceinline__ void accumulate_qk_vjp(
 
 
 template <typename scalar_t, BackwardPlan Plan>
-__global__ void soft_backward_kernel(
+__global__ void surrogate_vjp_kernel(
     const scalar_t* __restrict__ query,
     const scalar_t* __restrict__ key,
-    const scalar_t* __restrict__ value,
+    const scalar_t* __restrict__ payload,
     const scalar_t* __restrict__ grad_output,
-    const int32_t* __restrict__ query_symbols,
-    const int32_t* __restrict__ key_symbols,
+    const int32_t* __restrict__ packed_query_symbols,
+    const int32_t* __restrict__ packed_key_symbols,
     const int64_t* __restrict__ rng_seed,
     float* __restrict__ grad_query,
     float* __restrict__ grad_key,
-    float* __restrict__ grad_value,
+    float* __restrict__ grad_payload,
     int seq_len,
     int num_heads,
-    int dim,
-    int num_value_heads,
-    int value_dim,
+    int symbol_dim,
+    int num_payload_heads,
+    int payload_dim,
     int max_suffix_length,
     float inverse_route_temperature,
     float mismatch_penalty) {
   constexpr bool kCacheGradOutput =
-      BackwardPlanFeatures<Plan>::kCacheGradOutput;
+      BackwardCacheTraits<Plan>::kCacheGradOutput;
   constexpr bool kCacheQuery =
-      BackwardPlanFeatures<Plan>::kCacheQuery;
+      BackwardCacheTraits<Plan>::kCacheQuery;
   constexpr bool kCacheScores =
-      BackwardPlanFeatures<Plan>::kCacheScores;
+      BackwardCacheTraits<Plan>::kCacheScores;
   constexpr bool kCacheGradKey =
-      BackwardPlanFeatures<Plan>::kCacheGradKey;
+      BackwardCacheTraits<Plan>::kCacheGradKey;
   extern __shared__ float shared_float[];
   const BackwardSharedView shared = bind_backward_shared<Plan>(
       shared_float,
       seq_len,
-      dim,
-      value_dim,
+      symbol_dim,
+      payload_dim,
       max_suffix_length);
   float* cached_grad_output = shared.grad_output;
   int32_t* cached_query = shared.query;
@@ -704,9 +713,9 @@ __global__ void soft_backward_kernel(
   if constexpr (kCacheGradOutput || kCacheQuery) {
     const int64_t grad_base =
         ((static_cast<int64_t>(b) * seq_len + i) * num_heads + h) *
-        value_dim;
+        payload_dim;
     if constexpr (kCacheGradOutput) {
-      for (int d = tid; d < value_dim; d += blockDim.x) {
+      for (int d = tid; d < payload_dim; d += blockDim.x) {
         cached_grad_output[d] = read_float(grad_output, grad_base + d);
       }
     }
@@ -714,7 +723,7 @@ __global__ void soft_backward_kernel(
       const int query_count = min(max_suffix_length, i + 1);
       for (int offset = tid; offset < query_count; offset += blockDim.x) {
         cached_query[offset] = static_cast<int32_t>(
-            load_word(query_symbols, b, i - offset, h, seq_len, num_heads));
+            load_word(packed_query_symbols, b, i - offset, h, seq_len, num_heads));
       }
     }
     __syncthreads();
@@ -725,39 +734,39 @@ __global__ void soft_backward_kernel(
       ? SoftmaxStats{null_logit, 1.0f, 0.0f}
       : SoftmaxStats{-FLT_MAX, 0.0f, 0.0f};
   for (int tile_start = 1; tile_start <= i; tile_start += blockDim.x) {
-    const int action = tile_start + tid;
-    if (action > i) {
+    const int route_index = tile_start + tid;
+    if (route_index > i) {
       continue;
     }
-    const float score = proxy_score<kCacheQuery>(
-        query_symbols,
-        key_symbols,
+    const float score = proxy_suffix_score<kCacheQuery>(
+        packed_query_symbols,
+        packed_key_symbols,
         cached_query,
         seed,
         b,
         h,
         i,
-        action,
+        route_index,
         seq_len,
         num_heads,
-        dim,
+        symbol_dim,
         max_suffix_length,
         mismatch_penalty);
     if constexpr (kCacheScores) {
-      cached_scores[action - 1] = score;
+      cached_scores[route_index - 1] = score;
     }
-    const float utility = candidate_utility<scalar_t, kCacheGradOutput>(
-        value,
+    const float utility = route_payload_utility<scalar_t, kCacheGradOutput>(
+        payload,
         grad_output,
         cached_grad_output,
         b,
         h,
         i,
-        action,
+        route_index,
         seq_len,
         num_heads,
-        num_value_heads,
-        value_dim);
+        num_payload_heads,
+        payload_dim);
     local_stats = append_softmax_item(
         local_stats,
         score * inverse_route_temperature,
@@ -770,12 +779,12 @@ __global__ void soft_backward_kernel(
   const float expected_utility =
       row_stats.utility_numerator / row_stats.normalizer;
 
-  const int value_head = h / (num_heads / num_value_heads);
+  const int payload_head = h / (num_heads / num_payload_heads);
   for (int tile_start = 1; tile_start <= i; tile_start += blockDim.x) {
-    const int action = tile_start + tid;
+    const int route_index = tile_start + tid;
     const int key_tile_start = tile_start - max_suffix_length;
     const int key_tile_positions = blockDim.x + max_suffix_length - 1;
-    const int key_tile_values = key_tile_positions * dim;
+    const int key_tile_values = key_tile_positions * symbol_dim;
     if constexpr (kCacheGradKey) {
       for (int index = tid; index < key_tile_values; index += blockDim.x) {
         cached_grad_key[index] = 0.0f;
@@ -783,77 +792,79 @@ __global__ void soft_backward_kernel(
       __syncthreads();
     }
 
-    if (action <= i) {
+    if (route_index <= i) {
       float score;
       if constexpr (kCacheScores) {
-        score = cached_scores[action - 1];
+        score = cached_scores[route_index - 1];
       } else {
-        score = proxy_score<kCacheQuery>(
-            query_symbols,
-            key_symbols,
+        score = proxy_suffix_score<kCacheQuery>(
+            packed_query_symbols,
+            packed_key_symbols,
             cached_query,
             seed,
             b,
             h,
             i,
-            action,
+            route_index,
             seq_len,
             num_heads,
-            dim,
+            symbol_dim,
             max_suffix_length,
             mismatch_penalty);
       }
       const float probability =
           __expf(score * inverse_route_temperature - row_max) / denominator;
-      const float utility = candidate_utility<scalar_t, kCacheGradOutput>(
-          value,
+      const float utility = route_payload_utility<scalar_t, kCacheGradOutput>(
+          payload,
           grad_output,
           cached_grad_output,
           b,
           h,
           i,
-          action,
+          route_index,
           seq_len,
           num_heads,
-          num_value_heads,
-          value_dim);
-      const float dscore =
+          num_payload_heads,
+          payload_dim);
+      const float route_score_vjp =
           inverse_route_temperature * probability * (utility - expected_utility);
 
-      for (int d = 0; d < value_dim; ++d) {
-        const int64_t value_idx =
-            ((static_cast<int64_t>(b) * seq_len + action) *
-                 num_value_heads +
-             value_head) *
-                value_dim +
+      for (int d = 0; d < payload_dim; ++d) {
+        const int64_t payload_idx =
+            ((static_cast<int64_t>(b) * seq_len + route_index) *
+                 num_payload_heads +
+             payload_head) *
+                payload_dim +
             d;
-        const float value_logit = read_float(value, value_idx);
+        const float payload_logit =
+            read_float(payload, payload_idx);
         const int64_t grad_idx =
             ((static_cast<int64_t>(b) * seq_len + i) * num_heads + h) *
-                value_dim +
+                payload_dim +
             d;
         const float grad = kCacheGradOutput
             ? cached_grad_output[d]
             : read_float(grad_output, grad_idx);
         atomicAdd(
-            &grad_value[value_idx],
-            probability * grad * softsign_derivative(value_logit));
+            &grad_payload[payload_idx],
+            probability * grad * softsign_derivative(payload_logit));
       }
 
-      const int valid = min(max_suffix_length, min(i + 1, action));
+      const int suffix_steps =
+          min(max_suffix_length, min(i + 1, route_index));
       float prefix_product = 1.0f;
-      float tail_sum = score;
-      for (int offset = 0; offset < valid; ++offset) {
+      float suffix_tail_sum = score;
+      for (int offset = 0; offset < suffix_steps; ++offset) {
         const unsigned offset_mask =
-            action_offset_warp_mask(tile_start, i, offset);
+            route_offset_warp_mask(tile_start, i, offset);
         const int q_pos = i - offset;
-        const int k_pos = action - 1 - offset;
+        const int k_pos = route_index - 1 - offset;
         const uint32_t q_word = kCacheQuery
             ? static_cast<uint32_t>(cached_query[offset])
-            : load_word(query_symbols, b, q_pos, h, seq_len, num_heads);
+            : load_word(packed_query_symbols, b, q_pos, h, seq_len, num_heads);
         const uint32_t k_word =
-            load_word(key_symbols, b, k_pos, h, seq_len, num_heads);
-        const LocalGate gate = local_gate(
+            load_word(packed_key_symbols, b, k_pos, h, seq_len, num_heads);
+        const StochasticMatchGate gate = stochastic_local_match_gate(
             q_word,
             k_word,
             seed,
@@ -863,15 +874,15 @@ __global__ void soft_backward_kernel(
             k_pos,
             seq_len,
             num_heads,
-            dim,
+            symbol_dim,
             mismatch_penalty);
-        prefix_product *= gate.value;
-        const float common =
+        prefix_product *= gate.match_value;
+        const float local_gate_vjp_scale =
             mismatch_penalty *
-            dscore *
-            fmaxf(tail_sum, 0.0f) *
-            gate.derivative_ratio;
-        accumulate_qk_vjp<scalar_t, kCacheGradKey>(
+            route_score_vjp *
+            fmaxf(suffix_tail_sum, 0.0f) *
+            gate.hard_hamming_vjp_scale;
+        accumulate_local_match_qk_vjp<scalar_t, kCacheGradKey>(
             query,
             key,
             grad_query,
@@ -884,25 +895,25 @@ __global__ void soft_backward_kernel(
             k_pos,
             seq_len,
             num_heads,
-            dim,
+            symbol_dim,
             q_word,
             k_word,
-            common,
+            local_gate_vjp_scale,
             offset_mask);
-        tail_sum -= prefix_product;
+        suffix_tail_sum -= prefix_product;
       }
     }
 
     if constexpr (kCacheGradKey) {
       __syncthreads();
       for (int index = tid; index < key_tile_values; index += blockDim.x) {
-        const int key_offset = index / dim;
-        const int bit = index - key_offset * dim;
+        const int key_offset = index / symbol_dim;
+        const int bit = index - key_offset * symbol_dim;
         const int k_pos = key_tile_start + key_offset;
         const float gradient = cached_grad_key[index];
         if (k_pos >= 0 && k_pos < seq_len && gradient != 0.0f) {
           const int64_t k_base =
-              token_index(b, k_pos, h, seq_len, num_heads) * dim;
+              token_index(b, k_pos, h, seq_len, num_heads) * symbol_dim;
           atomicAdd(&grad_key[k_base + bit], gradient);
         }
       }
@@ -917,7 +928,7 @@ void launch_pack(
     const torch::Tensor& values,
     torch::Tensor& packed,
     int64_t tokens,
-    int dim,
+    int symbol_dim,
     cudaStream_t stream) {
   constexpr int threads = 256;
   const int blocks = static_cast<int>((tokens + threads - 1) / threads);
@@ -925,33 +936,34 @@ void launch_pack(
       values.data_ptr<scalar_t>(),
       packed.data_ptr<int32_t>(),
       tokens,
-      dim);
+      symbol_dim);
 }
 
 }  // namespace
 
 
-std::vector<torch::Tensor> soft_forward_cuda(
+std::vector<torch::Tensor> hard_forward_cuda(
     torch::Tensor query,
     torch::Tensor key,
-    torch::Tensor value,
+    torch::Tensor payload,
     int64_t max_suffix_length) {
   const c10::cuda::CUDAGuard device_guard(query.device());
   const int batch_size = static_cast<int>(query.size(0));
   const int seq_len = static_cast<int>(query.size(1));
   const int num_heads = static_cast<int>(query.size(2));
-  const int dim = static_cast<int>(query.size(3));
-  const int num_value_heads = static_cast<int>(value.size(2));
-  const int value_dim = static_cast<int>(value.size(3));
+  const int symbol_dim = static_cast<int>(query.size(3));
+  const int num_payload_heads =
+      static_cast<int>(payload.size(2));
+  const int payload_dim = static_cast<int>(payload.size(3));
   const int64_t packed_tokens =
       static_cast<int64_t>(batch_size) * seq_len * num_heads;
   const int64_t rows = packed_tokens;
 
   auto bits_options = query.options().dtype(torch::kInt32);
-  auto query_symbols = torch::empty({batch_size, seq_len, num_heads}, bits_options);
-  auto key_symbols = torch::empty({batch_size, seq_len, num_heads}, bits_options);
+  auto packed_query_symbols = torch::empty({batch_size, seq_len, num_heads}, bits_options);
+  auto packed_key_symbols = torch::empty({batch_size, seq_len, num_heads}, bits_options);
   auto output = torch::empty(
-      {batch_size, seq_len, num_heads, value_dim},
+      {batch_size, seq_len, num_heads, payload_dim},
       query.options());
   const auto stream = at::cuda::getCurrentCUDAStream();
 
@@ -961,15 +973,15 @@ std::vector<torch::Tensor> soft_forward_cuda(
       [&] {
         launch_pack<scalar_t>(
             query,
-            query_symbols,
+            packed_query_symbols,
             packed_tokens,
-            dim,
+            symbol_dim,
             stream);
         launch_pack<scalar_t>(
             key,
-            key_symbols,
+            packed_key_symbols,
             packed_tokens,
-            dim,
+            symbol_dim,
             stream);
         const size_t shared_bytes =
             2 * kBlockThreads * sizeof(int);
@@ -978,29 +990,29 @@ std::vector<torch::Tensor> soft_forward_cuda(
             kBlockThreads,
             shared_bytes,
             stream>>>(
-            query_symbols.data_ptr<int32_t>(),
-            key_symbols.data_ptr<int32_t>(),
-            value.data_ptr<scalar_t>(),
+            packed_query_symbols.data_ptr<int32_t>(),
+            packed_key_symbols.data_ptr<int32_t>(),
+            payload.data_ptr<scalar_t>(),
             output.data_ptr<scalar_t>(),
             seq_len,
             num_heads,
-            num_value_heads,
-            value_dim,
+            num_payload_heads,
+            payload_dim,
             static_cast<int>(max_suffix_length));
       });
 
   C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return {output, query_symbols, key_symbols};
+  return {output, packed_query_symbols, packed_key_symbols};
 }
 
 
-std::vector<torch::Tensor> soft_backward_cuda(
+std::vector<torch::Tensor> surrogate_vjp_cuda(
     torch::Tensor query,
     torch::Tensor key,
-    torch::Tensor value,
+    torch::Tensor payload,
     torch::Tensor grad_output,
-    torch::Tensor query_symbols,
-    torch::Tensor key_symbols,
+    torch::Tensor packed_query_symbols,
+    torch::Tensor packed_key_symbols,
     torch::Tensor rng_seed,
     int64_t max_suffix_length,
     float inverse_route_temperature,
@@ -1009,34 +1021,35 @@ std::vector<torch::Tensor> soft_backward_cuda(
   const int batch_size = static_cast<int>(query.size(0));
   const int seq_len = static_cast<int>(query.size(1));
   const int num_heads = static_cast<int>(query.size(2));
-  const int dim = static_cast<int>(query.size(3));
-  const int num_value_heads = static_cast<int>(value.size(2));
-  const int value_dim = static_cast<int>(value.size(3));
+  const int symbol_dim = static_cast<int>(query.size(3));
+  const int num_payload_heads =
+      static_cast<int>(payload.size(2));
+  const int payload_dim = static_cast<int>(payload.size(3));
   const int64_t rows =
       static_cast<int64_t>(batch_size) * seq_len * num_heads;
 
   auto grad_options = query.options().dtype(torch::kFloat32);
   auto grad_query = torch::zeros(query.sizes(), grad_options);
   auto grad_key = torch::zeros(key.sizes(), grad_options);
-  auto grad_value = torch::zeros(value.sizes(), grad_options);
+  auto grad_payload = torch::zeros(payload.sizes(), grad_options);
   const auto stream = at::cuda::getCurrentCUDAStream();
   const BackwardSharedLayout score_layout =
-      make_backward_shared_layout<BackwardPlan::ScoreCached>(
+      make_backward_shared_layout<BackwardPlan::CacheRouteScores>(
           seq_len,
-          dim,
-          value_dim,
+          symbol_dim,
+          payload_dim,
           static_cast<int>(max_suffix_length));
   const BackwardSharedLayout key_layout =
-      make_backward_shared_layout<BackwardPlan::KeyReduced>(
+      make_backward_shared_layout<BackwardPlan::ReduceKeyGradInShared>(
           seq_len,
-          dim,
-          value_dim,
+          symbol_dim,
+          payload_dim,
           static_cast<int>(max_suffix_length));
   const BackwardSharedLayout generic_layout =
-      make_backward_shared_layout<BackwardPlan::Generic>(
+      make_backward_shared_layout<BackwardPlan::MinimalSharedMemory>(
           seq_len,
-          dim,
-          value_dim,
+          symbol_dim,
+          payload_dim,
           static_cast<int>(max_suffix_length));
   const size_t score_bytes =
       static_cast<size_t>(seq_len) * sizeof(float);
@@ -1046,21 +1059,21 @@ std::vector<torch::Tensor> soft_backward_cuda(
       kBlockThreads + cached_query_len - 1;
   const size_t key_gradient_bytes =
       static_cast<size_t>(key_tile_positions) *
-      static_cast<size_t>(dim) *
+      static_cast<size_t>(symbol_dim) *
       sizeof(float);
   const bool score_plan_fits =
       score_layout.total_bytes() <= kPortableSharedMemoryLimit;
   const bool key_plan_fits =
       key_layout.total_bytes() <= kPortableSharedMemoryLimit;
 
-  BackwardPlan plan = BackwardPlan::Generic;
+  BackwardPlan plan = BackwardPlan::MinimalSharedMemory;
   size_t shared_bytes = generic_layout.total_bytes();
   if (score_plan_fits &&
       (!key_plan_fits || score_bytes <= key_gradient_bytes)) {
-    plan = BackwardPlan::ScoreCached;
+    plan = BackwardPlan::CacheRouteScores;
     shared_bytes = score_layout.total_bytes();
   } else if (key_plan_fits) {
-    plan = BackwardPlan::KeyReduced;
+    plan = BackwardPlan::ReduceKeyGradInShared;
     shared_bytes = key_layout.total_bytes();
   }
 
@@ -1071,49 +1084,49 @@ std::vector<torch::Tensor> soft_backward_cuda(
         const auto launch_backward = [&](auto plan_tag) {
           constexpr BackwardPlan kPlan =
               decltype(plan_tag)::value;
-          soft_backward_kernel<scalar_t, kPlan><<<
+          surrogate_vjp_kernel<scalar_t, kPlan><<<
               rows,
               kBlockThreads,
               shared_bytes,
               stream>>>(
               query.data_ptr<scalar_t>(),
               key.data_ptr<scalar_t>(),
-              value.data_ptr<scalar_t>(),
+              payload.data_ptr<scalar_t>(),
               grad_output.data_ptr<scalar_t>(),
-              query_symbols.data_ptr<int32_t>(),
-              key_symbols.data_ptr<int32_t>(),
+              packed_query_symbols.data_ptr<int32_t>(),
+              packed_key_symbols.data_ptr<int32_t>(),
               rng_seed.data_ptr<int64_t>(),
               grad_query.data_ptr<float>(),
               grad_key.data_ptr<float>(),
-              grad_value.data_ptr<float>(),
+              grad_payload.data_ptr<float>(),
               seq_len,
               num_heads,
-              dim,
-              num_value_heads,
-              value_dim,
+              symbol_dim,
+              num_payload_heads,
+              payload_dim,
               static_cast<int>(max_suffix_length),
               inverse_route_temperature,
               mismatch_penalty);
         };
         switch (plan) {
-          case BackwardPlan::ScoreCached:
+          case BackwardPlan::CacheRouteScores:
             launch_backward(std::integral_constant<
                 BackwardPlan,
-                BackwardPlan::ScoreCached>{});
+                BackwardPlan::CacheRouteScores>{});
             break;
-          case BackwardPlan::KeyReduced:
+          case BackwardPlan::ReduceKeyGradInShared:
             launch_backward(std::integral_constant<
                 BackwardPlan,
-                BackwardPlan::KeyReduced>{});
+                BackwardPlan::ReduceKeyGradInShared>{});
             break;
-          case BackwardPlan::Generic:
+          case BackwardPlan::MinimalSharedMemory:
             launch_backward(std::integral_constant<
                 BackwardPlan,
-                BackwardPlan::Generic>{});
+                BackwardPlan::MinimalSharedMemory>{});
             break;
         }
       });
 
   C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return {grad_query, grad_key, grad_value};
+  return {grad_query, grad_key, grad_payload};
 }

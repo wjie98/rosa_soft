@@ -9,8 +9,8 @@ from torch.autograd.function import once_differentiable
 from .soft_contract import (
     ROSA_SOFT_DEFAULT_MISMATCH_PENALTY,
     ROSA_SOFT_DEFAULT_ROUTE_TEMPERATURE,
-    validate_cuda_scalars,
-    validate_soft_inputs,
+    validate_cuda_surrogate_scalars,
+    validate_rosa_soft_inputs,
 )
 
 
@@ -21,7 +21,7 @@ __all__ = [
 ]
 
 
-def _validate_cuda_inputs(
+def _validate_cuda_call(
     query_logits: Tensor,
     key_logits: Tensor,
     payload_logits: Tensor,
@@ -29,7 +29,7 @@ def _validate_cuda_inputs(
     route_temperature: float,
     mismatch_penalty: float,
 ) -> int:
-    normalized_length = validate_soft_inputs(
+    effective_max_suffix_length = validate_rosa_soft_inputs(
         query_logits,
         key_logits,
         payload_logits,
@@ -45,16 +45,16 @@ def _validate_cuda_inputs(
         torch.bfloat16,
     ):
         raise ValueError("rosa_soft supports float32, float16, and bfloat16")
-    validate_cuda_scalars(
-        normalized_length,
+    validate_cuda_surrogate_scalars(
+        effective_max_suffix_length,
         route_temperature,
         mismatch_penalty,
     )
-    return normalized_length
+    return effective_max_suffix_length
 
 
 @torch.library.register_fake("rosa_soft::soft_forward")
-def _fake_soft_forward(
+def _fake_hard_forward(
     query_logits: Tensor,
     key_logits: Tensor,
     payload_logits: Tensor,
@@ -72,13 +72,13 @@ def _fake_soft_forward(
 
 
 @torch.library.register_fake("rosa_soft::soft_backward")
-def _fake_soft_backward(
+def _fake_surrogate_vjp(
     query_logits: Tensor,
     key_logits: Tensor,
     payload_logits: Tensor,
     grad_output: Tensor,
-    query_symbols: Tensor,
-    key_symbols: Tensor,
+    packed_query_symbols: Tensor,
+    packed_key_symbols: Tensor,
     rng_seed: Tensor,
     max_suffix_length: int,
     route_temperature: float,
@@ -86,8 +86,8 @@ def _fake_soft_backward(
 ):
     del (
         grad_output,
-        query_symbols,
-        key_symbols,
+        packed_query_symbols,
+        packed_key_symbols,
         rng_seed,
         max_suffix_length,
         route_temperature,
@@ -109,7 +109,7 @@ def _fake_soft_backward(
     ]
 
 
-class _RosaSoftFunction(torch.autograd.Function):
+class _HardForwardSoftVjpFunction(torch.autograd.Function):
     @staticmethod
     def forward(
         ctx,
@@ -121,7 +121,7 @@ class _RosaSoftFunction(torch.autograd.Function):
         mismatch_penalty: float,
         rng_seed: Tensor,
     ) -> Tensor:
-        hard_output, query_symbols, key_symbols = (
+        hard_output, packed_query_symbols, packed_key_symbols = (
             torch.ops.rosa_soft.soft_forward(
                 query_logits,
                 key_logits,
@@ -136,8 +136,8 @@ class _RosaSoftFunction(torch.autograd.Function):
             query_logits,
             key_logits,
             payload_logits,
-            query_symbols,
-            key_symbols,
+            packed_query_symbols,
+            packed_key_symbols,
             rng_seed,
         )
         return hard_output
@@ -149,8 +149,8 @@ class _RosaSoftFunction(torch.autograd.Function):
             query_logits,
             key_logits,
             payload_logits,
-            query_symbols,
-            key_symbols,
+            packed_query_symbols,
+            packed_key_symbols,
             rng_seed,
         ) = ctx.saved_tensors
         grad_query, grad_key, grad_payload = (
@@ -159,8 +159,8 @@ class _RosaSoftFunction(torch.autograd.Function):
                 key_logits,
                 payload_logits,
                 grad_output,
-                query_symbols,
-                key_symbols,
+                packed_query_symbols,
+                packed_key_symbols,
                 rng_seed,
                 ctx.max_suffix_length,
                 ctx.route_temperature,
@@ -178,7 +178,7 @@ class _RosaSoftFunction(torch.autograd.Function):
         )
 
 
-def _rosa_soft_with_seed(
+def _rosa_soft_cuda_with_seed(
     query_logits: Tensor,
     key_logits: Tensor,
     payload_logits: Tensor,
@@ -189,7 +189,7 @@ def _rosa_soft_with_seed(
 ) -> Tensor:
     """Private deterministic entry point used by CUDA parity tests."""
 
-    return _RosaSoftFunction.apply(
+    return _HardForwardSoftVjpFunction.apply(
         query_logits,
         key_logits,
         payload_logits,
@@ -210,7 +210,7 @@ def rosa_soft(
 ) -> Tensor:
     """Run exact hard ROSA forward with the fixed stochastic CUDA VJP."""
 
-    max_suffix_length = _validate_cuda_inputs(
+    max_suffix_length = _validate_cuda_call(
         query_logits,
         key_logits,
         payload_logits,
@@ -235,7 +235,7 @@ def rosa_soft(
         dtype=torch.int64,
         device=query_logits.device,
     ).random_()
-    return _rosa_soft_with_seed(
+    return _rosa_soft_cuda_with_seed(
         query_logits,
         key_logits,
         payload_logits,

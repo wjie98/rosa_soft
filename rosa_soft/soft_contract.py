@@ -14,7 +14,7 @@ ROSA_SOFT_DEFAULT_MISMATCH_PENALTY = 3.0
 ROSA_SOFT_NULL_ROUTE_SCORE = 0.5
 
 
-def validate_soft_inputs(
+def validate_rosa_soft_inputs(
     query_logits: Tensor,
     key_logits: Tensor,
     payload_logits: Tensor,
@@ -70,10 +70,10 @@ def validate_soft_inputs(
     if isinstance(max_suffix_length, bool):
         raise TypeError("max_suffix_length must be an integer")
     try:
-        normalized_length = operator.index(max_suffix_length)
+        effective_max_suffix_length = operator.index(max_suffix_length)
     except TypeError as error:
         raise TypeError("max_suffix_length must be an integer") from error
-    if normalized_length < 1:
+    if effective_max_suffix_length < 1:
         raise ValueError("max_suffix_length must be >= 1")
     if (
         not math.isfinite(float(route_temperature))
@@ -85,10 +85,10 @@ def validate_soft_inputs(
         or float(mismatch_penalty) <= 0.0
     ):
         raise ValueError("mismatch_penalty must be finite and > 0")
-    return min(normalized_length, query_logits.size(1))
+    return min(effective_max_suffix_length, query_logits.size(1))
 
 
-def validate_cuda_scalars(
+def validate_cuda_surrogate_scalars(
     max_suffix_length: int,
     route_temperature: float,
     mismatch_penalty: float,

@@ -1,4 +1,4 @@
-# RosaSoft Estimator Ablation Matrix
+# Historical RosaSoft Estimator Ablation Matrix
 
 > Historical research record. The private `experiments/` workspace is not
 > shipped with the package, and its original scripts target deleted prototype
@@ -104,7 +104,7 @@ The broad calibration grid is:
 Geometry calibration reports a Pareto surface. It must not select parameters by
 hard NLL alone because a sharper hard approximation can suppress exploration.
 The final route_temperature-only ladder is documented separately in
-`ROSA_SOFT_TEMPERATURE_LADDER.md`.
+`TEMPERATURE_LADDER.md`.
 
 ## 5. Predeclared Decisions
 
@@ -262,7 +262,7 @@ control is retained. The production default changes from `2` to `1`.
 A 1296-row route_temperature/null cross has identical paired success outcomes for
 null scores `0/0.5/1`. Null is negligible once suffix scores are large and
 remains task-dependent for weak, short routes. See
-`ROSA_SOFT_TEMPERATURE_LADDER.md` for the complete matrix.
+`TEMPERATURE_LADDER.md` for the complete matrix.
 
 ### 6.7 Held-Out Antithetic Decision
 

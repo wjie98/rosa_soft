@@ -1,9 +1,10 @@
 """Hard-forward/soft-backward PyTorch oracle for RosaSoft.
 
 The public training operator exposes only a suffix horizon, route
-temperature, and mismatch penalty. Stochastic mismatch exploration, Jacobian
-anchoring, and soft payload routing are fixed parts of the estimator. Payload
-credit follows the dense route distribution only in backward.
+temperature, and mismatch penalty. Stochastic mismatch exploration, the
+hard-Hamming local VJP, and soft payload routing are fixed parts of the
+estimator. Payload credit follows the dense route distribution only in
+backward.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from .soft_contract import (
     ROSA_SOFT_DEFAULT_MISMATCH_PENALTY,
     ROSA_SOFT_DEFAULT_ROUTE_TEMPERATURE,
     ROSA_SOFT_NULL_ROUTE_SCORE,
-    validate_soft_inputs,
+    validate_rosa_soft_inputs,
 )
 
 __all__ = [
@@ -29,7 +30,7 @@ __all__ = [
 ]
 
 
-def _working_dtype(dtype: torch.dtype) -> torch.dtype:
+def _reference_dtype(dtype: torch.dtype) -> torch.dtype:
     if dtype in (torch.float16, torch.bfloat16):
         return torch.float32
     return dtype
@@ -39,7 +40,7 @@ def _hard_sign(x: Tensor) -> Tensor:
     return torch.where(x > 0, torch.ones_like(x), -torch.ones_like(x))
 
 
-class _HardSignSoftsignJacobian(torch.autograd.Function):
+class _HardSignWithSoftsignVjp(torch.autograd.Function):
     @staticmethod
     def forward(ctx, logits: Tensor) -> Tensor:
         ctx.save_for_backward(logits)
@@ -52,21 +53,23 @@ class _HardSignSoftsignJacobian(torch.autograd.Function):
         return grad_output / denominator.square()
 
 
-def _sign_with_softsign_jacobian(x: Tensor) -> Tuple[Tensor, Tensor]:
-    hard = _hard_sign(x)
-    return hard, _HardSignSoftsignJacobian.apply(x)
+def _hard_sign_with_softsign_vjp(x: Tensor) -> Tuple[Tensor, Tensor]:
+    surrogate = _HardSignWithSoftsignVjp.apply(x)
+    return surrogate.detach(), surrogate
 
 
-def _action_mask(seq_len: int, device: torch.device) -> Tensor:
+def _causal_route_mask(seq_len: int, device: torch.device) -> Tensor:
     row = torch.arange(seq_len, device=device).view(seq_len, 1)
-    action = torch.arange(seq_len, device=device).view(1, seq_len)
-    return (action == 0) | ((action >= 1) & (action <= row))
+    route_index = torch.arange(seq_len, device=device).view(1, seq_len)
+    return (route_index == 0) | (
+        (route_index >= 1) & (route_index <= row)
+    )
 
 
-def _pairwise_exact_local_match(
+def _pairwise_exact_symbol_match(
     query: Tensor,
     key: Tensor,
-    action_mask: Tensor,
+    route_mask: Tensor,
 ) -> Tensor:
     query_hard = _hard_sign(query.permute(0, 2, 1, 3))
     key_hard = _hard_sign(key.permute(0, 2, 1, 3)[..., :-1, :])
@@ -80,7 +83,7 @@ def _pairwise_exact_local_match(
         q = query_hard[..., bit].unsqueeze(-1)
         k = key_hard[..., bit].unsqueeze(-2)
         exact &= q == k
-    return F.pad(exact, (1, 0), value=False) & action_mask.view(
+    return F.pad(exact, (1, 0), value=False) & route_mask.view(
         1,
         1,
         seq_len,
@@ -88,13 +91,13 @@ def _pairwise_exact_local_match(
     )
 
 
-def _relaxed_gate_with_hard_jacobian(
+def _local_match_gate_with_hard_vjp(
     hard_hamming: Tensor,
     relaxed_hamming: Tensor,
     surrogate_hamming: Tensor,
     mismatch_penalty: float,
 ) -> Tensor:
-    """Return a relaxed value with the hard-Hamming local Jacobian scale."""
+    """Return a relaxed gate whose local VJP follows hard Hamming distance."""
 
     mismatch_penalty = float(mismatch_penalty)
     hard_jacobian_scale = torch.exp(
@@ -105,46 +108,48 @@ def _relaxed_gate_with_hard_jacobian(
     return torch.exp(-mismatch_penalty * energy)
 
 
-def _pairwise_proxy_local_match(
+def _pairwise_stochastic_match_gates(
     query: Tensor,
     key: Tensor,
-    action_mask: Tensor,
+    route_mask: Tensor,
     mismatch_penalty: float,
-    mismatch_noise: Tensor,
+    mismatch_uniforms: Tensor,
 ) -> Tensor:
-    """Build fixed cubic local gates and their anchored VJP."""
+    """Build fixed cubic local gates and their hard-Hamming VJP."""
 
     query_h = query.permute(0, 2, 1, 3)
     key_h = key.permute(0, 2, 1, 3)[..., :-1, :]
-    query_hard, query_ste = _sign_with_softsign_jacobian(query_h)
-    key_hard, key_ste = _sign_with_softsign_jacobian(key_h)
+    query_hard, query_surrogate = _hard_sign_with_softsign_vjp(query_h)
+    key_hard, key_surrogate = _hard_sign_with_softsign_vjp(key_h)
     batch, heads, seq_len, bits = query_h.shape
     pair_shape = (batch, heads, seq_len, max(seq_len - 1, 0))
     hard_hamming = torch.zeros(pair_shape, dtype=query.dtype, device=query.device)
-    relaxed_a = torch.zeros_like(hard_hamming)
+    relaxed_hamming = torch.zeros_like(hard_hamming)
     surrogate_hamming = torch.zeros_like(hard_hamming)
 
     for bit in range(bits):
         q_hard = query_hard[..., bit].unsqueeze(-1)
         k_hard = key_hard[..., bit].unsqueeze(-2)
         hard_mismatch = 0.5 * (1.0 - q_hard * k_hard)
-        uniform = mismatch_noise[..., bit]
-        alpha_a = 1.0 - 0.5 * uniform.pow(3)
+        uniform = mismatch_uniforms[..., bit]
+        mismatch_weight = 1.0 - 0.5 * uniform.pow(3)
 
         hard_hamming += hard_mismatch
-        relaxed_a += hard_mismatch * alpha_a
+        relaxed_hamming += hard_mismatch * mismatch_weight
 
-        q_ste = query_ste[..., bit].unsqueeze(-1)
-        k_ste = key_ste[..., bit].unsqueeze(-2)
-        surrogate_hamming += 0.5 * (1.0 - q_ste * k_ste)
+        query_bit_surrogate = query_surrogate[..., bit].unsqueeze(-1)
+        key_bit_surrogate = key_surrogate[..., bit].unsqueeze(-2)
+        surrogate_hamming += 0.5 * (
+            1.0 - query_bit_surrogate * key_bit_surrogate
+        )
 
-    local_proxy = _relaxed_gate_with_hard_jacobian(
+    local_proxy = _local_match_gate_with_hard_vjp(
         hard_hamming,
-        relaxed_a,
+        relaxed_hamming,
         surrogate_hamming,
         mismatch_penalty,
     )
-    return F.pad(local_proxy, (1, 0), value=0.0) * action_mask.view(
+    return F.pad(local_proxy, (1, 0), value=0.0) * route_mask.view(
         1,
         1,
         seq_len,
@@ -152,7 +157,10 @@ def _pairwise_proxy_local_match(
     )
 
 
-def _diagonal_suffix_sum(local_match: Tensor, max_suffix_length: int) -> Tensor:
+def _suffix_prefix_product_scores(
+    local_match: Tensor,
+    max_suffix_length: int,
+) -> Tensor:
     product = local_match
     score = product
     max_offsets = min(int(max_suffix_length), local_match.size(-2), local_match.size(-1))
@@ -163,20 +171,32 @@ def _diagonal_suffix_sum(local_match: Tensor, max_suffix_length: int) -> Tensor:
     return score
 
 
-def _select_hard_actions(hard_lengths: Tensor, action_mask: Tensor) -> Tensor:
-    seq_len = hard_lengths.size(-1)
-    action = torch.arange(seq_len, device=hard_lengths.device).view(
+def _select_latest_longest_routes(
+    exact_suffix_lengths: Tensor,
+    route_mask: Tensor,
+) -> Tensor:
+    seq_len = exact_suffix_lengths.size(-1)
+    route_index = torch.arange(
+        seq_len,
+        device=exact_suffix_lengths.device,
+    ).view(
         1,
         1,
         1,
         seq_len,
     )
-    candidates = action_mask.view(1, 1, seq_len, seq_len) & (action > 0)
-    max_length = hard_lengths.amax(dim=-1, keepdim=True)
+    nonnull_routes = route_mask.view(1, 1, seq_len, seq_len) & (
+        route_index > 0
+    )
+    max_length = exact_suffix_lengths.amax(dim=-1, keepdim=True)
     latest = torch.where(
-        candidates & (hard_lengths == max_length),
-        action,
-        torch.zeros((), dtype=action.dtype, device=action.device),
+        nonnull_routes & (exact_suffix_lengths == max_length),
+        route_index,
+        torch.zeros(
+            (),
+            dtype=route_index.dtype,
+            device=route_index.device,
+        ),
     ).amax(dim=-1)
     return torch.where(
         max_length.squeeze(-1) > 0,
@@ -185,133 +205,182 @@ def _select_hard_actions(hard_lengths: Tensor, action_mask: Tensor) -> Tensor:
     )
 
 
-def _allocation_scores(candidate_scores: Tensor, action_mask: Tensor) -> Tensor:
-    seq_len = candidate_scores.size(-1)
-    scores = candidate_scores.clone()
+def _masked_route_scores(
+    proxy_scores: Tensor,
+    route_mask: Tensor,
+) -> Tensor:
+    seq_len = proxy_scores.size(-1)
+    scores = proxy_scores.clone()
     scores[..., 0] = ROSA_SOFT_NULL_ROUTE_SCORE
     return scores.masked_fill(
-        ~action_mask.view(1, 1, seq_len, seq_len),
+        ~route_mask.view(1, 1, seq_len, seq_len),
         -torch.inf,
     )
 
 
-def _proxy_probabilities(allocation_scores: Tensor, route_temperature: float) -> Tensor:
-    centered = allocation_scores - allocation_scores.amax(dim=-1, keepdim=True)
+def _route_probabilities(
+    route_scores: Tensor,
+    route_temperature: float,
+) -> Tensor:
+    centered = route_scores - route_scores.amax(dim=-1, keepdim=True)
     return torch.softmax(centered / float(route_temperature), dim=-1)
 
 
-def _expand_value_heads(value: Tensor, query_heads: int) -> Tensor:
-    groups = query_heads // value.size(2)
-    return value.repeat_interleave(groups, dim=2).permute(0, 2, 1, 3)
+def _expand_payload_heads(payload: Tensor, query_heads: int) -> Tensor:
+    groups = query_heads // payload.size(2)
+    return payload.repeat_interleave(groups, dim=2).permute(0, 2, 1, 3)
 
 
-def _gather_action_values(action_values: Tensor, actions: Tensor) -> Tensor:
-    value_dim = action_values.size(-1)
-    indices = actions.unsqueeze(-1).expand(*actions.shape, value_dim)
-    return torch.gather(action_values, dim=2, index=indices)
+def _gather_routed_payloads(
+    route_payloads: Tensor,
+    route_indices: Tensor,
+) -> Tensor:
+    payload_dim = route_payloads.size(-1)
+    indices = route_indices.unsqueeze(-1).expand(
+        *route_indices.shape,
+        payload_dim,
+    )
+    return torch.gather(route_payloads, dim=2, index=indices)
 
 
-def _hard_components(
+def _hard_route_forward(
     query: Tensor,
     key: Tensor,
-    value: Tensor,
+    payload: Tensor,
     max_suffix_length: int,
 ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-    action_mask = _action_mask(query.size(1), query.device)
-    exact_local = _pairwise_exact_local_match(query, key, action_mask)
-    hard_lengths = _diagonal_suffix_sum(exact_local.to(query.dtype), max_suffix_length)
-    hard_actions = _select_hard_actions(hard_lengths, action_mask)
+    route_mask = _causal_route_mask(query.size(1), query.device)
+    exact_local = _pairwise_exact_symbol_match(query, key, route_mask)
+    exact_suffix_lengths = _suffix_prefix_product_scores(
+        exact_local.to(query.dtype),
+        max_suffix_length,
+    )
+    selected_routes = _select_latest_longest_routes(
+        exact_suffix_lengths,
+        route_mask,
+    )
 
-    action_values = _expand_value_heads(_hard_sign(value), query.size(2))
-    action_values[..., 0, :] = 0.0
-    hard_output = _gather_action_values(action_values, hard_actions).permute(0, 2, 1, 3)
-    return hard_output, hard_lengths, hard_actions, action_mask
+    route_payloads = _expand_payload_heads(
+        _hard_sign(payload),
+        query.size(2),
+    )
+    route_payloads[..., 0, :] = 0.0
+    hard_output = _gather_routed_payloads(
+        route_payloads,
+        selected_routes,
+    ).permute(0, 2, 1, 3)
+    return hard_output, exact_suffix_lengths, selected_routes, route_mask
 
 
-def _surrogate_output(
-    value: Tensor,
+def _build_vjp_surrogate(
+    payload: Tensor,
     probabilities: Tensor,
     query_heads: int,
 ) -> Tensor:
-    value_hard, value_ste = _sign_with_softsign_jacobian(value)
-    action_hard = _expand_value_heads(value_hard, query_heads)
-    action_ste = _expand_value_heads(value_ste, query_heads)
-    nonnull = torch.arange(value.size(1), device=value.device).view(1, 1, -1, 1) != 0
-    action_hard = torch.where(nonnull, action_hard, torch.zeros_like(action_hard))
-    action_ste = torch.where(nonnull, action_ste, torch.zeros_like(action_ste))
+    payload_hard, payload_surrogate = _hard_sign_with_softsign_vjp(
+        payload
+    )
+    route_payload_hard = _expand_payload_heads(
+        payload_hard,
+        query_heads,
+    )
+    route_payload_surrogate = _expand_payload_heads(
+        payload_surrogate,
+        query_heads,
+    )
+    nonnull = torch.arange(
+        payload.size(1),
+        device=payload.device,
+    ).view(1, 1, -1, 1) != 0
+    route_payload_hard = torch.where(
+        nonnull,
+        route_payload_hard,
+        torch.zeros_like(route_payload_hard),
+    )
+    route_payload_surrogate = torch.where(
+        nonnull,
+        route_payload_surrogate,
+        torch.zeros_like(route_payload_surrogate),
+    )
 
     route = torch.einsum(
         "bhta,bhad->bhtd",
         probabilities,
-        action_hard.detach(),
+        route_payload_hard.detach(),
     )
-    value_path = torch.einsum(
+    payload_path = torch.einsum(
         "bhta,bhad->bhtd",
         probabilities.detach(),
-        action_ste,
+        route_payload_surrogate,
     )
-    return (route + value_path).permute(0, 2, 1, 3)
+    return (route + payload_path).permute(0, 2, 1, 3)
 
 
-class _RosaSoftReferenceFunction(torch.autograd.Function):
+class _HardForwardSoftVjpReference(torch.autograd.Function):
     @staticmethod
     def forward(
         ctx,
         query: Tensor,
         key: Tensor,
-        value: Tensor,
-        mismatch_noise: Tensor,
+        payload: Tensor,
+        mismatch_uniforms: Tensor,
         max_suffix_length: int,
         route_temperature: float,
         mismatch_penalty: float,
     ) -> Tensor:
-        work_dtype = _working_dtype(query.dtype)
-        hard_output, _, _, _ = _hard_components(
-            query.to(work_dtype),
-            key.to(work_dtype),
-            value.to(work_dtype),
+        reference_dtype = _reference_dtype(query.dtype)
+        hard_output, _, _, _ = _hard_route_forward(
+            query.to(reference_dtype),
+            key.to(reference_dtype),
+            payload.to(reference_dtype),
             int(max_suffix_length),
         )
         ctx.max_suffix_length = int(max_suffix_length)
         ctx.route_temperature = float(route_temperature)
         ctx.mismatch_penalty = float(mismatch_penalty)
-        ctx.save_for_backward(query, key, value, mismatch_noise)
+        ctx.save_for_backward(query, key, payload, mismatch_uniforms)
         return hard_output.to(query.dtype)
 
     @staticmethod
     @once_differentiable
     def backward(ctx, grad_output: Tensor):
-        query, key, value, mismatch_noise = ctx.saved_tensors
+        query, key, payload, mismatch_uniforms = ctx.saved_tensors
         needs = ctx.needs_input_grad[:3]
         with torch.enable_grad():
-            query_grad = query.detach().requires_grad_(True)
-            key_grad = key.detach().requires_grad_(True)
-            value_grad = value.detach().requires_grad_(True)
-            work_dtype = _working_dtype(query.dtype)
-            query_work = query_grad.to(work_dtype)
-            key_work = key_grad.to(work_dtype)
-            value_work = value_grad.to(work_dtype)
-            action_mask = _action_mask(query.size(1), query.device)
-            local_proxy = _pairwise_proxy_local_match(
+            query_leaf = query.detach().requires_grad_(True)
+            key_leaf = key.detach().requires_grad_(True)
+            payload_leaf = payload.detach().requires_grad_(True)
+            reference_dtype = _reference_dtype(query.dtype)
+            query_work = query_leaf.to(reference_dtype)
+            key_work = key_leaf.to(reference_dtype)
+            payload_work = payload_leaf.to(reference_dtype)
+            route_mask = _causal_route_mask(
+                query.size(1),
+                query.device,
+            )
+            local_proxy = _pairwise_stochastic_match_gates(
                 query_work,
                 key_work,
-                action_mask,
+                route_mask,
                 ctx.mismatch_penalty,
-                mismatch_noise,
+                mismatch_uniforms,
             )
-            proxy_scores = _diagonal_suffix_sum(local_proxy, ctx.max_suffix_length)
-            probabilities = _proxy_probabilities(
-                _allocation_scores(proxy_scores, action_mask),
+            proxy_scores = _suffix_prefix_product_scores(
+                local_proxy,
+                ctx.max_suffix_length,
+            )
+            probabilities = _route_probabilities(
+                _masked_route_scores(proxy_scores, route_mask),
                 ctx.route_temperature,
             )
-            surrogate = _surrogate_output(
-                value_work,
+            surrogate = _build_vjp_surrogate(
+                payload_work,
                 probabilities,
                 query.size(2),
             ).to(query.dtype)
             grads = torch.autograd.grad(
                 surrogate,
-                (query_grad, key_grad, value_grad),
+                (query_leaf, key_leaf, payload_leaf),
                 grad_output,
                 create_graph=False,
                 allow_unused=True,
@@ -328,46 +397,48 @@ class _RosaSoftReferenceFunction(torch.autograd.Function):
         )
 
 
-def _mismatch_shape(query: Tensor) -> Tuple[int, int, int, int, int]:
+def _mismatch_uniform_shape(
+    query: Tensor,
+) -> Tuple[int, int, int, int, int]:
     batch, seq_len, heads, bits = query.shape
     return batch, heads, seq_len, max(seq_len - 1, 0), bits
 
 
-def _sample_mismatch_noise(
+def _sample_mismatch_uniforms(
     query: Tensor,
     *,
     generator: Optional[torch.Generator] = None,
 ) -> Tensor:
     return torch.rand(
-        _mismatch_shape(query),
+        _mismatch_uniform_shape(query),
         device=query.device,
-        dtype=_working_dtype(query.dtype),
+        dtype=_reference_dtype(query.dtype),
         generator=generator,
     )
 
 
-def _rosa_soft_reference_with_noise(
+def _rosa_soft_reference_with_uniforms(
     query: Tensor,
     key: Tensor,
-    value: Tensor,
-    mismatch_noise: Tensor,
+    payload: Tensor,
+    mismatch_uniforms: Tensor,
     max_suffix_length: int,
     route_temperature: float,
     mismatch_penalty: float,
 ) -> Tensor:
     """Private deterministic entry point used by CUDA parity tests."""
 
-    expected_shape = _mismatch_shape(query)
-    if tuple(mismatch_noise.shape) != expected_shape:
+    expected_shape = _mismatch_uniform_shape(query)
+    if tuple(mismatch_uniforms.shape) != expected_shape:
         raise ValueError(
-            f"mismatch_noise must have shape {expected_shape}, "
-            f"got {tuple(mismatch_noise.shape)}"
+            f"mismatch_uniforms must have shape {expected_shape}, "
+            f"got {tuple(mismatch_uniforms.shape)}"
         )
-    return _RosaSoftReferenceFunction.apply(
+    return _HardForwardSoftVjpReference.apply(
         query,
         key,
-        value,
-        mismatch_noise,
+        payload,
+        mismatch_uniforms,
         int(max_suffix_length),
         float(route_temperature),
         float(mismatch_penalty),
@@ -384,7 +455,7 @@ def rosa_soft_reference(
 ) -> Tensor:
     """Return exact hard ROSA values with a fixed stochastic surrogate VJP."""
 
-    max_suffix_length = validate_soft_inputs(
+    max_suffix_length = validate_rosa_soft_inputs(
         query_logits,
         key_logits,
         payload_logits,
@@ -396,20 +467,20 @@ def rosa_soft_reference(
         tensor.requires_grad
         for tensor in (query_logits, key_logits, payload_logits)
     ):
-        work_dtype = _working_dtype(query_logits.dtype)
-        hard_output, _, _, _ = _hard_components(
-            query_logits.to(work_dtype),
-            key_logits.to(work_dtype),
-            payload_logits.to(work_dtype),
+        reference_dtype = _reference_dtype(query_logits.dtype)
+        hard_output, _, _, _ = _hard_route_forward(
+            query_logits.to(reference_dtype),
+            key_logits.to(reference_dtype),
+            payload_logits.to(reference_dtype),
             max_suffix_length,
         )
         return hard_output.to(query_logits.dtype)
 
-    return _rosa_soft_reference_with_noise(
+    return _rosa_soft_reference_with_uniforms(
         query_logits,
         key_logits,
         payload_logits,
-        _sample_mismatch_noise(query_logits),
+        _sample_mismatch_uniforms(query_logits),
         max_suffix_length,
         float(route_temperature),
         float(mismatch_penalty),

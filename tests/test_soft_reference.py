@@ -7,9 +7,9 @@ from rosa_soft import rosa_soft_reference
 from rosa_soft.soft_reference import (
     ROSA_SOFT_DEFAULT_MISMATCH_PENALTY,
     ROSA_SOFT_DEFAULT_ROUTE_TEMPERATURE,
-    _action_mask,
-    _pairwise_proxy_local_match,
-    _sign_with_softsign_jacobian,
+    _causal_route_mask,
+    _hard_sign_with_softsign_vjp,
+    _pairwise_stochastic_match_gates,
 )
 from rosa_soft.testing import inspect_rosa_soft
 
@@ -21,13 +21,13 @@ def _nonzero_randn(shape, *, dtype=torch.float64, seed=0):
     return signs * (values.abs() + 0.2)
 
 
-def _inspect(query, key, value, **kwargs):
+def _inspect(query, key, payload, **kwargs):
     return inspect_rosa_soft(
         query,
         key,
-        value,
-        mismatch_noise=kwargs.pop(
-            "mismatch_noise",
+        payload,
+        mismatch_uniforms=kwargs.pop(
+            "mismatch_uniforms",
             torch.full(
                 (
                     query.size(0),
@@ -45,7 +45,7 @@ def _inspect(query, key, value, **kwargs):
     )
 
 
-def _naive_hard_lengths(query, key, max_suffix_length):
+def _naive_exact_suffix_lengths(query, key, max_suffix_length):
     batch, seq_len, heads, _ = query.shape
     q_bits = query > 0
     k_bits = key > 0
@@ -53,15 +53,19 @@ def _naive_hard_lengths(query, key, max_suffix_length):
     for b in range(batch):
         for h in range(heads):
             for query_pos in range(seq_len):
-                for action in range(1, query_pos + 1):
-                    limit = min(max_suffix_length, query_pos + 1, action)
+                for route_index in range(1, query_pos + 1):
+                    limit = min(
+                        max_suffix_length,
+                        query_pos + 1,
+                        route_index,
+                    )
                     for offset in range(limit):
-                        key_pos = action - 1 - offset
+                        key_pos = route_index - 1 - offset
                         if torch.equal(
                             q_bits[b, query_pos - offset, h],
                             k_bits[b, key_pos, h],
                         ):
-                            lengths[b, h, query_pos, action] += 1
+                            lengths[b, h, query_pos, route_index] += 1
                         else:
                             break
     return lengths
@@ -74,7 +78,7 @@ def test_softsign_jacobian_is_exact_at_zero_and_nonfinite_values():
         requires_grad=True,
     )
 
-    hard, straight_through = _sign_with_softsign_jacobian(logits)
+    hard, straight_through = _hard_sign_with_softsign_vjp(logits)
     gradient = torch.autograd.grad(straight_through.sum(), logits)[0]
 
     torch.testing.assert_close(
@@ -99,31 +103,31 @@ def test_softsign_jacobian_is_exact_at_zero_and_nonfinite_values():
 def test_hard_suffix_dynamic_program_matches_naive(max_suffix_length):
     query = _nonzero_randn((2, 7, 2, 4), seed=1)
     key = _nonzero_randn((2, 7, 2, 4), seed=2)
-    value = _nonzero_randn((2, 7, 1, 3), seed=3)
+    payload = _nonzero_randn((2, 7, 1, 3), seed=3)
 
-    _, inspection = _inspect(query, key, value, max_suffix_length=max_suffix_length)
+    _, inspection = _inspect(query, key, payload, max_suffix_length=max_suffix_length)
 
-    expected = _naive_hard_lengths(query, key, max_suffix_length)
-    torch.testing.assert_close(inspection.hard_lengths, expected, rtol=0, atol=0)
+    expected = _naive_exact_suffix_lengths(query, key, max_suffix_length)
+    torch.testing.assert_close(inspection.exact_suffix_lengths, expected, rtol=0, atol=0)
 
 
 def test_forward_is_hard_latest_tie_and_null_is_positive_zero():
     seq_len = 6
     query = torch.ones(1, seq_len, 1, 3, requires_grad=True)
     key = torch.ones_like(query, requires_grad=True)
-    value = _nonzero_randn((1, seq_len, 1, 2), dtype=torch.float32, seed=4)
-    value.requires_grad_()
+    payload = _nonzero_randn((1, seq_len, 1, 2), dtype=torch.float32, seed=4)
+    payload.requires_grad_()
 
-    output, inspection = _inspect(query, key, value, max_suffix_length=3)
+    output, inspection = _inspect(query, key, payload, max_suffix_length=3)
 
     expected = torch.zeros_like(output)
-    expected[:, 1:] = torch.where(value[:, 1:] > 0, 1.0, -1.0)
+    expected[:, 1:] = torch.where(payload[:, 1:] > 0, 1.0, -1.0)
     assert torch.equal(output, expected)
-    assert torch.equal(inspection.selected_actions[0, 0], torch.arange(seq_len))
+    assert torch.equal(inspection.selected_routes[0, 0], torch.arange(seq_len))
     assert set(output.unique().tolist()) <= {-1.0, 0.0, 1.0}
     assert not torch.signbit(output[:, 0]).any()
 
-    null_output = rosa_soft_reference(query, -key, value)
+    null_output = rosa_soft_reference(query, -key, payload)
     assert torch.equal(null_output, torch.zeros_like(null_output))
     assert not torch.signbit(null_output).any()
 
@@ -131,26 +135,26 @@ def test_forward_is_hard_latest_tie_and_null_is_positive_zero():
 def test_hard_forward_is_independent_of_soft_controls_and_random_sample():
     query = _nonzero_randn((1, 8, 2, 4), seed=5)
     key = _nonzero_randn((1, 8, 2, 4), seed=6)
-    value = _nonzero_randn((1, 8, 1, 3), seed=7)
+    payload = _nonzero_randn((1, 8, 1, 3), seed=7)
     shape = (1, 2, 8, 7, 4)
 
     output_a, _ = _inspect(
         query,
         key,
-        value,
+        payload,
         max_suffix_length=5,
         route_temperature=0.2,
         mismatch_penalty=0.3,
-        mismatch_noise=torch.zeros(shape, dtype=query.dtype),
+        mismatch_uniforms=torch.zeros(shape, dtype=query.dtype),
     )
     output_b, _ = _inspect(
         query,
         key,
-        value,
+        payload,
         max_suffix_length=5,
         route_temperature=5.0,
         mismatch_penalty=12.0,
-        mismatch_noise=torch.ones(shape, dtype=query.dtype),
+        mismatch_uniforms=torch.ones(shape, dtype=query.dtype),
     )
 
     assert torch.equal(output_a, output_b)
@@ -159,18 +163,18 @@ def test_hard_forward_is_independent_of_soft_controls_and_random_sample():
 def test_allocation_is_plain_route_temperature_softmax_without_winner_margin():
     query = _nonzero_randn((1, 8, 2, 3), seed=8)
     key = _nonzero_randn((1, 8, 2, 3), seed=9)
-    value = _nonzero_randn((1, 8, 1, 2), seed=10)
+    payload = _nonzero_randn((1, 8, 1, 2), seed=10)
     route_temperature = 1.3
 
     _, inspection = _inspect(
         query,
         key,
-        value,
+        payload,
         route_temperature=route_temperature,
         mismatch_penalty=2.7,
     )
 
-    valid_nonnull = inspection.valid_actions.clone()
+    valid_nonnull = inspection.valid_routes.clone()
     valid_nonnull[:, 0] = False
     valid_nonnull = valid_nonnull.view(1, 1, 8, 8)
     torch.testing.assert_close(
@@ -192,32 +196,32 @@ def test_allocation_is_plain_route_temperature_softmax_without_winner_margin():
     )
     expected = torch.softmax(centered / route_temperature, dim=-1)
     torch.testing.assert_close(inspection.route_probabilities, expected, rtol=0, atol=0)
-    invalid = ~inspection.valid_actions.view(1, 1, 8, 8)
+    invalid = ~inspection.valid_routes.view(1, 1, 8, 8)
     assert torch.equal(
         inspection.route_probabilities.masked_select(invalid),
         torch.zeros_like(inspection.route_probabilities.masked_select(invalid)),
     )
-    valid = inspection.valid_actions.view(1, 1, 8, 8)
+    valid = inspection.valid_routes.view(1, 1, 8, 8)
     assert torch.all(inspection.route_probabilities.masked_select(valid) > 0)
 
 
 def test_proxy_depends_on_signs_not_qk_magnitude():
     query = _nonzero_randn((1, 7, 2, 4), seed=11)
     key = _nonzero_randn((1, 7, 2, 4), seed=12)
-    value = _nonzero_randn((1, 7, 1, 3), seed=13)
+    payload = _nonzero_randn((1, 7, 1, 3), seed=13)
     uniform = torch.rand((1, 2, 7, 6, 4), dtype=query.dtype)
 
     _, base = _inspect(
         query,
         key,
-        value,
-        mismatch_noise=uniform,
+        payload,
+        mismatch_uniforms=uniform,
     )
     _, scaled = _inspect(
         query * 0.01,
         key * 100.0,
-        value,
-        mismatch_noise=uniform,
+        payload,
+        mismatch_uniforms=uniform,
     )
 
     torch.testing.assert_close(
@@ -238,16 +242,16 @@ def test_proxy_depends_on_signs_not_qk_magnitude():
 def test_cubic_mismatch_gate_matches_formula(uniform):
     query = torch.ones(1, 2, 1, 1, dtype=torch.float64)
     key = -torch.ones_like(query)
-    value = torch.ones_like(query)
+    payload = torch.ones_like(query)
     samples = torch.full((1, 1, 2, 1, 1), uniform, dtype=query.dtype)
     mismatch_penalty = 2.3
 
     _, inspection = _inspect(
         query,
         key,
-        value,
+        payload,
         mismatch_penalty=mismatch_penalty,
-        mismatch_noise=samples,
+        mismatch_uniforms=samples,
     )
 
     alpha = 1.0 - 0.5 * uniform**3
@@ -259,27 +263,27 @@ def test_cubic_mismatch_gate_matches_formula(uniform):
     assert 0.0 < expected < 1.0
 
 
-def test_jacobian_anchor_removes_random_local_gradient_scale():
-    action_mask = _action_mask(2, torch.device("cpu"))
+def test_hard_hamming_vjp_removes_random_local_gradient_scale():
+    route_mask = _causal_route_mask(2, torch.device("cpu"))
 
     def gradients(uniform_value):
         query = torch.tensor([[[[0.7]], [[0.4]]]], dtype=torch.float64, requires_grad=True)
         key = torch.tensor([[[[-0.6]], [[-0.8]]]], dtype=torch.float64, requires_grad=True)
         uniform = torch.full((1, 1, 2, 1, 1), uniform_value, dtype=query.dtype)
-        local = _pairwise_proxy_local_match(
+        local = _pairwise_stochastic_match_gates(
             query,
             key,
-            action_mask,
+            route_mask,
             mismatch_penalty=3.0,
-            mismatch_noise=uniform,
+            mismatch_uniforms=uniform,
         )
         grads = torch.autograd.grad(local[0, 0, 1, 1], (query, key))
         return local[0, 0, 1, 1].detach(), grads
 
-    value_a, grads_a = gradients(0.0)
-    value_b, grads_b = gradients(0.5)
+    gate_a, grads_a = gradients(0.0)
+    gate_b, grads_b = gradients(0.5)
 
-    assert value_a != value_b
+    assert gate_a != gate_b
     for grad_a, grad_b in zip(grads_a, grads_b):
         torch.testing.assert_close(grad_a, grad_b, rtol=1e-12, atol=1e-12)
 
@@ -288,24 +292,24 @@ def test_mismatch_penalty_controls_mismatch_leak_but_not_exact_matches():
     query = torch.ones(1, 3, 1, 1, dtype=torch.float64)
     key = -torch.ones_like(query)
     key[:, 1] = 1
-    value = torch.ones_like(query)
+    payload = torch.ones_like(query)
     uniform = torch.full((1, 1, 3, 2, 1), 0.5, dtype=query.dtype)
 
     _, low = _inspect(
         query,
         key,
-        value,
+        payload,
         max_suffix_length=1,
         mismatch_penalty=0.2,
-        mismatch_noise=uniform,
+        mismatch_uniforms=uniform,
     )
     _, high = _inspect(
         query,
         key,
-        value,
+        payload,
         max_suffix_length=1,
         mismatch_penalty=8.0,
-        mismatch_noise=uniform,
+        mismatch_uniforms=uniform,
     )
 
     assert high.proxy_scores[0, 0, 1, 1] < low.proxy_scores[0, 0, 1, 1]
@@ -320,22 +324,22 @@ def test_mismatch_penalty_controls_mismatch_leak_but_not_exact_matches():
 def test_route_temperature_only_changes_allocation_distribution():
     query = _nonzero_randn((1, 9, 1, 4), seed=14)
     key = _nonzero_randn((1, 9, 1, 4), seed=15)
-    value = _nonzero_randn((1, 9, 1, 2), seed=16)
+    payload = _nonzero_randn((1, 9, 1, 2), seed=16)
     uniform = torch.rand((1, 1, 9, 8, 4), dtype=query.dtype)
 
     output_cold, cold = _inspect(
         query,
         key,
-        value,
+        payload,
         route_temperature=0.5,
-        mismatch_noise=uniform,
+        mismatch_uniforms=uniform,
     )
     output_hot, hot = _inspect(
         query,
         key,
-        value,
+        payload,
         route_temperature=3.0,
-        mismatch_noise=uniform,
+        mismatch_uniforms=uniform,
     )
 
     assert torch.equal(output_cold, output_hot)
@@ -346,15 +350,50 @@ def test_route_temperature_only_changes_allocation_distribution():
     assert cold_entropy.mean() < hot_entropy.mean()
 
 
-def test_backward_is_finite_and_soft_value_credit_reaches_hard_null_rows():
+def test_low_temperature_tracks_proxy_winner_not_hard_latest_tie():
+    query = torch.tensor(
+        [1, -1, 1, -1, 1, 1, 1, 1],
+        dtype=torch.float64,
+    ).view(1, 8, 1, 1)
+    key = torch.tensor(
+        [-1, 1, -1, 1, -1, 1, -1, -1],
+        dtype=torch.float64,
+    ).view(1, 8, 1, 1)
+    payload = torch.ones(1, 8, 1, 1, dtype=torch.float64)
+    payload[:, 2] = -1
+    mismatch_uniforms = torch.rand(
+        (1, 1, 8, 7, 1),
+        dtype=query.dtype,
+        generator=torch.Generator().manual_seed(1),
+    )
+
+    output, inspection = _inspect(
+        query,
+        key,
+        payload,
+        max_suffix_length=8,
+        route_temperature=1e-3,
+        mismatch_penalty=3.0,
+        mismatch_uniforms=mismatch_uniforms,
+    )
+
+    row = inspection.exact_suffix_lengths[0, 0, 5]
+    assert row[2] == row[4] == 1
+    assert inspection.selected_routes[0, 0, 5] == 4
+    assert inspection.route_scores[0, 0, 5].argmax() == 2
+    assert inspection.route_probabilities[0, 0, 5].argmax() == 2
+    assert output[0, 5, 0, 0] == 1
+
+
+def test_backward_is_finite_and_soft_payload_credit_reaches_hard_null_rows():
     query = torch.ones(1, 6, 2, 3, dtype=torch.float64, requires_grad=True)
     key = torch.full_like(query, -1.0, requires_grad=True)
-    value = _nonzero_randn((1, 6, 1, 4), seed=17).requires_grad_()
+    payload = _nonzero_randn((1, 6, 1, 4), seed=17).requires_grad_()
 
     output = rosa_soft_reference(
         query,
         key,
-        value,
+        payload,
         max_suffix_length=4,
         route_temperature=1.2,
         mismatch_penalty=3.0,
@@ -362,35 +401,35 @@ def test_backward_is_finite_and_soft_value_credit_reaches_hard_null_rows():
     assert torch.equal(output, torch.zeros_like(output))
     output.backward(torch.randn_like(output))
 
-    for tensor in (query, key, value):
+    for tensor in (query, key, payload):
         assert tensor.grad is not None
         assert torch.isfinite(tensor.grad).all()
-    assert value.grad[:, 1:].abs().sum() > 0
+    assert payload.grad[:, 1:].abs().sum() > 0
 
 
-def test_grouped_value_heads_and_noncontiguous_inputs():
+def test_grouped_payload_heads_and_noncontiguous_inputs():
     query_base = _nonzero_randn((2, 4, 7, 3), dtype=torch.float32, seed=18)
     key_base = _nonzero_randn((2, 4, 7, 3), dtype=torch.float32, seed=19)
-    value_base = _nonzero_randn((2, 2, 7, 5), dtype=torch.float32, seed=20)
+    payload_base = _nonzero_randn((2, 2, 7, 5), dtype=torch.float32, seed=20)
     query = query_base.transpose(1, 2).requires_grad_()
     key = key_base.transpose(1, 2).requires_grad_()
-    value = value_base.transpose(1, 2).requires_grad_()
+    payload = payload_base.transpose(1, 2).requires_grad_()
 
-    output = rosa_soft_reference(query, key, value, max_suffix_length=5)
+    output = rosa_soft_reference(query, key, payload, max_suffix_length=5)
 
     assert output.shape == (2, 7, 4, 5)
     output.float().square().mean().backward()
-    assert all(x.grad is not None for x in (query, key, value))
+    assert all(x.grad is not None for x in (query, key, payload))
 
 
 def test_inference_path_does_not_consume_random_numbers():
     query = _nonzero_randn((1, 5, 1, 2), dtype=torch.float32, seed=21)
     key = _nonzero_randn((1, 5, 1, 2), dtype=torch.float32, seed=22)
-    value = _nonzero_randn((1, 5, 1, 2), dtype=torch.float32, seed=23)
+    payload = _nonzero_randn((1, 5, 1, 2), dtype=torch.float32, seed=23)
     state_before = torch.random.get_rng_state()
 
     with torch.no_grad():
-        rosa_soft_reference(query, key, value)
+        rosa_soft_reference(query, key, payload)
 
     assert torch.equal(state_before, torch.random.get_rng_state())
 
@@ -398,43 +437,41 @@ def test_inference_path_does_not_consume_random_numbers():
 def test_window_is_integral_and_normalized_to_sequence_length():
     query = _nonzero_randn((1, 5, 1, 2), dtype=torch.float32, seed=28)
     key = _nonzero_randn((1, 5, 1, 2), dtype=torch.float32, seed=29)
-    value = _nonzero_randn((1, 5, 1, 2), dtype=torch.float32, seed=30)
+    payload = _nonzero_randn((1, 5, 1, 2), dtype=torch.float32, seed=30)
 
-    output_full, state_full = _inspect(query, key, value, max_suffix_length=5)
-    output_large, state_large = _inspect(query, key, value, max_suffix_length=10**9)
+    output_full, state_full = _inspect(query, key, payload, max_suffix_length=5)
+    output_large, state_large = _inspect(query, key, payload, max_suffix_length=10**9)
 
     assert torch.equal(output_full, output_large)
-    assert torch.equal(state_full.hard_lengths, state_large.hard_lengths)
+    assert torch.equal(state_full.exact_suffix_lengths, state_large.exact_suffix_lengths)
     assert torch.equal(state_full.proxy_scores, state_large.proxy_scores)
     for invalid in (True, 1.5):
         with pytest.raises(TypeError, match="integer"):
-            rosa_soft_reference(query, key, value, max_suffix_length=invalid)
+            rosa_soft_reference(query, key, payload, max_suffix_length=invalid)
 
 
 def test_inspection_state_is_detached_and_uses_static_defaults():
     query = _nonzero_randn((2, 5, 2, 3), dtype=torch.float32, seed=24)
     key = _nonzero_randn((2, 5, 2, 3), dtype=torch.float32, seed=25)
-    value = _nonzero_randn((2, 5, 1, 2), dtype=torch.float32, seed=26)
+    payload = _nonzero_randn((2, 5, 1, 2), dtype=torch.float32, seed=26)
 
     _, inspection = inspect_rosa_soft(
         query,
         key,
-        value,
+        payload,
         generator=torch.Generator().manual_seed(27),
     )
 
     assert inspection.route_temperature == ROSA_SOFT_DEFAULT_ROUTE_TEMPERATURE
     assert inspection.mismatch_penalty == ROSA_SOFT_DEFAULT_MISMATCH_PENALTY
-    assert inspection.selected_actions.shape == (2, 2, 5)
-    assert inspection.mismatch_noise.shape == (2, 2, 5, 4, 3)
+    assert inspection.selected_routes.shape == (2, 2, 5)
     assert all(
         not tensor.requires_grad
         for tensor in (
-            inspection.hard_lengths,
+            inspection.exact_suffix_lengths,
             inspection.proxy_scores,
             inspection.route_scores,
             inspection.route_probabilities,
-            inspection.mismatch_noise,
         )
     )
 
@@ -476,24 +513,37 @@ def test_removed_training_controls_are_not_public(removed):
 def test_shape_head_bit_dtype_and_uniform_validation():
     query = torch.ones(1, 3, 2, 4)
     key = torch.ones_like(query)
-    value = torch.ones(1, 3, 1, 2)
+    payload = torch.ones(1, 3, 1, 2)
 
     with pytest.raises(ValueError, match="sequence"):
-        rosa_soft_reference(query, key[:, :-1], value)
+        rosa_soft_reference(query, key[:, :-1], payload)
     with pytest.raises(ValueError, match="divisible"):
-        rosa_soft_reference(query[:, :, :1], key[:, :, :1], value.repeat(1, 1, 2, 1))
+        rosa_soft_reference(query[:, :, :1], key[:, :, :1], payload.repeat(1, 1, 2, 1))
     with pytest.raises(ValueError, match=r"\[1, 32\]"):
         rosa_soft_reference(
             torch.ones(1, 3, 1, 33),
             torch.ones(1, 3, 1, 33),
-            value,
+            payload,
         )
     with pytest.raises(ValueError, match="same dtype"):
-        rosa_soft_reference(query.double(), key, value)
-    with pytest.raises(ValueError, match="wrong shape"):
+        rosa_soft_reference(query.double(), key, payload)
+    with pytest.raises(ValueError, match="must have shape"):
         inspect_rosa_soft(
             query,
             key,
-            value,
-            mismatch_noise=torch.zeros(1),
+            payload,
+            mismatch_uniforms=torch.zeros(1),
         )
+    shape = (1, 2, 3, 2, 4)
+    for invalid_uniforms in (
+        torch.full(shape, -0.1),
+        torch.full(shape, 1.1),
+        torch.full(shape, math.nan),
+    ):
+        with pytest.raises(ValueError, match=r"\[0, 1\]"):
+            inspect_rosa_soft(
+                query,
+                key,
+                payload,
+                mismatch_uniforms=invalid_uniforms,
+            )

@@ -1,7 +1,13 @@
+"""Legacy manual benchmark for the optional RWKV7 state kernel."""
+
 import time, sys
+from pathlib import Path
+
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rosa_soft.ops import rwkv7_state_clampw_forward, rwkv7_state_clampw_backward
 
@@ -9,10 +15,7 @@ np.set_printoptions(precision=4, suppress=True, linewidth=200)
 torch.backends.cudnn.allow_tf32 = False
 torch.backends.cuda.matmul.allow_tf32 = False
 
-'''
-cd /mnt/program/_RWKV_/_ref_/RWKV-CUDA/rwkv7_fast_fused; python rwkv7_cuda_benchmark_state.py fp32 0; python rwkv7_cuda_benchmark_state.py fp32 1
-cd /mnt/program/_RWKV_/_ref_/RWKV-CUDA/rwkv7_fast_fused; python rwkv7_cuda_benchmark_state.py bf16 0; python rwkv7_cuda_benchmark_state.py bf16 1
-'''
+# Usage: python benchmarks/legacy/rwkv7_cuda_state.py {fp32,bf16} {0,1}
 print('\n### RWKV7_fused_clamp_w state-tuning fwd+bwd kernel ###\n')
 
 DTYPE = torch.float if sys.argv[1].strip()=='fp32' else torch.bfloat16

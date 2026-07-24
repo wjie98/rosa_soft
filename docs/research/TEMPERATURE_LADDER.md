@@ -1,4 +1,4 @@
-# RosaSoft Temperature Ladder
+# Historical RosaSoft Temperature Ladder
 
 > Historical research record. The private script used for this sweep is not
 > shipped and targets a deleted prototype API. The decisions remain design

@@ -90,37 +90,40 @@ class TinyRosaFitLM(nn.Module):
         vocab_size: int,
         num_heads: int,
         qk_bits: int,
-        value_heads: int,
-        value_bits: int,
+        payload_heads: int,
+        payload_bits: int,
         max_suffix_length: int,
         route_temperature: float,
         mismatch_penalty: float,
         operator: str,
     ) -> None:
         super().__init__()
-        if num_heads % value_heads != 0:
-            raise ValueError("num_heads must be divisible by value_heads")
+        if num_heads % payload_heads != 0:
+            raise ValueError("num_heads must be divisible by payload_heads")
         self.num_heads = num_heads
         self.qk_bits = qk_bits
-        self.value_heads = value_heads
-        self.value_bits = value_bits
+        self.payload_heads = payload_heads
+        self.payload_bits = payload_bits
         self.max_suffix_length = max_suffix_length
         self.route_temperature = route_temperature
         self.mismatch_penalty = mismatch_penalty
         self.operator = operator
 
         hidden_size = num_heads * qk_bits
-        value_size = num_heads * value_bits
+        routed_width = num_heads * payload_bits
         self.embedding = nn.Embedding(vocab_size, hidden_size)
         self.input_norm = nn.LayerNorm(hidden_size)
         self.query = nn.Linear(hidden_size, hidden_size, bias=False)
         self.key = nn.Linear(hidden_size, hidden_size, bias=False)
-        self.value = nn.Linear(hidden_size, value_heads * value_bits, bias=False)
-        self.output = nn.Linear(value_size, hidden_size, bias=False)
+        self.payload = nn.Linear(hidden_size, payload_heads * payload_bits, bias=False)
+        self.output = nn.Linear(routed_width, hidden_size, bias=False)
         self.output_norm = nn.LayerNorm(hidden_size)
         self.head = nn.Linear(hidden_size, vocab_size, bias=False)
 
-    def qkv(self, tokens: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def project_symbols(
+        self,
+        tokens: Tensor,
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         residual = self.embedding(tokens)
         hidden = self.input_norm(residual)
         query = self.query(hidden).view(
@@ -135,25 +138,25 @@ class TinyRosaFitLM(nn.Module):
             self.num_heads,
             self.qk_bits,
         )
-        value = self.value(hidden).view(
+        payload = self.payload(hidden).view(
             tokens.size(0),
             tokens.size(1),
-            self.value_heads,
-            self.value_bits,
+            self.payload_heads,
+            self.payload_bits,
         )
-        return residual, query, key, value
+        return residual, query, key, payload
 
     def forward(self, tokens: Tensor) -> Tensor:
-        residual, query, key, value = self.qkv(tokens)
-        soft_operator = (
+        residual, query, key, payload = self.project_symbols(tokens)
+        training_operator = (
             rosa_soft.rosa_soft
             if self.operator == "cuda"
             else rosa_soft_reference
         )
-        routed = soft_operator(
+        routed = training_operator(
             query,
             key,
-            value,
+            payload,
             max_suffix_length=self.max_suffix_length,
             route_temperature=self.route_temperature,
             mismatch_penalty=self.mismatch_penalty,
@@ -163,31 +166,33 @@ class TinyRosaFitLM(nn.Module):
 
     @torch.no_grad()
     def route_stats(self, tokens: Tensor) -> Dict[str, float]:
-        _, query, key, value = self.qkv(tokens)
+        _, query, key, payload = self.project_symbols(tokens)
         generator = torch.Generator(device=query.device).manual_seed(12345)
         _, inspection = inspect_rosa_soft(
             query,
             key,
-            value,
+            payload,
             max_suffix_length=self.max_suffix_length,
             route_temperature=self.route_temperature,
             mismatch_penalty=self.mismatch_penalty,
             generator=generator,
         )
         probabilities = inspection.route_probabilities[:, :, 1:]
-        actions = inspection.selected_actions[:, :, 1:]
+        selected_routes = inspection.selected_routes[:, :, 1:]
         selected = torch.gather(
             probabilities,
             -1,
-            actions.unsqueeze(-1),
+            selected_routes.unsqueeze(-1),
         ).squeeze(-1)
         effective = probabilities.square().sum(dim=-1).reciprocal()
         return {
             "hard_top_probability": float(selected.mean().item()),
-            "effective_actions": float(effective.mean().item()),
-            "nonnull_fraction": float((actions != 0).float().mean().item()),
+            "effective_routes": float(effective.mean().item()),
+            "hard_nonnull_route_fraction": float(
+                (selected_routes != 0).float().mean().item()
+            ),
             "observed_max_suffix_length": float(
-                inspection.hard_lengths.max().item()
+                inspection.exact_suffix_lengths.max().item()
             ),
         }
 
@@ -224,8 +229,8 @@ def fit(args: argparse.Namespace) -> Dict[str, object]:
         vocab_size=args.vocab_size,
         num_heads=args.heads,
         qk_bits=args.qk_bits,
-        value_heads=args.value_heads,
-        value_bits=args.value_bits,
+        payload_heads=args.payload_heads,
+        payload_bits=args.payload_bits,
         max_suffix_length=args.max_suffix_length,
         route_temperature=args.route_temperature,
         mismatch_penalty=args.mismatch_penalty,
@@ -330,8 +335,8 @@ def main() -> None:
     parser.add_argument("--motif-max", type=int, default=8)
     parser.add_argument("--heads", type=int, default=2)
     parser.add_argument("--qk-bits", type=int, default=4)
-    parser.add_argument("--value-heads", type=int, default=2)
-    parser.add_argument("--value-bits", type=int, default=4)
+    parser.add_argument("--payload-heads", type=int, default=2)
+    parser.add_argument("--payload-bits", type=int, default=4)
     parser.add_argument("--max-suffix-length", type=int, default=8)
     parser.add_argument(
         "--route-temperature",
