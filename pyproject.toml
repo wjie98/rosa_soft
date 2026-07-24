@@ -1,10 +1,17 @@
 [build-system]
 requires = [
     "setuptools",
-    "ninja",
-    "torch",
+    "wheel",
 ]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# Native builds must use the already installed PyTorch ABI. Install PyTorch
+# first, then pass --no-build-isolation to pip. Reference-only wheels do not
+# import PyTorch during the build when ROSA_BUILD_EXTENSION=0.
+[tool.rosa-soft.build]
+requires-no-build-isolation = true
+use-cuda-default = "auto"
+build-rwkv7-default = false

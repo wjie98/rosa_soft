@@ -1,0 +1,72 @@
+name: Build matrix
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pure-reference:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install torch pytest
+      - name: Install without native extension
+        env:
+          ROSA_BUILD_EXTENSION: "0"
+        run: python -m pip install --no-build-isolation -e .
+      - name: Assert reference capabilities
+        run: |
+          python - <<'PY'
+          import rosa_soft
+          assert rosa_soft.BUILD_CAPABILITIES["variant"] == "reference"
+          assert not rosa_soft.HAS_COMPILED_EXTENSION
+          assert rosa_soft.EXTENSION_IMPORT_ERROR_MESSAGE
+          PY
+      - run: >-
+          python -m pytest
+          tests/test_build_contract.py
+          tests/test_soft_reference.py
+          tests/test_diagnostics.py
+
+  cpu-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install torch pytest ninja
+      - name: Clean-build CPU runtime
+        env:
+          USE_CUDA: "0"
+          ROSA_BUILD_RWKV7: "0"
+        run: python -m pip install --no-build-isolation -v -e .
+      - name: Assert CPU-only registration
+        run: |
+          python - <<'PY'
+          import torch
+          import rosa_soft
+          assert rosa_soft.BUILD_CAPABILITIES["variant"] == "cpu-runtime"
+          assert rosa_soft.HAS_ROSA_RUNTIME
+          assert not rosa_soft.HAS_ROSA_SOFT_CUDA
+          assert not rosa_soft.HAS_RWKV7_CUDA
+          for operator in (
+              "rosa_soft::soft_forward",
+              "rosa_soft::soft_backward",
+              "rosa_soft::rwkv7_clampw_forward",
+          ):
+              try:
+                  torch._C._dispatch_find_schema_or_throw(operator, "")
+              except RuntimeError:
+                  continue
+              raise AssertionError(f"unexpected CPU schema: {operator}")
+          PY
+      - run: >-
+          python -m pytest
+          tests/test_build_contract.py
+          tests/test_runtime.py

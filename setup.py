@@ -2,33 +2,32 @@ import os
 import sys
 
 from pathlib import Path
-from setuptools import find_packages, setup
+from typing import Mapping, NamedTuple, Optional
 
-from torch.utils.cpp_extension import (
-    CppExtension,
-    CUDAExtension,
-    BuildExtension,
-    CUDA_HOME,
-)
+from setuptools import find_packages, setup
 
 
 library_name = "rosa_soft"
+PACKAGE_VERSION = "0.1.0"
 
 CPU_SOURCES = [
     "export.cpp",
     "rosa_runtime.cpp",
 ]
 
-CUDA_CPP_SOURCES = [
+ROSA_CUDA_SOURCES = [
     "rosa_soft.cpp",
+    "cuda/rosa_soft_kernels.cu",
+]
+
+RWKV7_CPP_SOURCES = [
     "rwkv7_albatross.cpp",
     "rwkv7_clampw.cpp",
     "rwkv7_state_clampw.cpp",
     "rwkv7_statepassing_clampw.cpp",
 ]
 
-CUDA_SOURCES = [
-    "cuda/rosa_soft_kernels.cu",
+RWKV7_CUDA_SOURCES = [
     "cuda/rwkv7_albatross.cu",
     "cuda/rwkv7_clampw.cu",
     "cuda/rwkv7_state_clampw.cu",
@@ -36,26 +35,135 @@ CUDA_SOURCES = [
 ]
 
 
-def wants_extension_build():
-    value = os.getenv("ROSA_BUILD_EXTENSION", "1").strip().lower()
-    return value not in {"0", "false", "no", "off"}
+class BuildConfiguration(NamedTuple):
+    build_extension: bool
+    cuda_mode: str
+    use_cuda: bool
+    build_rwkv7: bool
+    variant: str
 
 
-def wants_cuda_build():
-    value = os.getenv("USE_CUDA", "1").strip().lower()
-    return value not in {"0", "false", "no", "off"}
+def _binary_setting(
+    name: str,
+    default: str,
+    environ: Mapping[str, str],
+) -> bool:
+    value = environ.get(name, default).strip().lower()
+    if value not in {"0", "1"}:
+        raise RuntimeError(f"{name} must be 0 or 1, got {value!r}")
+    return value == "1"
 
 
-def get_extensions():
+def _cuda_mode(environ: Mapping[str, str]) -> str:
+    value = environ.get("USE_CUDA", "auto").strip().lower()
+    if value not in {"auto", "0", "1"}:
+        raise RuntimeError(
+            f"USE_CUDA must be auto, 0, or 1, got {value!r}"
+        )
+    return value
+
+
+def wants_extension_build(
+    environ: Optional[Mapping[str, str]] = None,
+) -> bool:
+    if environ is None:
+        environ = os.environ
+    return _binary_setting("ROSA_BUILD_EXTENSION", "1", environ)
+
+
+def resolve_build_configuration(
+    cuda_home: Optional[str],
+    environ: Optional[Mapping[str, str]] = None,
+) -> BuildConfiguration:
+    if environ is None:
+        environ = os.environ
+
+    build_extension = wants_extension_build(environ)
+    cuda_mode = _cuda_mode(environ)
+    build_rwkv7 = _binary_setting("ROSA_BUILD_RWKV7", "0", environ)
+
+    if not build_extension:
+        return BuildConfiguration(
+            build_extension=False,
+            cuda_mode=cuda_mode,
+            use_cuda=False,
+            build_rwkv7=False,
+            variant="reference",
+        )
+
+    use_cuda = cuda_home is not None if cuda_mode == "auto" else cuda_mode == "1"
+    if cuda_mode == "1" and cuda_home is None:
+        raise RuntimeError(
+            "USE_CUDA=1 but CUDA_HOME was not found. Install a CUDA toolkit "
+            "visible to torch.utils.cpp_extension, or use USE_CUDA=0/auto."
+        )
+    if build_rwkv7 and not use_cuda:
+        raise RuntimeError(
+            "ROSA_BUILD_RWKV7=1 requires a CUDA extension build; set "
+            "USE_CUDA=1 with a valid CUDA_HOME."
+        )
+
+    if build_rwkv7:
+        variant = "cuda-rwkv7"
+    elif use_cuda:
+        variant = "cuda"
+    else:
+        variant = "cpu-runtime"
+    return BuildConfiguration(
+        build_extension=True,
+        cuda_mode=cuda_mode,
+        use_cuda=use_cuda,
+        build_rwkv7=build_rwkv7,
+        variant=variant,
+    )
+
+
+def source_names_for(config: BuildConfiguration):
+    if not config.build_extension:
+        return []
+    source_names = list(CPU_SOURCES)
+    if config.use_cuda:
+        source_names += ROSA_CUDA_SOURCES
+    if config.build_rwkv7:
+        source_names += RWKV7_CPP_SOURCES
+        source_names += RWKV7_CUDA_SOURCES
+    return source_names
+
+
+def define_macros_for(config: BuildConfiguration):
+    macros = []
+    if config.use_cuda:
+        macros.append(("ROSA_WITH_CUDA", "1"))
+    if config.build_rwkv7:
+        macros.append(("ROSA_WITH_RWKV7", "1"))
+    return macros
+
+
+def _load_torch_extension_api():
+    try:
+        import torch.utils.cpp_extension as cpp_extension
+    except ImportError as error:
+        raise RuntimeError(
+            "Building the rosa_soft extension requires an already installed "
+            "PyTorch. Install PyTorch first and invoke pip with "
+            "--no-build-isolation so the extension uses that exact PyTorch "
+            "ABI. Set ROSA_BUILD_EXTENSION=0 for a reference-only wheel."
+        ) from error
+    return cpp_extension
+
+
+def get_extensions(cpp_extension=None):
     if not wants_extension_build():
         return []
-    use_cuda = wants_cuda_build()
-    if use_cuda and CUDA_HOME is None:
-        raise RuntimeError(
-            "USE_CUDA=1 but CUDA_HOME was not found. Set CUDA_HOME to a CUDA toolkit "
-            "path, or set USE_CUDA=0 to build only the CPU-only extension pieces."
-        )
-    extension = CUDAExtension if use_cuda else CppExtension
+    if cpp_extension is None:
+        cpp_extension = _load_torch_extension_api()
+
+    config = resolve_build_configuration(cpp_extension.CUDA_HOME)
+    extension = (
+        cpp_extension.CUDAExtension
+        if config.use_cuda
+        else cpp_extension.CppExtension
+    )
 
     if sys.platform == "win32":
         cxx_args = ["/O2", "/openmp"]
@@ -69,47 +177,55 @@ def get_extensions():
         extra_link_args = ["-fopenmp"]
 
     extra_compile_args = {"cxx": cxx_args}
-    if use_cuda:
+    if config.use_cuda:
         extra_compile_args["nvcc"] = [
             "-O3",
             "-res-usage",
             "--use_fast_math",
-            "-Xptxas", "-O3",
+            "-Xptxas",
+            "-O3",
             "--extra-device-vectorization",
         ]
 
     extensions_dir = Path(__file__).parent / library_name / "csrc"
-    source_names = list(CPU_SOURCES)
-    if use_cuda:
-        source_names += CUDA_CPP_SOURCES
-        source_names += CUDA_SOURCES
     sources = [
         str(extensions_dir / source_name)
-        for source_name in source_names
+        for source_name in source_names_for(config)
     ]
-
-    ext_modules = [
+    return [
         extension(
             f"{library_name}._C",
             sources,
+            define_macros=define_macros_for(config),
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
         )
     ]
 
-    return ext_modules
+
+def setup_package():
+    if wants_extension_build():
+        cpp_extension = _load_torch_extension_api()
+        ext_modules = get_extensions(cpp_extension)
+        cmdclass = {"build_ext": cpp_extension.BuildExtension}
+    else:
+        ext_modules = []
+        cmdclass = {}
+
+    setup(
+        name=library_name,
+        version=PACKAGE_VERSION,
+        author="Wenjie Huang",
+        packages=find_packages(include=[library_name, f"{library_name}.*"]),
+        ext_modules=ext_modules,
+        install_requires=["torch"],
+        extras_require={
+            "build": ["ninja"],
+        },
+        description="ROSA Operations for PyTorch",
+        cmdclass=cmdclass,
+    )
 
 
-setup(
-    name=library_name,
-    version="0.1.0",
-    author="Wenjie Huang",
-    packages=find_packages(include=[library_name, f"{library_name}.*"]),
-    ext_modules=get_extensions(),
-    install_requires=["torch"],
-    extras_require={
-        "build": ["ninja"],
-    },
-    description="ROSA Operations for PyTorch",
-    cmdclass={"build_ext": BuildExtension},
-)
+if __name__ == "__main__":
+    setup_package()
