@@ -14,7 +14,7 @@ namespace {
 struct SamStats {
   int64_t states = 0;
   int64_t edges = 0;
-  int64_t values = 0;
+  int64_t logical_bytes = 0;
 };
 
 struct SamState {
@@ -30,58 +30,51 @@ struct SamEdge {
   int32_t next_edge = -1;
 };
 
-class BoundedSuffixAutomaton {
+class FiniteHorizonSuffixAutomaton {
  public:
-  explicit BoundedSuffixAutomaton(int32_t max_suffix_length)
+  explicit FiniteHorizonSuffixAutomaton(int32_t max_suffix_length)
       : max_suffix_length_(max_suffix_length) {
     states_.emplace_back();
   }
 
-  uint8_t update(
-      uint8_t query,
-      uint8_t key,
-      uint8_t value,
-      int64_t& end_position) {
+  int32_t update(uint8_t query, uint8_t key) {
     const int32_t matched_end = match_query(query);
-    extend_key(key, value);
-    end_position = static_cast<int64_t>(matched_end);
-    return matched_end >= 0
-        ? values_[static_cast<size_t>(matched_end + 1)]
-        : uint8_t{0};
+    extend_key(key);
+    return matched_end;
   }
 
   SamStats stats() const {
     return {
         static_cast<int64_t>(states_.size()),
         static_cast<int64_t>(edges_.size()),
-        static_cast<int64_t>(values_.size()),
+        static_cast<int64_t>(
+            states_.size() * sizeof(SamState) +
+            edges_.size() * sizeof(SamEdge) +
+            recent_keys_.size() * sizeof(uint8_t)),
     };
   }
 
  private:
-  int32_t find_transition(int32_t state, uint8_t symbol) const {
+  int32_t find_transition_edge(int32_t state, uint8_t symbol) const {
     int32_t edge = states_[static_cast<size_t>(state)].first_edge;
     while (edge != -1) {
       const SamEdge& candidate = edges_[static_cast<size_t>(edge)];
       if (candidate.symbol == symbol) {
-        return candidate.next_state;
+        return edge;
       }
       edge = candidate.next_edge;
     }
     return -1;
   }
 
-  void set_transition(int32_t state, uint8_t symbol, int32_t next_state) {
-    int32_t edge = states_[static_cast<size_t>(state)].first_edge;
-    while (edge != -1) {
-      SamEdge& candidate = edges_[static_cast<size_t>(edge)];
-      if (candidate.symbol == symbol) {
-        candidate.next_state = next_state;
-        return;
-      }
-      edge = candidate.next_edge;
-    }
+  int32_t find_transition(int32_t state, uint8_t symbol) const {
+    const int32_t edge = find_transition_edge(state, symbol);
+    return edge == -1
+        ? -1
+        : edges_[static_cast<size_t>(edge)].next_state;
+  }
 
+  void add_transition(int32_t state, uint8_t symbol, int32_t next_state) {
     const int32_t new_edge = static_cast<int32_t>(edges_.size());
     edges_.push_back(
         {symbol, next_state, states_[static_cast<size_t>(state)].first_edge});
@@ -137,18 +130,16 @@ class BoundedSuffixAutomaton {
     return states_[static_cast<size_t>(query_state_)].latest_end;
   }
 
-  void extend_key(uint8_t symbol, uint8_t value) {
+  void extend_key(uint8_t symbol) {
     constexpr size_t kMaxInt32 =
         static_cast<size_t>(std::numeric_limits<int32_t>::max());
     TORCH_CHECK(
         states_.size() < kMaxInt32,
         "ROSA SAM state count exceeded int32 range");
     TORCH_CHECK(
-        values_.size() < kMaxInt32,
-        "ROSA SAM value count exceeded int32 range");
-
-    const int32_t value_position = static_cast<int32_t>(values_.size());
-    values_.push_back(value);
+        key_count_ < std::numeric_limits<int32_t>::max(),
+        "ROSA SAM key count exceeded int32 range");
+    const int32_t end_position = key_count_++;
 
     const int32_t next_state = static_cast<int32_t>(states_.size());
     states_.emplace_back();
@@ -156,17 +147,20 @@ class BoundedSuffixAutomaton {
         states_[static_cast<size_t>(last_key_state_)].max_length + 1;
 
     int32_t parent = last_key_state_;
-    while (
-        parent != -1 &&
-        find_transition(parent, symbol) == -1) {
-      set_transition(parent, symbol, next_state);
+    int32_t child = -1;
+    while (parent != -1) {
+      const int32_t edge = find_transition_edge(parent, symbol);
+      if (edge != -1) {
+        child = edges_[static_cast<size_t>(edge)].next_state;
+        break;
+      }
+      add_transition(parent, symbol, next_state);
       parent = states_[static_cast<size_t>(parent)].suffix_link;
     }
 
     if (parent == -1) {
       states_[static_cast<size_t>(next_state)].suffix_link = 0;
     } else {
-      const int32_t child = find_transition(parent, symbol);
       if (
           states_[static_cast<size_t>(parent)].max_length + 1 ==
           states_[static_cast<size_t>(child)].max_length) {
@@ -184,10 +178,14 @@ class BoundedSuffixAutomaton {
         states_[static_cast<size_t>(child)].suffix_link = clone;
         states_[static_cast<size_t>(next_state)].suffix_link = clone;
 
-        while (
-            parent != -1 &&
-            find_transition(parent, symbol) == child) {
-          set_transition(parent, symbol, clone);
+        while (parent != -1) {
+          const int32_t edge = find_transition_edge(parent, symbol);
+          if (
+              edge == -1 ||
+              edges_[static_cast<size_t>(edge)].next_state != child) {
+            break;
+          }
+          edges_[static_cast<size_t>(edge)].next_state = clone;
           parent = states_[static_cast<size_t>(parent)].suffix_link;
         }
       }
@@ -200,7 +198,7 @@ class BoundedSuffixAutomaton {
         static_cast<size_t>(max_suffix_length_)) {
       recent_keys_.pop_front();
     }
-    update_recent_suffixes(value_position);
+    update_recent_suffixes(end_position);
   }
 
   void update_recent_suffixes(int32_t end_position) {
@@ -218,23 +216,23 @@ class BoundedSuffixAutomaton {
   }
 
   const int32_t max_suffix_length_;
-  std::vector<uint8_t> values_;
   std::vector<SamState> states_;
   std::vector<SamEdge> edges_;
   std::deque<uint8_t> recent_keys_;
   int32_t query_state_ = 0;
   int32_t query_length_ = 0;
   int32_t last_key_state_ = 0;
+  int32_t key_count_ = 0;
 };
 
 template <typename scalar_t>
 std::vector<int64_t> read_cu_seqlens(const torch::Tensor& cu_seqlens) {
-  const auto* values = cu_seqlens.data_ptr<scalar_t>();
+  const auto* entries = cu_seqlens.data_ptr<scalar_t>();
   std::vector<int64_t> result(
       static_cast<size_t>(cu_seqlens.numel()));
   for (int64_t index = 0; index < cu_seqlens.numel(); ++index) {
     result[static_cast<size_t>(index)] =
-        static_cast<int64_t>(values[index]);
+        static_cast<int64_t>(entries[index]);
   }
   return result;
 }
@@ -303,28 +301,28 @@ class RosaRuntime : public torch::CustomClassHolder {
  public:
   RosaRuntime(
       int64_t num_heads,
-      int64_t num_value_heads,
+      int64_t num_payload_heads,
       int64_t qk_bits,
-      int64_t value_bits,
+      int64_t payload_bits,
       int64_t max_suffix_length)
       : num_heads_(num_heads),
-        num_value_heads_(num_value_heads),
+        num_payload_heads_(num_payload_heads),
         qk_bits_(qk_bits),
-        value_bits_(value_bits),
+        payload_bits_(payload_bits),
         max_suffix_length_(max_suffix_length) {
     TORCH_CHECK(num_heads_ > 0, "num_heads must be positive");
     TORCH_CHECK(
-        num_value_heads_ > 0,
-        "num_value_heads must be positive");
+        num_payload_heads_ > 0,
+        "num_payload_heads must be positive");
     TORCH_CHECK(
-        num_heads_ % num_value_heads_ == 0,
-        "num_heads must be divisible by num_value_heads");
+        num_heads_ % num_payload_heads_ == 0,
+        "num_heads must be divisible by num_payload_heads");
     TORCH_CHECK(
         qk_bits_ > 0 && qk_bits_ <= 8,
         "qk_bits must be in [1, 8]");
     TORCH_CHECK(
-        value_bits_ > 0 && value_bits_ <= 8,
-        "value_bits must be in [1, 8]");
+        payload_bits_ > 0 && payload_bits_ <= 8,
+        "payload_bits must be in [1, 8]");
     TORCH_CHECK(
         max_suffix_length_ > 0 &&
             max_suffix_length_ <= std::numeric_limits<int32_t>::max(),
@@ -335,7 +333,7 @@ class RosaRuntime : public torch::CustomClassHolder {
       const torch::Tensor& cu_seqlens,
       const torch::Tensor& query,
       const torch::Tensor& key,
-      const torch::Tensor& value) {
+      const torch::Tensor& payload) {
     std::lock_guard<std::mutex> lock(mutex_);
     TORCH_CHECK(!closed_, "RosaRuntime is closed");
 
@@ -359,52 +357,103 @@ class RosaRuntime : public torch::CustomClassHolder {
         total_tokens,
         num_heads_);
     check_packed_tensor(
-        value,
-        "value",
+        payload,
+        "payload",
         total_tokens,
-        num_value_heads_);
-    ensure_cache(batch);
+        num_payload_heads_);
+    ensure_automata(batch);
 
-    auto output = torch::empty({total_tokens, num_heads_}, value.options());
+    auto output = torch::empty({total_tokens, num_heads_}, payload.options());
     auto end_positions = torch::empty(
         {total_tokens, num_heads_},
-        value.options().dtype(torch::kInt64));
+        payload.options().dtype(torch::kInt64));
 
     const uint8_t* query_data = query.data_ptr<uint8_t>();
     const uint8_t* key_data = key.data_ptr<uint8_t>();
-    const uint8_t* value_data = value.data_ptr<uint8_t>();
+    const uint8_t* payload_data = payload.data_ptr<uint8_t>();
     uint8_t* output_data = output.data_ptr<uint8_t>();
     int64_t* end_position_data = end_positions.data_ptr<int64_t>();
-    const int64_t query_heads_per_value_head =
-        num_heads_ / num_value_heads_;
+    const int64_t query_heads_per_payload_head =
+        num_heads_ / num_payload_heads_;
     const uint8_t qk_mask = static_cast<uint8_t>(
         (uint16_t{1} << qk_bits_) - 1);
-    const uint8_t value_mask = static_cast<uint8_t>(
-        (uint16_t{1} << value_bits_) - 1);
+    const uint8_t payload_mask = static_cast<uint8_t>(
+        (uint16_t{1} << payload_bits_) - 1);
+
+    for (int64_t batch_index = 0; batch_index < batch; ++batch_index) {
+      const int64_t begin = offsets[static_cast<size_t>(batch_index)];
+      const int64_t end = offsets[static_cast<size_t>(batch_index + 1)];
+      const size_t token_count = static_cast<size_t>(end - begin);
+      TORCH_CHECK(
+          token_count <=
+              static_cast<size_t>(std::numeric_limits<int32_t>::max()),
+          "ROSA sequence length exceeded int32 range");
+      for (
+          int64_t payload_head = 0;
+          payload_head < num_payload_heads_;
+          ++payload_head) {
+        const auto& history = payload_histories_[static_cast<size_t>(
+            batch_index * num_payload_heads_ + payload_head)];
+        TORCH_CHECK(
+            history.size() <=
+                static_cast<size_t>(std::numeric_limits<int32_t>::max()) -
+                    token_count,
+            "ROSA payload history exceeded int32 range");
+      }
+    }
+
+    #pragma omp parallel for collapse(2) schedule(static)
+    for (int64_t batch_index = 0; batch_index < batch; ++batch_index) {
+      for (
+          int64_t payload_head = 0;
+          payload_head < num_payload_heads_;
+          ++payload_head) {
+        const int64_t begin =
+            offsets[static_cast<size_t>(batch_index)];
+        const int64_t end =
+            offsets[static_cast<size_t>(batch_index + 1)];
+        auto& history = payload_histories_[static_cast<size_t>(
+            batch_index * num_payload_heads_ + payload_head)];
+        history.reserve(
+            history.size() + static_cast<size_t>(end - begin));
+        for (int64_t token = begin; token < end; ++token) {
+          history.push_back(
+              payload_data[
+                  token * num_payload_heads_ + payload_head] &
+              payload_mask);
+        }
+      }
+    }
 
     #pragma omp parallel for collapse(2) schedule(dynamic)
     for (int64_t batch_index = 0; batch_index < batch; ++batch_index) {
       for (int64_t head = 0; head < num_heads_; ++head) {
-        BoundedSuffixAutomaton& automaton =
-            *cache_[static_cast<size_t>(
+        FiniteHorizonSuffixAutomaton& automaton =
+            *automata_[static_cast<size_t>(
                 batch_index * num_heads_ + head)];
-        const int64_t value_head =
-            head / query_heads_per_value_head;
+        const int64_t payload_head =
+            head / query_heads_per_payload_head;
+        const auto& payload_history =
+            payload_histories_[static_cast<size_t>(
+                batch_index * num_payload_heads_ + payload_head)];
         const int64_t begin =
             offsets[static_cast<size_t>(batch_index)];
         const int64_t end =
             offsets[static_cast<size_t>(batch_index + 1)];
         for (int64_t token = begin; token < end; ++token) {
-          int64_t end_position = -1;
-          const uint8_t result = automaton.update(
+          const int32_t matched_end = automaton.update(
               query_data[token * num_heads_ + head] & qk_mask,
-              key_data[token * num_heads_ + head] & qk_mask,
-              value_data[
-                  token * num_value_heads_ + value_head] & value_mask,
-              end_position);
+              key_data[token * num_heads_ + head] & qk_mask);
+          uint8_t result = 0;
+          if (matched_end >= 0) {
+            const size_t successor =
+                static_cast<size_t>(matched_end) + 1;
+            TORCH_INTERNAL_ASSERT(successor < payload_history.size());
+            result = payload_history[successor];
+          }
           output_data[token * num_heads_ + head] = result;
           end_position_data[token * num_heads_ + head] =
-              end_position;
+              static_cast<int64_t>(matched_end);
         }
       }
     }
@@ -414,25 +463,42 @@ class RosaRuntime : public torch::CustomClassHolder {
 
   void close() {
     std::lock_guard<std::mutex> lock(mutex_);
-    cache_.clear();
+    automata_.clear();
+    payload_histories_.clear();
     batch_size_ = -1;
     closed_ = true;
+  }
+
+  void reset() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    TORCH_CHECK(!closed_, "RosaRuntime is closed");
+    automata_.clear();
+    payload_histories_.clear();
+    batch_size_ = -1;
   }
 
   int64_t num_heads() const {
     return num_heads_;
   }
 
+  int64_t num_payload_heads() const {
+    return num_payload_heads_;
+  }
+
   int64_t num_value_heads() const {
-    return num_value_heads_;
+    return num_payload_heads_;
   }
 
   int64_t qk_bits() const {
     return qk_bits_;
   }
 
+  int64_t payload_bits() const {
+    return payload_bits_;
+  }
+
   int64_t value_bits() const {
-    return value_bits_;
+    return payload_bits_;
   }
 
   int64_t max_suffix_length() const {
@@ -443,30 +509,69 @@ class RosaRuntime : public torch::CustomClassHolder {
     std::lock_guard<std::mutex> lock(mutex_);
     int64_t states = 0;
     int64_t edges = 0;
-    int64_t values = 0;
-    for (const auto& automaton : cache_) {
+    for (const auto& automaton : automata_) {
       const SamStats current = automaton->stats();
       states += current.states;
       edges += current.edges;
-      values += current.values;
     }
-    return {states, edges, values};
+    int64_t payload_symbols = 0;
+    for (const auto& history : payload_histories_) {
+      payload_symbols += static_cast<int64_t>(history.size());
+    }
+    return {states, edges, payload_symbols};
+  }
+
+  std::tuple<
+      int64_t,
+      int64_t,
+      int64_t,
+      int64_t,
+      int64_t,
+      int64_t>
+  detailed_stats() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    int64_t states = 0;
+    int64_t edges = 0;
+    int64_t payload_symbols = 0;
+    int64_t logical_bytes = 0;
+    for (const auto& automaton : automata_) {
+      const SamStats current = automaton->stats();
+      states += current.states;
+      edges += current.edges;
+      logical_bytes += current.logical_bytes;
+    }
+    for (const auto& history : payload_histories_) {
+      payload_symbols += static_cast<int64_t>(history.size());
+      logical_bytes += static_cast<int64_t>(
+          history.size() * sizeof(uint8_t));
+    }
+    return {
+        states,
+        edges,
+        payload_symbols,
+        static_cast<int64_t>(automata_.size()),
+        batch_size_ < 0 ? 0 : batch_size_,
+        logical_bytes,
+    };
   }
 
  private:
-  void ensure_cache(int64_t batch) {
+  void ensure_automata(int64_t batch) {
     if (batch_size_ == -1) {
       batch_size_ = batch;
-      cache_.reserve(
+      automata_.reserve(
           static_cast<size_t>(batch_size_ * num_heads_));
       for (
           int64_t index = 0;
           index < batch_size_ * num_heads_;
           ++index) {
-        cache_.push_back(
-            std::make_unique<BoundedSuffixAutomaton>(
+        automata_.push_back(
+            std::make_unique<FiniteHorizonSuffixAutomaton>(
                 static_cast<int32_t>(max_suffix_length_)));
       }
+      payload_histories_.resize(
+          static_cast<size_t>(
+              batch_size_ * num_payload_heads_));
       return;
     }
     TORCH_CHECK(
@@ -475,13 +580,14 @@ class RosaRuntime : public torch::CustomClassHolder {
   }
 
   const int64_t num_heads_;
-  const int64_t num_value_heads_;
+  const int64_t num_payload_heads_;
   const int64_t qk_bits_;
-  const int64_t value_bits_;
+  const int64_t payload_bits_;
   const int64_t max_suffix_length_;
   int64_t batch_size_ = -1;
   bool closed_ = false;
-  std::vector<std::unique_ptr<BoundedSuffixAutomaton>> cache_;
+  std::vector<std::unique_ptr<FiniteHorizonSuffixAutomaton>> automata_;
+  std::vector<std::vector<uint8_t>> payload_histories_;
   mutable std::mutex mutex_;
 };
 
@@ -494,11 +600,15 @@ TORCH_LIBRARY_FRAGMENT(rosa_soft, m) {
           int64_t,
           int64_t>())
       .def("update_packed", &RosaRuntime::update_packed)
+      .def("reset", &RosaRuntime::reset)
       .def("close", &RosaRuntime::close)
       .def("num_heads", &RosaRuntime::num_heads)
+      .def("num_payload_heads", &RosaRuntime::num_payload_heads)
       .def("num_value_heads", &RosaRuntime::num_value_heads)
       .def("qk_bits", &RosaRuntime::qk_bits)
+      .def("payload_bits", &RosaRuntime::payload_bits)
       .def("value_bits", &RosaRuntime::value_bits)
       .def("max_suffix_length", &RosaRuntime::max_suffix_length)
-      .def("stats", &RosaRuntime::stats);
+      .def("stats", &RosaRuntime::stats)
+      .def("detailed_stats", &RosaRuntime::detailed_stats);
 }
