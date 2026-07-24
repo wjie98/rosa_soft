@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-25T03:30:23+08:00",
+  "source_commit": "fe642b01bb11a2f894869751e4748788d764ad89",
+  "environment": {
+    "os": "Linux 6.18.33.2-microsoft-standard-WSL2 x86_64",
+    "python": "3.12.13",
+    "pytorch": "2.11.0+cu128",
+    "cuda_runtime": "12.8",
+    "cuda_toolkit": "12.8",
+    "compiler": "g++ 11.4.0",
+    "gpus": [
+      {
+        "name": "NVIDIA GeForce RTX 3070",
+        "compute_capability": "8.6"
+      },
+      {
+        "name": "NVIDIA GeForce RTX 2080 Ti",
+        "compute_capability": "7.5"
+      }
+    ]
+  },
+  "builds": {
+    "reference_only": {
+      "result": "passed",
+      "native_extension": false
+    },
+    "cpu_runtime": {
+      "result": "passed",
+      "variant": "cpu-runtime",
+      "cuda_operator_schemas": false
+    },
+    "cuda_default": {
+      "result": "passed",
+      "variant": "cuda",
+      "architectures": [
+        "sm_75",
+        "sm_86"
+      ],
+      "translation_units": 4,
+      "rwkv7_included": false,
+      "rosa_soft_local_memory_spills": 0
+    },
+    "cuda_rwkv7_optional": {
+      "result": "passed",
+      "variant": "cuda-rwkv7",
+      "architectures": [
+        "sm_75",
+        "sm_86"
+      ],
+      "rwkv7_capabilities": true,
+      "fp32_probe_max_relative_error": {
+        "clamp": 7.800166041912249e-07,
+        "state": 8.724093019928492e-07,
+        "state_passing": 8.080683551163611e-07
+      }
+    }
+  },
+  "tests": {
+    "reference_only": {
+      "passed": 52,
+      "skipped": 1,
+      "expected_skip": "CPU-runtime-only schema check"
+    },
+    "cpu_runtime": {
+      "passed": 48,
+      "skipped": 0
+    },
+    "cuda_dual_gpu": {
+      "passed": 144,
+      "skipped": 1,
+      "expected_skip": "CPU-runtime-only schema check"
+    },
+    "cuda_sm75_only": {
+      "passed": 143,
+      "skipped": 2,
+      "expected_skips": [
+        "CPU-runtime-only schema check",
+        "two-device CUDA guard test"
+      ]
+    },
+    "long_runtime_case": {
+      "tokens": 32768,
+      "chunks": 2,
+      "max_suffix_length": 32,
+      "result": "passed"
+    }
+  },
+  "fit": {
+    "task": "default repeated-motif next-token fit",
+    "seed": 0,
+    "perturb_seed": 0,
+    "steps": 1000,
+    "max_suffix_length": 8,
+    "route_temperature": 1.0,
+    "mismatch_penalty": 3.0,
+    "reference": {
+      "final_hard_cross_entropy": 0.00047772895777598023,
+      "final_accuracy": 1.0,
+      "step_ms": 11.683760492975125
+    },
+    "cuda": {
+      "final_hard_cross_entropy": 0.0003826629836112261,
+      "final_accuracy": 1.0,
+      "step_ms": 2.886040231009247
+    }
+  },
+  "benchmarks": {
+    "rosa_soft": {
+      "gpu": "NVIDIA GeForce RTX 3070",
+      "dtype": "float32",
+      "shape": {
+        "batch": 1,
+        "heads": 4,
+        "symbol_dim": 8,
+        "payload_heads": 2,
+        "payload_dim": 8,
+        "max_suffix_length": 32
+      },
+      "pattern": "random",
+      "warmup": 10,
+      "repeats": 50,
+      "cuda": [
+        {
+          "sequence_length": 64,
+          "step_ms": 0.4504185485839844,
+          "peak_operator_mib": 0.02978515625
+        },
+        {
+          "sequence_length": 128,
+          "step_ms": 0.4879769515991211,
+          "peak_operator_mib": 0.05908203125
+        },
+        {
+          "sequence_length": 256,
+          "step_ms": 1.538682861328125,
+          "peak_operator_mib": 0.11767578125
+        }
+      ],
+      "reference": [
+        {
+          "sequence_length": 64,
+          "step_ms": 19.400482177734375,
+          "peak_operator_mib": 3.052734375
+        },
+        {
+          "sequence_length": 128,
+          "step_ms": 19.32533935546875,
+          "peak_operator_mib": 12.15234375
+        },
+        {
+          "sequence_length": 256,
+          "step_ms": 19.286943359375,
+          "peak_operator_mib": 48.4921875
+        }
+      ]
+    },
+    "rosa_runtime": {
+      "cpu_threads": 1,
+      "batch": 4,
+      "tokens": 4096,
+      "heads": 8,
+      "payload_heads": 2,
+      "bits": 4,
+      "max_suffix_length": 32,
+      "repeats": 5,
+      "median_ms": 34.562,
+      "states": 176587,
+      "edges": 305846,
+      "payload_symbols": 32768
+    }
+  },
+  "known_boundaries": [
+    "RosaSoft backward remains dense O(T^2); candidate pruning is prohibited.",
+    "RosaRuntime packed Q/K and payload widths are limited to 1..8 bits.",
+    "RosaRuntime checkpoint serialization is explicitly unsupported.",
+    "RosaRuntime logical_bytes excludes allocator capacity and container overhead."
+  ]
+}
