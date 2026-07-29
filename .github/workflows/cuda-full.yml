@@ -1,10 +1,16 @@
 name: CUDA full
 
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
   cuda-full:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, cuda]
     steps:
       - uses: actions/checkout@v4
@@ -12,25 +18,72 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install torch pytest ninja
-      - name: Build ROSA and RWKV7 CUDA extension
+      - name: Install pinned CUDA PyTorch
+        run: >-
+          python -m pip install
+          --index-url https://download.pytorch.org/whl/cu128
+          torch==2.11.0
+      - run: python -m pip install ninja
+      - name: Verify pinned build toolchain
+        run: |
+          python - <<'PY'
+          import subprocess
+          import torch
+          from torch.utils.cpp_extension import CUDA_HOME
+
+          assert torch.__version__ == "2.11.0+cu128", torch.__version__
+          assert torch.version.cuda == "12.8", torch.version.cuda
+          assert CUDA_HOME is not None, "CUDA toolkit was not detected"
+          nvcc = subprocess.check_output(
+              [f"{CUDA_HOME}/bin/nvcc", "--version"],
+              text=True,
+          )
+          assert "release 12.8" in nvcc, nvcc
+          PY
+      - name: Build ROSA CUDA extension
         env:
           USE_CUDA: "1"
-          ROSA_BUILD_RWKV7: "1"
-        run: python -m pip install --no-build-isolation -v -e .
+        run: python -m pip install --no-build-isolation -v -e ".[test]"
       - name: Require executable CUDA capabilities
         run: |
           python - <<'PY'
           import torch
           import rosa_soft
           assert torch.cuda.is_available(), "CUDA tests must not all skip"
-          assert rosa_soft.BUILD_CAPABILITIES["variant"] == "cuda-rwkv7"
-          assert rosa_soft.HAS_ROSA_RUNTIME
-          assert rosa_soft.HAS_ROSA_SOFT_CUDA
-          assert rosa_soft.HAS_RWKV7_CUDA
+          capabilities = rosa_soft.BUILD_CAPABILITIES
+          assert capabilities.variant == "cuda"
+          assert capabilities.compiled_extension
+          assert capabilities.rosa_runtime
+          assert capabilities.rosa_soft_cuda
+          assert torch.cuda.device_count() >= 2
+          device_capabilities = {
+              torch.cuda.get_device_capability(index)
+              for index in range(torch.cuda.device_count())
+          }
+          assert {(7, 5), (8, 6)} <= device_capabilities
+          assert torch.cuda.get_device_capability() >= (8, 0)
+          assert torch.cuda.is_bf16_supported()
           PY
-      - run: >-
-          python -m pytest
-          tests/test_build_contract.py
-          tests/test_runtime.py
-          tests/test_soft_cuda.py
+      - run: python -m pytest -q
+      - name: Hard-forward fitting gate
+        run: >-
+          python examples/fit_soft_reference.py
+          --operator cuda --device cuda --steps 1000 --log-every 1000
+          --success-loss-threshold 0.20
+      - name: Hard associative-recall gate
+        run: >-
+          python examples/associative_recall_gate.py
+          --operator both --device cuda --seeds 0 1 2
+      - name: Benchmark smoke
+        run: >-
+          python benchmarks/rosa_soft.py
+          --operator cuda --device cuda
+          --sequence-lengths 64 128
+          --warmup 2 --repeats 5
+      - name: Packed varlen benchmark smoke
+        run: >-
+          python benchmarks/rosa_soft.py
+          --operator cuda --device cuda
+          --layout varlen --segment-length 32
+          --sequence-lengths 64 128
+          --warmup 2 --repeats 5

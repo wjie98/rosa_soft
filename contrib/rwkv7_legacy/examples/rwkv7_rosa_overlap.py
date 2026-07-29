@@ -187,9 +187,9 @@ def make_rwkv7_rosa_state(
         "rosa_runtime": [
             RosaRuntime(
                 rosa_q_heads,
-                rosa_value_heads,
+                num_payload_heads=rosa_value_heads,
                 qk_bits=spec.rosa_qk_bits,
-                value_bits=spec.rosa_value_bits,
+                payload_bits=spec.rosa_value_bits,
                 max_suffix_length=spec.max_suffix_length,
             )
             for _ in range(spec.n_layer)

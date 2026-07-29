@@ -1,37 +1,38 @@
-import importlib
-from typing import Optional
+import importlib as _importlib
+from dataclasses import dataclass as _dataclass
 
-import torch
+import torch as _torch
 
 from .soft_contract import (
-    ROSA_SOFT_DEFAULT_MISMATCH_PENALTY,
-    ROSA_SOFT_DEFAULT_ROUTE_TEMPERATURE,
+    ROSA_SOFT_DEFAULT_DROPOUT_P as _DEFAULT_DROPOUT_P,
+    ROSA_SOFT_DEFAULT_MISMATCH_SCALE as _DEFAULT_MISMATCH_SCALE,
+    ROSA_SOFT_DEFAULT_SCALE as _DEFAULT_SCALE,
 )
-from .soft_reference import rosa_soft_reference
+from .soft_reference import (
+    rosa_soft_reference,
+    rosa_soft_varlen_reference,
+)
 
 
 __version__ = "0.1.0"
 
-EXTENSION_IMPORT_ERROR: Optional[BaseException] = None
-try:
-    _C = importlib.import_module(f"{__name__}._C")
-except (ImportError, OSError, RuntimeError) as error:
-    _C = None
-    EXTENSION_IMPORT_ERROR = error
 
-EXTENSION_IMPORT_ERROR_MESSAGE = (
-    None
-    if EXTENSION_IMPORT_ERROR is None
-    else (
-        f"{type(EXTENSION_IMPORT_ERROR).__name__}: "
-        f"{EXTENSION_IMPORT_ERROR}"
-    )
-)
+def _load_compiled_extension():
+    module_name = f"{__name__}._C"
+    try:
+        return _importlib.import_module(module_name)
+    except ModuleNotFoundError as error:
+        if error.name != module_name:
+            raise
+        return None
+
+
+_C = _load_compiled_extension()
 
 
 def _has_custom_class(namespace: str, name: str) -> bool:
     try:
-        getattr(getattr(torch.classes, namespace), name)
+        getattr(getattr(_torch.classes, namespace), name)
     except (AttributeError, RuntimeError):
         return False
     return True
@@ -40,7 +41,7 @@ def _has_custom_class(namespace: str, name: str) -> bool:
 def _has_dispatch_kernel(operator: str, dispatch_key: str) -> bool:
     try:
         return bool(
-            torch._C._dispatch_has_kernel_for_dispatch_key(
+            _torch._C._dispatch_has_kernel_for_dispatch_key(
                 operator,
                 dispatch_key,
             )
@@ -56,116 +57,130 @@ def _has_cuda_kernels(*operators: str) -> bool:
     )
 
 
-HAS_COMPILED_EXTENSION = _C is not None
-HAS_ROSA_RUNTIME = HAS_COMPILED_EXTENSION and _has_custom_class(
+def _require_complete_cuda_registration(
+    *operator_flags: bool,
+) -> bool:
+    if any(operator_flags) and not all(operator_flags):
+        raise RuntimeError(
+            "rosa_soft._C loaded with an incomplete CUDA operator "
+            "registration; the extension is stale or incompatible with "
+            "this package"
+        )
+    return all(operator_flags)
+
+
+_has_compiled_extension = _C is not None
+_has_rosa_runtime = _has_compiled_extension and _has_custom_class(
     "rosa_soft",
     "RosaRuntime",
 )
-HAS_ROSA_SOFT_CUDA = HAS_COMPILED_EXTENSION and _has_cuda_kernels(
-    "soft_forward",
-    "soft_backward",
+_required_cuda_operators = (
+    "hard_forward",
+    "hard_forward_varlen",
+    "surrogate_vjp_masked",
+    "surrogate_vjp_varlen_masked",
 )
-HAS_RWKV7_CLAMPW_CUDA = HAS_COMPILED_EXTENSION and _has_cuda_kernels(
-    "rwkv7_clampw_forward",
-    "rwkv7_clampw_backward",
+_cuda_operator_flags = tuple(
+    _has_compiled_extension and _has_cuda_kernels(operator)
+    for operator in _required_cuda_operators
 )
-HAS_RWKV7_STATE_CLAMPW_CUDA = (
-    HAS_COMPILED_EXTENSION
-    and _has_cuda_kernels(
-        "rwkv7_state_clampw_forward",
-        "rwkv7_state_clampw_backward",
-    )
-)
-HAS_RWKV7_STATE_PASSING_CLAMPW_CUDA = (
-    HAS_COMPILED_EXTENSION
-    and _has_cuda_kernels(
-        "rwkv7_statepassing_clampw_forward",
-        "rwkv7_statepassing_clampw_backward",
-    )
-)
-HAS_RWKV7_ALBATROSS_CUDA = (
-    HAS_COMPILED_EXTENSION
-    and _has_cuda_kernels(
-        "rwkv7_albatross_forward_w0_fp16_dither",
-    )
-)
-HAS_RWKV7_CUDA = all(
-    (
-        HAS_RWKV7_CLAMPW_CUDA,
-        HAS_RWKV7_STATE_CLAMPW_CUDA,
-        HAS_RWKV7_STATE_PASSING_CLAMPW_CUDA,
-        HAS_RWKV7_ALBATROSS_CUDA,
-    )
+_has_rosa_soft_cuda = _require_complete_cuda_registration(
+    *_cuda_operator_flags,
 )
 
-if not HAS_COMPILED_EXTENSION:
-    _build_variant = "reference"
-elif HAS_RWKV7_CUDA:
-    _build_variant = "cuda-rwkv7"
-elif HAS_ROSA_SOFT_CUDA:
+if _has_compiled_extension and not _has_rosa_runtime:
+    raise RuntimeError(
+        "rosa_soft._C loaded without the required RosaRuntime registration; "
+        "the extension is stale or incompatible with this package"
+    )
+
+if _has_rosa_soft_cuda:
     _build_variant = "cuda"
-elif HAS_ROSA_RUNTIME:
+elif _has_rosa_runtime:
     _build_variant = "cpu-runtime"
 else:
-    _build_variant = "extension"
+    _build_variant = "reference"
 
-BUILD_CAPABILITIES = {
-    "version": __version__,
-    "variant": _build_variant,
-    "compiled_extension": HAS_COMPILED_EXTENSION,
-    "rosa_runtime": HAS_ROSA_RUNTIME,
-    "rosa_soft_cuda": HAS_ROSA_SOFT_CUDA,
-    "rwkv7_cuda": HAS_RWKV7_CUDA,
-    "rwkv7_clampw_cuda": HAS_RWKV7_CLAMPW_CUDA,
-    "rwkv7_state_clampw_cuda": HAS_RWKV7_STATE_CLAMPW_CUDA,
-    "rwkv7_state_passing_clampw_cuda": (
-        HAS_RWKV7_STATE_PASSING_CLAMPW_CUDA
-    ),
-    "rwkv7_albatross_cuda": HAS_RWKV7_ALBATROSS_CUDA,
-    "extension_import_error": EXTENSION_IMPORT_ERROR_MESSAGE,
-}
+
+@_dataclass(frozen=True, slots=True)
+class BuildCapabilities:
+    variant: str
+    compiled_extension: bool
+    rosa_runtime: bool
+    rosa_soft_cuda: bool
+
+
+BUILD_CAPABILITIES = BuildCapabilities(
+    variant=_build_variant,
+    compiled_extension=_has_compiled_extension,
+    rosa_runtime=_has_rosa_runtime,
+    rosa_soft_cuda=_has_rosa_soft_cuda,
+)
 
 
 def _raise_unavailable(feature: str, build_hint: str) -> None:
-    message = (
+    raise RuntimeError(
         f"{feature} is unavailable in the "
-        f"{BUILD_CAPABILITIES['variant']!r} rosa_soft build. {build_hint}"
+        f"{BUILD_CAPABILITIES.variant!r} rosa_soft build. {build_hint}"
     )
-    if EXTENSION_IMPORT_ERROR is not None:
-        message += (
-            " The compiled extension failed to import: "
-            f"{EXTENSION_IMPORT_ERROR_MESSAGE}"
-        )
-    raise RuntimeError(message) from EXTENSION_IMPORT_ERROR
 
 
-if HAS_ROSA_SOFT_CUDA:
-    from .soft import rosa_soft
+if _has_rosa_soft_cuda:
+    from .soft import rosa_soft, rosa_soft_varlen
 else:
     def rosa_soft(
-        query_logits,
-        key_logits,
-        payload_logits,
+        query,
+        key,
+        value,
+        *,
         max_suffix_length=32,
-        route_temperature=ROSA_SOFT_DEFAULT_ROUTE_TEMPERATURE,
-        mismatch_penalty=ROSA_SOFT_DEFAULT_MISMATCH_PENALTY,
+        scale=_DEFAULT_SCALE,
+        dropout_p=_DEFAULT_DROPOUT_P,
+        mismatch_scale=_DEFAULT_MISMATCH_SCALE,
     ):
         del (
-            query_logits,
-            key_logits,
-            payload_logits,
+            query,
+            key,
+            value,
             max_suffix_length,
-            route_temperature,
-            mismatch_penalty,
+            scale,
+            dropout_p,
+            mismatch_scale,
         )
         _raise_unavailable(
             "rosa_soft CUDA training operator",
             "Build with USE_CUDA=1 (or auto with CUDA_HOME available).",
         )
 
+    def rosa_soft_varlen(
+        query,
+        key,
+        value,
+        cu_seqlens,
+        *,
+        max_suffix_length=32,
+        scale=_DEFAULT_SCALE,
+        dropout_p=_DEFAULT_DROPOUT_P,
+        mismatch_scale=_DEFAULT_MISMATCH_SCALE,
+    ):
+        del (
+            query,
+            key,
+            value,
+            cu_seqlens,
+            max_suffix_length,
+            scale,
+            dropout_p,
+            mismatch_scale,
+        )
+        _raise_unavailable(
+            "rosa_soft_varlen CUDA training operator",
+            "Build with USE_CUDA=1 (or auto with CUDA_HOME available).",
+        )
 
-if HAS_ROSA_RUNTIME:
-    from .runtime import RosaRuntime, RosaRuntimeWork
+
+if _has_rosa_runtime:
+    from .runtime import RosaRuntime
 else:
     class RosaRuntime:
         def __init__(self, *args, **kwargs):
@@ -176,32 +191,12 @@ else:
             )
 
 
-    class RosaRuntimeWork:
-        def __init__(self, *args, **kwargs):
-            del args, kwargs
-            _raise_unavailable(
-                "RosaRuntimeWork",
-                "Build with ROSA_BUILD_EXTENSION=1.",
-            )
-
-
 __all__ = [
     "__version__",
     "BUILD_CAPABILITIES",
-    "EXTENSION_IMPORT_ERROR",
-    "EXTENSION_IMPORT_ERROR_MESSAGE",
-    "HAS_COMPILED_EXTENSION",
-    "HAS_ROSA_RUNTIME",
-    "HAS_ROSA_SOFT_CUDA",
-    "HAS_RWKV7_CUDA",
-    "HAS_RWKV7_CLAMPW_CUDA",
-    "HAS_RWKV7_STATE_CLAMPW_CUDA",
-    "HAS_RWKV7_STATE_PASSING_CLAMPW_CUDA",
-    "HAS_RWKV7_ALBATROSS_CUDA",
-    "ROSA_SOFT_DEFAULT_MISMATCH_PENALTY",
-    "ROSA_SOFT_DEFAULT_ROUTE_TEMPERATURE",
     "RosaRuntime",
-    "RosaRuntimeWork",
     "rosa_soft",
     "rosa_soft_reference",
+    "rosa_soft_varlen",
+    "rosa_soft_varlen_reference",
 ]

@@ -32,7 +32,7 @@ def benchmark(
             max_suffix_length=max_suffix_length,
         )
         t0 = time.perf_counter()
-        output, end_positions = rt.update_packed(
+        output, matched_key_end_positions = rt.update_packed(
             query,
             key,
             payload,
@@ -41,7 +41,7 @@ def benchmark(
         stats = rt.stats()
         rt.close()
         timings.append(elapsed)
-        del output, end_positions
+        del output, matched_key_end_positions
     timings.sort()
     return timings[len(timings) // 2], stats
 

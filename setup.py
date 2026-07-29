@@ -1,3 +1,4 @@
+import ast
 import os
 import sys
 
@@ -8,7 +9,27 @@ from setuptools import find_packages, setup
 
 
 library_name = "rosa_soft"
-PACKAGE_VERSION = "0.1.0"
+TORCH_REQUIREMENT = "torch>=2.11,<2.12"
+
+
+def _read_package_version() -> str:
+    init_path = Path(__file__).parent / library_name / "__init__.py"
+    module = ast.parse(init_path.read_text(encoding="utf-8"), init_path.name)
+    for statement in module.body:
+        if not isinstance(statement, ast.Assign):
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == "__version__"
+            for target in statement.targets
+        ):
+            continue
+        version = ast.literal_eval(statement.value)
+        if isinstance(version, str):
+            return version
+    raise RuntimeError(f"Unable to find __version__ in {init_path}")
+
+
+PACKAGE_VERSION = _read_package_version()
 
 CPU_SOURCES = [
     "export.cpp",
@@ -20,27 +41,10 @@ ROSA_CUDA_SOURCES = [
     "cuda/rosa_soft_kernels.cu",
 ]
 
-RWKV7_CPP_SOURCES = [
-    "rwkv7_albatross.cpp",
-    "rwkv7_clampw.cpp",
-    "rwkv7_state_clampw.cpp",
-    "rwkv7_statepassing_clampw.cpp",
-]
-
-RWKV7_CUDA_SOURCES = [
-    "cuda/rwkv7_albatross.cu",
-    "cuda/rwkv7_clampw.cu",
-    "cuda/rwkv7_state_clampw.cu",
-    "cuda/rwkv7_statepassing_clampw.cu",
-]
-
 
 class BuildConfiguration(NamedTuple):
     build_extension: bool
-    cuda_mode: str
     use_cuda: bool
-    build_rwkv7: bool
-    variant: str
 
 
 def _binary_setting(
@@ -78,44 +82,18 @@ def resolve_build_configuration(
     if environ is None:
         environ = os.environ
 
-    build_extension = wants_extension_build(environ)
+    if not wants_extension_build(environ):
+        return BuildConfiguration(False, False)
+
     cuda_mode = _cuda_mode(environ)
-    build_rwkv7 = _binary_setting("ROSA_BUILD_RWKV7", "0", environ)
-
-    if not build_extension:
-        return BuildConfiguration(
-            build_extension=False,
-            cuda_mode=cuda_mode,
-            use_cuda=False,
-            build_rwkv7=False,
-            variant="reference",
-        )
-
     use_cuda = cuda_home is not None if cuda_mode == "auto" else cuda_mode == "1"
     if cuda_mode == "1" and cuda_home is None:
         raise RuntimeError(
             "USE_CUDA=1 but CUDA_HOME was not found. Install a CUDA toolkit "
             "visible to torch.utils.cpp_extension, or use USE_CUDA=0/auto."
         )
-    if build_rwkv7 and not use_cuda:
-        raise RuntimeError(
-            "ROSA_BUILD_RWKV7=1 requires a CUDA extension build; set "
-            "USE_CUDA=1 with a valid CUDA_HOME."
-        )
 
-    if build_rwkv7:
-        variant = "cuda-rwkv7"
-    elif use_cuda:
-        variant = "cuda"
-    else:
-        variant = "cpu-runtime"
-    return BuildConfiguration(
-        build_extension=True,
-        cuda_mode=cuda_mode,
-        use_cuda=use_cuda,
-        build_rwkv7=build_rwkv7,
-        variant=variant,
-    )
+    return BuildConfiguration(True, use_cuda)
 
 
 def source_names_for(config: BuildConfiguration):
@@ -124,9 +102,6 @@ def source_names_for(config: BuildConfiguration):
     source_names = list(CPU_SOURCES)
     if config.use_cuda:
         source_names += ROSA_CUDA_SOURCES
-    if config.build_rwkv7:
-        source_names += RWKV7_CPP_SOURCES
-        source_names += RWKV7_CUDA_SOURCES
     return source_names
 
 
@@ -134,8 +109,6 @@ def define_macros_for(config: BuildConfiguration):
     macros = []
     if config.use_cuda:
         macros.append(("ROSA_WITH_CUDA", "1"))
-    if config.build_rwkv7:
-        macros.append(("ROSA_WITH_RWKV7", "1"))
     return macros
 
 
@@ -218,9 +191,11 @@ def setup_package():
         author="Wenjie Huang",
         packages=find_packages(include=[library_name, f"{library_name}.*"]),
         ext_modules=ext_modules,
-        install_requires=["torch"],
+        install_requires=[TORCH_REQUIREMENT],
+        python_requires=">=3.10",
         extras_require={
             "build": ["ninja"],
+            "test": ["numpy", "pytest"],
         },
         description="ROSA Operations for PyTorch",
         cmdclass=cmdclass,

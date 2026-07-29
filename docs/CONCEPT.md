@@ -1,331 +1,238 @@
-# ROSA and RosaSoft Technical Report
+# RosaSoft Concept
 
-This document explains why `rosa_soft` separates a hard ROSA forward path from
-a stochastic surrogate backward path.
+RosaSoft trains an exact discrete ROSA router without exposing a soft value
+path in forward. Its design has two deliberately different semantics:
 
-The short version:
+- forward is the deployment behavior;
+- backward is one dense credit-assignment approximation with optional
+  attention dropout.
 
-- `RosaRuntime` is the stateful hard suffix-automaton inference path.
-- `rosa_soft` is the dense CUDA training operator.
-- `rosa_soft_reference` is its PyTorch semantic oracle.
-- Training and inference observe the same hard Q/K/payload route output.
-- Softness exists only in the custom backward estimator.
+The separation is implemented by a custom VJP. It is not a soft forward
+relaxation.
 
-## Design Ladder
+## 1. Inputs
 
-The current operator came from a sequence of partial solutions:
+For dense batches:
 
-| Step | Useful property | Blocking problem |
-| --- | --- | --- |
-| Hard ROSA | Exact discrete suffix retrieval and compact inference state. | Q/K comparisons and route changes have no ordinary gradient. |
-| Bitflip perturbation | Measures route sensitivity while keeping hard forward. | Requires many hard re-evaluations and has high variance. |
-| Soft dynamic programming | Gives dense credit to candidate suffixes. | Quadratic state, sequential recurrence, and a hackable soft forward. |
-| Suffix attention | Maps suffix comparison to GPU-friendly candidate rows. | Additive evidence lets older matches compensate for an early mismatch. |
-| RosaSoft | Hard forward plus multiplicative stochastic suffix credit in backward. | Dense training still enumerates all causal candidates. |
-
-## 1. Hard ROSA
-
-ROSA turns Q/K activations into symbols:
-
-```math
-s(x)=
-\begin{cases}
-+1,&x>0\\
--1,&x\le 0.
-\end{cases}
+```text
+query   Q: [B, T, H, D]
+key     K: [B, T, H, D]
+value V: [B, T, Hv, Dv]
 ```
 
-For a query suffix ending at `i` and a key suffix ending at `j`, the hard
-matching length follows:
+`H` must be divisible by `Hv`. Each value head is shared by `H / Hv` query
+heads. Packed variable-length inputs remove `B` and use `cu_seqlens` to define
+independent segments.
 
-```math
-L_{i,j}^{hard}=
-\begin{cases}
-1+L_{i-1,j-1}^{hard},&s(q_i)=s(k_j)\\
-0,&\text{otherwise}.
-\end{cases}
+Every Q, K, and value bit is quantized by
+
+```text
+sign(x) = +1 if x > 0 else -1.
 ```
 
-Inference chooses a historical value associated with the longest exact suffix.
-A suffix automaton can maintain this state without storing an attention-style
-matrix. The training difficulty is that symbolization and winner selection are
-step functions.
+Zero therefore belongs to the negative symbol.
 
-## 2. Bitflip Perturbation
+## 2. Exact Hard Forward
 
-Let `F(B,V)` be hard ROSA from packed route bits `B` and values `V`. Flipping
-one bit `u` gives a directional signal:
+At query position `t`, route `a` is either:
 
-```math
-\Delta_u=
-\left\langle
-g,\,
-F(\operatorname{flip}_u(B),V)-F(B,V)
-\right\rangle.
+- `a = 0`: the null route, whose value is the all-zero vector;
+- `1 <= a <= t`: match the query history ending at `t` against the key
+  history ending at `a - 1`, then return value `V[a]`.
+
+For a non-null route, its exact suffix length is
+
+```text
+L(t,a) = max l such that
+         sign(Q[t-r]) == sign(K[a-1-r])
+         for every r in [0, l),
 ```
 
-This is a strong local oracle because it asks the actual discrete operator what
-would change. It also scales with the number of probes and inherits large
-route jumps. The historical tiny fitting task showed that hard-forward
-learning is possible, but bitflip is not an economical full-model primitive.
+bounded by `max_suffix_length` and both sequence boundaries. Equality means
+all `D` bits match for that head and position.
 
-## 3. Soft Dynamic Programming
+Forward selects the non-null route with largest `L(t,a)`. Equal lengths select
+the latest route, meaning largest `a`. If every non-null route has length
+zero, forward selects null. The returned value is exactly:
 
-A differentiable local match `m(i,j)` can define:
-
-```math
-S_{i,j}=m(i,j)(1+S_{i-1,j-1}),
+```text
+0                         for null
+sign(V[a])                for a selected non-null route.
 ```
 
-followed by a softmax over candidates. This gives every candidate a gradient in
-one graph, but introduces three problems:
+No probability, soft symbol, or surrogate score contributes to this value.
 
-- `O(T^2)` score state;
-- diagonal recurrence that is difficult to tile;
-- a soft weighted-value forward that can carry information unavailable to
-  hard inference.
+## 3. Symbol VJP
 
-The last issue is fundamental. If training can exploit probability tails or
-value amplitudes, it need not learn a useful discrete route.
+Backward evaluates hard symbols numerically but assigns them the derivative of
+softsign:
 
-## 4. Suffix Attention
-
-Suffix attention flattens a recent window into features and scores them with an
-attention-like dot product:
-
-```math
-\phi_q(i)=[q_i,\eta q_{i-1},\ldots,\eta^{W-1}q_{i-W+1}],
+```text
+z(x) = sign(x)
+dz/dx := 1 / (1 + |x|)^2.
 ```
 
-```math
-s_{i,j}=\frac{\langle\phi_q(i),\phi_k(j)\rangle}{\sqrt{WD}}.
+This straight-through rule keeps the forward algebra binary while reducing
+the gradient of already-saturated logits. It is applied to Q, K, and value
+logits.
+
+## 4. Local Match Gate
+
+For one query/key symbol pair, normalized Hamming mismatch is
+
+```text
+m = (1 / 2D) * sum_i (1 - z(q_i) z(k_i)).
 ```
 
-This is parallel and kernel-friendly. Its score is additive, however, so a
-mismatch at the most recent symbol can be offset by older similarities. Hard
-longest-suffix matching terminates at that mismatch. The objective is
-therefore structurally different even before hard inference is considered.
+Because `z` is numerically `+1/-1`, `m` is exactly the mismatch fraction in
+forward arithmetic. The deterministic local match gate is
 
-## 5. Current Path: RosaSoft
-
-RosaSoft keeps:
-
-- hard Q/K/payload signs in forward;
-- exact longest-suffix selection with latest-route ties;
-- a finite suffix window for the dense training oracle;
-- dense candidate credit only in backward;
-- multiplicative local gates so an early mismatch suppresses later offsets;
-- stochastic exploration that cannot alter the hard forward;
-- distributed soft payload gradients.
-
-### Hard Forward
-
-For row `i`, route `a` compares `q_i` to `k_{a-1}` and continues backward
-until the first unequal complete symbol or `max_suffix_length`. The route with
-the longest exact suffix wins; the latest route resolves equal lengths. If
-every route mismatches immediately, the null route returns exact zero.
-
-The returned value is one hard signed `V[a]`. No soft score, probability, or
-weighted value is visible to the model.
-
-### Straight-Through Boundary
-
-Backward uses:
-
-```math
-\hat s(x)=\operatorname{stopgrad}
-\left(s(x)-\frac{x}{1+|x|}\right)
-+\frac{x}{1+|x|},
+```text
+g = exp(-mismatch_scale * m).
 ```
 
-with derivative:
+An exact symbol match has `g = 1`; a mismatch has `0 < g < 1`. Normalizing by
+`D` makes `mismatch_scale` describe a mismatch fraction rather than a raw
+bit count.
 
-```math
-\frac{\partial\hat s}{\partial x}=\frac{1}{(1+|x|)^2}.
+## 5. Soft Suffix Score
+
+For route `(t,a)`, define the product for suffix length `l`:
+
+```text
+P_l(t,a) = product from r=0 to l-1 of g(t-r, a-1-r).
 ```
 
-Numerically `hat s(x)` is still the hard sign.
+The route score is the expected matched-prefix length:
 
-### Independent Mismatch Exploration
-
-For hard mismatch bit `delta_d`, sample an independent `u_d` and use:
-
-```math
-\alpha_d=1-\frac{u_d^3}{2}.
+```text
+F(t,a) = sum from l=1 to W of P_l(t,a),
 ```
 
-The relaxed Hamming distance is:
+where `W` is clipped by `max_suffix_length` and sequence boundaries.
 
-```math
-H=\sum_d\delta_d\alpha_d.
+This complete prefix sum is important. Every deeper suffix position receives
+credit before it becomes part of the current hard winner. Frontier-only or
+winner-only gradients remove that discovery path.
+
+As `mismatch_scale` approaches infinity, `g` approaches the exact local
+match indicator and `F` approaches the exact suffix length. At finite
+penalty, a near match may receive more backward credit than a shorter exact
+match. That is intentional exploration in the VJP; it cannot change forward.
+
+## 6. Dense Route Distribution
+
+The fixed null score is
+
+```text
+F(t,0) = 0.5.
 ```
 
-The local numerical gate is:
+For `N_t` valid non-null candidates, logits are
 
-```math
-\mu=e^{-\lambda H}.
+```text
+logit(t,0) = 0.5 * scale
+logit(t,a) = F(t,a) * scale - log(N_t),  a > 0.
 ```
 
-Every exact symbol match remains `1`. Every mismatching symbol is strictly
-below `1`. Non-exact candidates may reorder, which is intentional exploration;
-only the exact/non-exact boundary must remain invariant.
+The route probabilities are a softmax over null and every valid causal route.
+Subtracting `log(N_t)` treats all non-null candidates as one aggregate
+hypothesis, so merely increasing context length does not multiply their prior
+mass.
 
-A detach construction makes the local VJP follow hard Hamming distance:
+`scale` only controls competition among scores that already exist. A larger
+scale sharpens routing but does not create support for a longer suffix. Unlike
+dot-product attention, the mismatch is already normalized by `D`, so the
+default does not apply an implicit `1 / sqrt(D)`.
 
-```math
-\lambda e^{-\lambda h},
-\qquad h=\sum_d\delta_d,
+## 7. Value Carrier
+
+Let the post-softmax dropout multiplier be
+
+```text
+d(t,a) = Bernoulli(1 - dropout_p) / (1 - dropout_p).
 ```
 
-rather than a random exponential scale based on `H`.
+The differentiable carrier used only for the VJP is
 
-### Multiplicative Suffix Score
-
-For route `a`, let `mu_r` be the local gate at suffix offset `r`:
-
-```math
-p_0=1,\qquad p_{r+1}=p_r\mu_r,
+```text
+y_soft(t) = sum_a d(t,a) * p(t,a) * z(V[a]),
 ```
 
-```math
-R(i,a)=\sum_r p_{r+1}.
+with a zero value for null. The custom autograd function returns the exact
+hard value in forward and applies
+
+```text
+J(y_soft)^T * grad_output
 ```
 
-An early mismatch is present in every later product. This is the key property
-missing from additive suffix attention.
+in backward. Q/K receive route-discovery credit and values receive
+distributed probability-weighted credit from the same route distribution.
+The dropout mask is never visible in forward. Its inverted scaling preserves
+the deterministic carrier in expectation.
 
-### Candidate Distribution
+## 8. Irreducible Contract
 
-The null score is fixed at `0.5`; every valid route uses `R(i,a)`:
+The production estimator contains only:
 
-```math
-P(a|i)=\operatorname{softmax}_a
-\left(\frac{z(i,a)}{\text{route_temperature}}\right).
-```
+1. hard binary symbols with softsign VJP;
+2. normalized Hamming mismatch;
+3. one exponential local gate;
+4. one complete suffix prefix-product sum;
+5. one candidate-normalized dense softmax;
+6. optional standard attention dropout;
+7. one distributed value carrier.
 
-There is no recency term or current-winner bonus in backward. Temperature
-controls how widely route credit is distributed. It does not change the hard
-forward or the maximum learnable suffix length. At finite mismatch penalty,
-the proxy winner can differ from the hard latest-longest route, so taking the
-temperature toward zero only selects the proxy winner.
+It has no mismatch perturbation, antithetic branch, hard-tier wrapper, bounded
+residual, adaptive schedule, confidence gate, recency prior, top-k candidate
+set, or soft forward value. Dropout stores one scalar seed and reconstructs
+route decisions by index; it does not save a quadratic mask.
 
-`mismatch_penalty` controls mismatch leakage and its hard-Hamming local VJP.
-It is independent of route_temperature and `max_suffix_length`. A configured window may be
-only a loose upper bound, so deriving the mismatch penalty from that bound is
-unjustified.
+Every valid causal route is still scored and normalized in backward. Dropout
+can mask a route's carrier contribution for one sample, but it does not define
+or prune the candidate set. A sparse hard forward does not justify a
+structurally sparse training gradient: undiscovered routes need support before
+they can become winners.
 
-### Payload Credit
+## 9. Static Controls
 
-Q/K route gradients use probabilities against detached hard payload symbols.
-Payload
-gradients use detached probabilities and the softsign Jacobian. Consequently,
-non-winning routes and hard-null rows can still train V, while no weighted
-value leaks into forward.
+The public controls are intentionally limited:
 
-## 6. Public Controls
-
-The operator intentionally exposes only:
-
-| Parameter | Default | Meaning |
+| Control | Default | Effect |
 | --- | ---: | --- |
-| `max_suffix_length` | `32` | Hard and proxy suffix horizon. |
-| `route_temperature` | `1.0` | Backward route-allocation temperature. |
-| `mismatch_penalty` | `3.0` | Backward mismatch leakage and Jacobian scale. |
+| `max_suffix_length` | `32` | Hard and surrogate suffix horizon. |
+| `scale` | `1.0` | Multiplicative backward attention-logit scale. |
+| `dropout_p` | `0.0` | Post-softmax inverted attention dropout in backward. |
+| `mismatch_scale` | `3.0` | Leakage and gradient scale of local mismatches. |
 
-These are fixed run-level values. The operator does not schedule or infer them
-from context length, code width, training step, diagnostics, or each other.
+These values are explicit run-level hyperparameters. The operator does not
+derive them from `D`, `T`, the configured window, the active suffix length, or
+the training step.
 
-Removed mechanisms include magnitude confidence, winner margins, recency
-biases, optional perturbation width, hard/soft payload modes, early-stop
-epsilon, Q/K
-dampers, and hot-path telemetry. Each either changed the estimator, duplicated
-optimizer policy, or added state without sufficient evidence.
+For long near-match discovery, an overly large mismatch scale can make
+products vanish before the model repairs later suffix positions. Changing the
+attention-logit `scale` cannot repair that loss of support: `scale` changes
+route competition, while `mismatch_scale` changes whether a near-match score
+exists.
 
-## 7. Reference and CUDA
+The default `3.0` is a conservative choice for the default
+`dropout_p=0` estimator. A matched synthetic fitting probe favored `3.0`
+without dropout and `9.0` with `dropout_p=0.1`; neither value was uniformly
+better. Keep non-default values explicit and calibrate them with the training
+recipe rather than embedding a schedule in the operator.
 
-The PyTorch reference materializes candidate matrices and independent samples:
+## 10. Complexity Boundary
 
-```text
-mismatch_uniform: [B,H,T,T-1,D]
-```
-
-CUDA stores one seed and reconstructs each `u` from the index
-`(b,h,q_pos,k_pos,bit)`. A local gate keeps only `h` and `H`
-accumulators. This removes quadratic random memory while preserving exact
-sample-level parity with the reference.
-
-The current CUDA kernel still scans every causal route. Counter randomness
-solves memory state, not candidate complexity:
+The semantic backward is dense in routes:
 
 ```text
-persistent estimator state: O(B H T)
-dense candidate compute:    O(B H T^2 W D)
+route support: O(B * H * T^2)
+suffix work:   bounded by max_suffix_length
 ```
 
-This full route support is intentional. RosaSoft's advantage is precisely
-that it trains a sparse hard route with dense proxy gradients. Pruning the
-backward candidate set according to the current hard route, a learned index,
-top-k scores, ANN/LSH retrieval, thresholds, or sampled negatives changes the
-estimator. In particular, an undiscovered route can receive no gradient,
-remain undiscovered, and create a self-reinforcing collapse.
-
-Hard `RosaRuntime` uses bounded compact suffix state for inference, and an exact
-index may optimize training forward. Neither may choose the routes included
-in the default backward pass. Long-context training optimization must preserve
-all causal routes while reducing redundant work through online softmax,
-dense tiling, exact diagonal recurrences, caching, and checkpointed
-recomputation.
-
-## 8. Validation
-
-The test suite covers hard suffix semantics, latest ties, null rows,
-static-control isolation, cubic mismatch gates, hard-Hamming local VJPs, dense
-low-rank route discovery, exact
-diagonal-recurrence adjoints, all three CUDA execution plans, grouped heads,
-`D=32`, non-contiguous inputs, FP16/BF16, and exact counter reconstruction.
-
-Current reproduced tests, fitting gates, and benchmark metadata are recorded
-in `validation/latest.json`. Historical estimator comparisons remain under
-`docs/research/` and are not part of the production test count.
-
-## 9. Runtime Contract
-
-Training:
-
-```python
-output = rosa_soft(
-    query_logits,
-    key_logits,
-    payload_logits,
-    max_suffix_length=128,
-    route_temperature=1.0,
-    mismatch_penalty=3.0,
-)
-```
-
-Inference:
-
-```python
-with RosaRuntime(
-    num_heads,
-    num_payload_heads,
-    qk_bits=4,
-    payload_bits=4,
-    max_suffix_length=128,
-) as rt:
-    output, end_positions = rt.update(
-        query,
-        key,
-        payload,
-        return_packed=False,
-    )
-```
-
-`RosaRuntime` uses the same finite suffix horizon, latest-match tie rule, and
-exact null value as the training forward. Latest end positions are propagated
-only through suffix classes reachable within that horizon, so repeated-symbol
-updates are `O(max_suffix_length)` instead of quadratic in accumulated context.
-One per-instance executor serializes state transitions, asynchronous work, and
-close. The current packed runtime stores one byte per head, so Q/K and payload
-widths are `1..8`; the training Q/K contract remains `1..32`. Packed calls
-ignore byte bits above the declared widths.
+The PyTorch oracle materializes quadratic route tensors for clarity. CUDA
+visits the same routes but recomputes local state and uses online reductions,
+so dense gradient support does not imply an `O(B H T^2)` persistent
+workspace. Counter-based dropout also needs only scalar saved state, not a
+quadratic mask. Candidate pruning would change the estimator and is not a
+kernel optimization.

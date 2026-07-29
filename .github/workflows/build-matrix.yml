@@ -13,24 +13,25 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install torch pytest
+      - run: >-
+          python -m pip install
+          --index-url https://download.pytorch.org/whl/cpu
+          torch==2.11.0
       - name: Install without native extension
         env:
           ROSA_BUILD_EXTENSION: "0"
-        run: python -m pip install --no-build-isolation -e .
+        run: python -m pip install --no-build-isolation -e ".[test]"
       - name: Assert reference capabilities
         run: |
           python - <<'PY'
           import rosa_soft
-          assert rosa_soft.BUILD_CAPABILITIES["variant"] == "reference"
-          assert not rosa_soft.HAS_COMPILED_EXTENSION
-          assert rosa_soft.EXTENSION_IMPORT_ERROR_MESSAGE
+          capabilities = rosa_soft.BUILD_CAPABILITIES
+          assert capabilities.variant == "reference"
+          assert not capabilities.compiled_extension
+          assert not capabilities.rosa_runtime
+          assert not capabilities.rosa_soft_cuda
           PY
-      - run: >-
-          python -m pytest
-          tests/test_build_contract.py
-          tests/test_soft_reference.py
-          tests/test_diagnostics.py
+      - run: python -m pytest -q
 
   cpu-runtime:
     runs-on: ubuntu-latest
@@ -40,25 +41,31 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install torch pytest ninja
+      - run: >-
+          python -m pip install
+          --index-url https://download.pytorch.org/whl/cpu
+          torch==2.11.0
+      - run: python -m pip install ninja
       - name: Clean-build CPU runtime
         env:
           USE_CUDA: "0"
-          ROSA_BUILD_RWKV7: "0"
-        run: python -m pip install --no-build-isolation -v -e .
+        run: python -m pip install --no-build-isolation -v -e ".[test]"
       - name: Assert CPU-only registration
         run: |
           python - <<'PY'
           import torch
           import rosa_soft
-          assert rosa_soft.BUILD_CAPABILITIES["variant"] == "cpu-runtime"
-          assert rosa_soft.HAS_ROSA_RUNTIME
-          assert not rosa_soft.HAS_ROSA_SOFT_CUDA
-          assert not rosa_soft.HAS_RWKV7_CUDA
+          capabilities = rosa_soft.BUILD_CAPABILITIES
+          assert capabilities.variant == "cpu-runtime"
+          assert capabilities.compiled_extension
+          assert capabilities.rosa_runtime
+          assert not capabilities.rosa_soft_cuda
           for operator in (
-              "rosa_soft::soft_forward",
-              "rosa_soft::soft_backward",
-              "rosa_soft::rwkv7_clampw_forward",
+              "rosa_soft::hard_forward",
+              "rosa_soft::hard_forward_varlen",
+              "rosa_soft::surrogate_vjp",
+              "rosa_soft::surrogate_vjp_masked",
+              "rosa_soft::surrogate_vjp_varlen_masked",
           ):
               try:
                   torch._C._dispatch_find_schema_or_throw(operator, "")
@@ -66,7 +73,4 @@ jobs:
                   continue
               raise AssertionError(f"unexpected CPU schema: {operator}")
           PY
-      - run: >-
-          python -m pytest
-          tests/test_build_contract.py
-          tests/test_runtime.py
+      - run: python -m pytest -q

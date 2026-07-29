@@ -1,3 +1,4 @@
+import inspect
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -5,10 +6,11 @@ import pytest
 import torch
 
 import rosa_soft
+import rosa_soft.runtime as runtime_module
 
 
 pytestmark = pytest.mark.skipif(
-    not rosa_soft.HAS_ROSA_RUNTIME,
+    not rosa_soft.BUILD_CAPABILITIES.rosa_runtime,
     reason="RosaRuntime extension is unavailable",
 )
 
@@ -462,6 +464,59 @@ def test_cpu_async_submission_snapshots_inputs_and_offsets():
     assert torch.equal(actual[1], expected[1].squeeze(0))
 
 
+def test_async_submission_applies_bounded_backpressure(monkeypatch):
+    monkeypatch.setattr(runtime_module, "_MAX_PENDING_OPERATIONS", 2)
+
+    class BlockingNative:
+        def __init__(self):
+            self.entered = threading.Event()
+            self.release = threading.Event()
+
+        def update_packed(self, offsets, query, key, payload):
+            del offsets, key
+            self.entered.set()
+            assert self.release.wait(timeout=5)
+            return (
+                torch.zeros_like(query),
+                torch.full(
+                    query.shape,
+                    -1,
+                    dtype=torch.int64,
+                ),
+            )
+
+        def close(self):
+            pass
+
+    runtime = rosa_soft.RosaRuntime(1, 1, 1, 1, 1)
+    native = BlockingNative()
+    runtime._native = native
+    packed = torch.zeros(1, 1, 1, dtype=torch.uint8)
+    first = runtime.update_packed(packed, packed, packed, async_op=True)
+    assert native.entered.wait(timeout=5)
+    second = runtime.update_packed(packed, packed, packed, async_op=True)
+
+    with ThreadPoolExecutor(max_workers=1) as submitter:
+        third_submission = submitter.submit(
+            runtime.update_packed,
+            packed,
+            packed,
+            packed,
+            None,
+            async_op=True,
+        )
+        assert not third_submission.done()
+        with runtime._state_condition:
+            assert runtime._pending_operations == 2
+        native.release.set()
+        third = third_submission.result(timeout=5)
+
+    first.wait()
+    second.wait()
+    third.wait()
+    runtime.close()
+
+
 def test_work_wait_is_thread_safe_and_repeatable():
     packed = torch.zeros(1, 8, 1, dtype=torch.uint8)
     payload = torch.arange(8, dtype=torch.uint8).view(1, 8, 1)
@@ -580,6 +635,26 @@ def test_close_shuts_down_executor_when_native_close_fails():
     assert runtime._executor_shutdown
 
 
+def test_close_reaches_failed_state_when_executor_shutdown_fails():
+    class ClosingNative:
+        def close(self):
+            pass
+
+    class FailingExecutor:
+        def shutdown(self, wait):
+            assert wait
+            raise RuntimeError("executor shutdown failed")
+
+    runtime = rosa_soft.RosaRuntime(1, 1, 1, 1, 1)
+    runtime._native = ClosingNative()
+    runtime._executor = FailingExecutor()
+
+    with pytest.raises(RuntimeError, match="executor shutdown failed"):
+        runtime.close()
+    assert runtime.state == "FAILED"
+    assert runtime._executor_shutdown
+
+
 def test_reset_clears_state_stats_and_slot_binding():
     packed = torch.zeros(2, 5, 2, dtype=torch.uint8)
     payload = _random_packed((2, 5, 1), 3, seed=31)
@@ -622,7 +697,7 @@ def test_slot_count_is_fixed_until_reset():
     packed = torch.zeros(2, 2, 1, dtype=torch.uint8)
     with rosa_soft.RosaRuntime(1, 1, 1, 1, 1) as runtime:
         runtime.update_packed(packed, packed, packed)
-        with pytest.raises(RuntimeError, match="batch size is fixed"):
+        with pytest.raises(RuntimeError, match="slot count is fixed"):
             runtime.update_packed(
                 packed[:1],
                 packed[:1],
@@ -754,7 +829,7 @@ def test_packed_byte_bit_widths_are_limited_to_one_through_eight(
     qk_bits,
     payload_bits,
 ):
-    with pytest.raises(RuntimeError, match=r"in \[1, 8\]"):
+    with pytest.raises(ValueError, match=r"in \[1, 8\]"):
         rosa_soft.RosaRuntime(
             1,
             1,
@@ -776,7 +851,14 @@ def test_checkpoint_boundary_is_explicitly_unsupported():
         runtime.close()
 
 
-def test_payload_names_and_legacy_value_aliases_are_compatible():
+def test_payload_names_are_canonical():
+    assert tuple(inspect.signature(rosa_soft.RosaRuntime).parameters) == (
+        "num_heads",
+        "num_payload_heads",
+        "qk_bits",
+        "payload_bits",
+        "max_suffix_length",
+    )
     runtime = rosa_soft.RosaRuntime(
         num_heads=4,
         num_payload_heads=2,
@@ -787,34 +869,27 @@ def test_payload_names_and_legacy_value_aliases_are_compatible():
     try:
         assert runtime.num_payload_heads == 2
         assert runtime.payload_bits == 5
-        assert runtime.num_value_heads == runtime.num_payload_heads
-        assert runtime.value_bits == runtime.payload_bits
     finally:
         runtime.close()
 
-    legacy = rosa_soft.RosaRuntime(
-        num_heads=4,
-        num_value_heads=2,
-        qk_bits=3,
-        value_bits=5,
-        max_suffix_length=7,
-    )
-    legacy.close()
 
-
-def test_constructor_rejects_conflicting_payload_aliases():
-    with pytest.raises(TypeError, match="only one"):
-        rosa_soft.RosaRuntime(
-            2,
-            num_payload_heads=1,
-            num_value_heads=1,
-        )
-    with pytest.raises(TypeError, match="only one"):
-        rosa_soft.RosaRuntime(
-            2,
-            payload_bits=3,
-            value_bits=3,
-        )
+def test_runtime_configuration_properties_are_read_only():
+    expected = {
+        "num_heads": 4,
+        "num_payload_heads": 2,
+        "qk_bits": 3,
+        "payload_bits": 5,
+        "max_suffix_length": 7,
+    }
+    runtime = rosa_soft.RosaRuntime(**expected)
+    try:
+        for name, value in expected.items():
+            assert getattr(runtime, name) == value
+            with pytest.raises(AttributeError):
+                setattr(runtime, name, value + 1)
+            assert getattr(runtime, name) == value
+    finally:
+        runtime.close()
 
 
 def test_closed_runtime_rejects_state_access_and_updates():
@@ -892,6 +967,36 @@ def test_cuda_stream_async_matches_blocking():
             stream=stream,
             async_op=True,
         )
+        actual = work.wait()
+
+    assert torch.equal(actual[0], expected[0])
+    assert torch.equal(actual[1], expected[1])
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available(),
+    reason="CUDA is unavailable",
+)
+def test_cuda_stream_async_snapshots_inputs_before_return():
+    query = _random_packed((1, 32, 2), 3, seed=20).cuda()
+    key = _random_packed((1, 32, 2), 3, seed=21).cuda()
+    payload = _random_packed((1, 32, 1), 3, seed=22).cuda()
+
+    with rosa_soft.RosaRuntime(2, 1, 3, 3, 4) as blocking:
+        expected = blocking.update_packed(query, key, payload)
+
+    stream = torch.cuda.Stream()
+    with rosa_soft.RosaRuntime(2, 1, 3, 3, 4) as asynchronous:
+        work = asynchronous.update_packed(
+            query,
+            key,
+            payload,
+            stream=stream,
+            async_op=True,
+        )
+        query.fill_(7)
+        key.zero_()
+        payload.fill_(6)
         actual = work.wait()
 
     assert torch.equal(actual[0], expected[0])

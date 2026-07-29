@@ -1,6 +1,7 @@
 import importlib.util
 import sys
 import tomllib
+from dataclasses import FrozenInstanceError, is_dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -25,14 +26,10 @@ BUILD_SETUP = _load_setup_module()
 
 
 def test_default_build_is_cpu_without_cuda_home():
-    config = BUILD_SETUP.resolve_build_configuration(
-        None,
-        environ={},
-    )
-    assert config.cuda_mode == "auto"
-    assert config.variant == "cpu-runtime"
+    config = BUILD_SETUP.resolve_build_configuration(None, environ={})
+
+    assert config.build_extension
     assert not config.use_cuda
-    assert not config.build_rwkv7
     assert BUILD_SETUP.source_names_for(config) == [
         "export.cpp",
         "rosa_runtime.cpp",
@@ -40,14 +37,14 @@ def test_default_build_is_cpu_without_cuda_home():
     assert BUILD_SETUP.define_macros_for(config) == []
 
 
-def test_default_cuda_build_has_only_four_rosa_translation_units():
+def test_default_cuda_build_contains_only_core_translation_units():
     config = BUILD_SETUP.resolve_build_configuration(
         "/opt/cuda",
         environ={},
     )
-    assert config.variant == "cuda"
+
+    assert config.build_extension
     assert config.use_cuda
-    assert not config.build_rwkv7
     assert BUILD_SETUP.source_names_for(config) == [
         "export.cpp",
         "rosa_runtime.cpp",
@@ -59,32 +56,37 @@ def test_default_cuda_build_has_only_four_rosa_translation_units():
     ]
 
 
-def test_rwkv7_is_explicit_and_requires_cuda():
-    with pytest.raises(RuntimeError, match="ROSA_BUILD_RWKV7=1 requires"):
-        BUILD_SETUP.resolve_build_configuration(
-            None,
-            environ={
-                "USE_CUDA": "0",
-                "ROSA_BUILD_RWKV7": "1",
-            },
-        )
+def test_packed_symbol_shape_contracts_are_explicit_without_cuda():
+    soft_source = (ROOT / "rosa_soft" / "soft.py").read_text()
+    native_source = (
+        ROOT / "rosa_soft" / "csrc" / "rosa_soft.cpp"
+    ).read_text()
 
-    config = BUILD_SETUP.resolve_build_configuration(
-        "/opt/cuda",
-        environ={
-            "USE_CUDA": "1",
-            "ROSA_BUILD_RWKV7": "1",
-        },
-    )
-    sources = BUILD_SETUP.source_names_for(config)
-    assert config.variant == "cuda-rwkv7"
-    assert len(sources) == 12
-    assert set(BUILD_SETUP.RWKV7_CPP_SOURCES).issubset(sources)
-    assert set(BUILD_SETUP.RWKV7_CUDA_SOURCES).issubset(sources)
-    assert BUILD_SETUP.define_macros_for(config) == [
-        ("ROSA_WITH_CUDA", "1"),
-        ("ROSA_WITH_RWKV7", "1"),
+    assert (
+        "packed_symbol_shape = (\n"
+        "        query.shape[0],\n"
+        "        query.shape[2],\n"
+        "        query.shape[1],\n"
+        "    )"
+    ) in soft_source
+
+    dense_validation = native_source[
+        native_source.index("void check_packed_symbols("):
+        native_source.index("void check_surrogate_vjp_inputs(")
     ]
+    assert '" must have shape (B, H, T)"' in dense_validation
+    assert "packed_symbols.size(1) == query.size(2)" in dense_validation
+    assert "packed_symbols.size(2) == query.size(1)" in dense_validation
+
+    varlen_validation = native_source[
+        native_source.index("void check_varlen_packed_symbols("):
+        native_source.index("}  // namespace")
+    ]
+    assert '" must have shape (N, H)"' in varlen_validation
+    assert (
+        "packed_symbols.size(0) == query.size(0) &&\n"
+        "          packed_symbols.size(1) == query.size(1)"
+    ) in varlen_validation
 
 
 def test_explicit_cuda_is_strict_and_values_are_unambiguous():
@@ -98,26 +100,19 @@ def test_explicit_cuda_is_strict_and_values_are_unambiguous():
             None,
             environ={"USE_CUDA": "true"},
         )
-    with pytest.raises(RuntimeError, match="ROSA_BUILD_RWKV7 must be 0 or 1"):
-        BUILD_SETUP.resolve_build_configuration(
-            "/opt/cuda",
-            environ={"ROSA_BUILD_RWKV7": "yes"},
-        )
 
 
-def test_reference_build_overrides_native_feature_requests():
+def test_reference_build_skips_native_configuration():
     config = BUILD_SETUP.resolve_build_configuration(
         None,
         environ={
             "ROSA_BUILD_EXTENSION": "0",
             "USE_CUDA": "1",
-            "ROSA_BUILD_RWKV7": "1",
         },
     )
-    assert config.variant == "reference"
+
     assert not config.build_extension
     assert not config.use_cuda
-    assert not config.build_rwkv7
     assert BUILD_SETUP.source_names_for(config) == []
 
 
@@ -137,19 +132,46 @@ def test_get_extensions_is_configuration_only(monkeypatch):
     )
     monkeypatch.delenv("ROSA_BUILD_EXTENSION", raising=False)
     monkeypatch.delenv("USE_CUDA", raising=False)
-    monkeypatch.delenv("ROSA_BUILD_RWKV7", raising=False)
 
     extensions = BUILD_SETUP.get_extensions(fake_api)
 
     assert len(extensions) == 1
     assert captured["name"] == "rosa_soft._C"
-    assert len(captured["sources"]) == 4
+    assert [Path(path).name for path in captured["sources"]] == [
+        "export.cpp",
+        "rosa_runtime.cpp",
+        "rosa_soft.cpp",
+        "rosa_soft_kernels.cu",
+    ]
     assert captured["kwargs"]["define_macros"] == [
         ("ROSA_WITH_CUDA", "1"),
     ]
 
 
-def test_pep517_contract_requires_installed_torch_abi():
+def test_setup_metadata_uses_static_package_version_and_python_floor(
+    monkeypatch,
+):
+    captured = {}
+    monkeypatch.setenv("ROSA_BUILD_EXTENSION", "0")
+    monkeypatch.setattr(
+        BUILD_SETUP,
+        "setup",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    BUILD_SETUP.setup_package()
+
+    init_source = (ROOT / "rosa_soft" / "__init__.py").read_text()
+    assert f'__version__ = "{BUILD_SETUP.PACKAGE_VERSION}"' in init_source
+    assert captured["version"] == BUILD_SETUP.PACKAGE_VERSION
+    assert captured["python_requires"] == ">=3.10"
+    assert captured["install_requires"] == [
+        BUILD_SETUP.TORCH_REQUIREMENT
+    ]
+    assert captured["ext_modules"] == []
+
+
+def test_pep517_contract_requires_the_installed_torch_abi():
     with (ROOT / "pyproject.toml").open("rb") as stream:
         pyproject = tomllib.load(stream)
 
@@ -157,91 +179,154 @@ def test_pep517_contract_requires_installed_torch_abi():
         "setuptools",
         "wheel",
     ]
-    build = pyproject["tool"]["rosa-soft"]["build"]
-    assert build["requires-no-build-isolation"] is True
-    assert build["use-cuda-default"] == "auto"
-    assert build["build-rwkv7-default"] is False
+    assert "torch" not in pyproject["build-system"]["requires"]
 
 
-def test_export_schema_guards_and_mutation_contract():
-    source = (ROOT / "rosa_soft" / "csrc" / "export.cpp").read_text()
+def test_core_package_and_build_have_no_rwkv_sources_or_entry_points():
+    setup_source = (ROOT / "setup.py").read_text()
+    for token in (
+        "ROSA_BUILD_RWKV7",
+        "ROSA_WITH_RWKV7",
+        "RWKV7_CPP_SOURCES",
+        "RWKV7_CUDA_SOURCES",
+    ):
+        assert token not in setup_source
 
-    assert "#ifdef ROSA_WITH_CUDA" in source
-    assert "#ifdef ROSA_WITH_RWKV7" in source
-    assert (
-        "Tensor(a!) y, Tensor(b!) s, Tensor(c!) sa"
-        in source
+    assert not (ROOT / "rosa_soft" / "ops.py").exists()
+    assert not (ROOT / "rosa_soft" / "rwkv7.py").exists()
+    assert not list((ROOT / "rosa_soft" / "csrc").glob("rwkv7_*.cpp"))
+    assert not list(
+        (ROOT / "rosa_soft" / "csrc" / "cuda").glob("rwkv7_*.cu")
     )
-    assert (
-        "Tensor(a!) y, Tensor(b!) sT, Tensor(c!) s, Tensor(d!) sa"
-        in source
+
+    archive = ROOT / "contrib" / "rwkv7_legacy"
+    assert (archive / "python" / "ops.py").is_file()
+    assert (archive / "python" / "rwkv7.py").is_file()
+
+
+def test_only_missing_extension_module_selects_reference_mode(monkeypatch):
+    pytest.importorskip("torch")
+    import rosa_soft
+
+    module_name = "rosa_soft._C"
+
+    def missing_extension(name):
+        raise ModuleNotFoundError(
+            f"No module named {name!r}",
+            name=name,
+        )
+
+    monkeypatch.setattr(
+        rosa_soft._importlib,
+        "import_module",
+        missing_extension,
     )
-    assert (
-        "Tensor dy, Tensor dsT, Tensor s, Tensor sa, "
-        "Tensor(a!) ds0"
-        in source
+    assert rosa_soft._load_compiled_extension() is None
+
+    def missing_dependency(name):
+        del name
+        raise ModuleNotFoundError(
+            "No module named 'extension_dependency'",
+            name="extension_dependency",
+        )
+
+    monkeypatch.setattr(
+        rosa_soft._importlib,
+        "import_module",
+        missing_dependency,
     )
-    assert (
-        "Tensor(a!) s0, Tensor r, Tensor w, Tensor k, Tensor v, "
-        "Tensor a, Tensor b, Tensor(b!) y, Tensor elapsed_t"
-        in source
+    with pytest.raises(ModuleNotFoundError, match="extension_dependency"):
+        rosa_soft._load_compiled_extension()
+
+    def broken_extension(name):
+        del name
+        raise OSError("undefined symbol: incompatible_torch_abi")
+
+    monkeypatch.setattr(
+        rosa_soft._importlib,
+        "import_module",
+        broken_extension,
     )
+    with pytest.raises(OSError, match="incompatible_torch_abi"):
+        rosa_soft._load_compiled_extension()
+
+    assert module_name == f"{rosa_soft.__name__}._C"
 
 
 def test_public_capabilities_and_placeholders_are_stable():
     pytest.importorskip("torch")
     import rosa_soft
 
-    expected_public = {
+    assert rosa_soft.__all__ == [
         "__version__",
         "BUILD_CAPABILITIES",
+        "RosaRuntime",
+        "rosa_soft",
+        "rosa_soft_reference",
+        "rosa_soft_varlen",
+        "rosa_soft_varlen_reference",
+    ]
+    assert rosa_soft.__version__ == BUILD_SETUP.PACKAGE_VERSION
+    assert is_dataclass(rosa_soft.BUILD_CAPABILITIES)
+    assert isinstance(
+        rosa_soft.BUILD_CAPABILITIES,
+        rosa_soft.BuildCapabilities,
+    )
+    with pytest.raises(FrozenInstanceError):
+        rosa_soft.BUILD_CAPABILITIES.variant = "mutated"
+
+    for removed_name in (
         "EXTENSION_IMPORT_ERROR",
         "EXTENSION_IMPORT_ERROR_MESSAGE",
+        "HAS_RWKV7_CUDA",
+        "HAS_RWKV7_CLAMPW_CUDA",
+        "HAS_RWKV7_STATE_CLAMPW_CUDA",
+        "HAS_RWKV7_STATE_PASSING_CLAMPW_CUDA",
+        "HAS_RWKV7_ALBATROSS_CUDA",
         "HAS_COMPILED_EXTENSION",
         "HAS_ROSA_RUNTIME",
         "HAS_ROSA_SOFT_CUDA",
-        "HAS_RWKV7_CUDA",
-        "RosaRuntime",
+        "ROSA_SOFT_DEFAULT_MISMATCH_SCALE",
+        "ROSA_SOFT_DEFAULT_SCALE",
         "RosaRuntimeWork",
-        "rosa_soft",
-        "rosa_soft_reference",
-    }
-    assert expected_public.issubset(rosa_soft.__all__)
-    assert all(hasattr(rosa_soft, name) for name in expected_public)
-    assert rosa_soft.__version__ == BUILD_SETUP.PACKAGE_VERSION
-    assert isinstance(rosa_soft.BUILD_CAPABILITIES, dict)
-    assert (
-        rosa_soft.BUILD_CAPABILITIES["version"]
-        == rosa_soft.__version__
-    )
+    ):
+        assert not hasattr(rosa_soft, removed_name)
 
-    if not rosa_soft.HAS_COMPILED_EXTENSION:
-        assert rosa_soft.EXTENSION_IMPORT_ERROR is not None
-        assert rosa_soft.EXTENSION_IMPORT_ERROR_MESSAGE
-    if not rosa_soft.HAS_ROSA_SOFT_CUDA:
+    capabilities = rosa_soft.BUILD_CAPABILITIES
+    assert capabilities.rosa_soft_cuda <= capabilities.compiled_extension
+    assert capabilities.rosa_runtime <= capabilities.compiled_extension
+    assert capabilities.variant in {"reference", "cpu-runtime", "cuda"}
+    if not capabilities.compiled_extension:
+        assert capabilities.variant == "reference"
+    if not capabilities.rosa_soft_cuda:
         with pytest.raises(
             RuntimeError,
             match="rosa_soft CUDA training operator is unavailable",
         ):
             rosa_soft.rosa_soft(None, None, None)
-    if not rosa_soft.HAS_ROSA_RUNTIME:
+        with pytest.raises(
+            RuntimeError,
+            match="rosa_soft_varlen CUDA training operator is unavailable",
+        ):
+            rosa_soft.rosa_soft_varlen(None, None, None, None)
+    if not capabilities.rosa_runtime:
         with pytest.raises(RuntimeError, match="RosaRuntime is unavailable"):
             rosa_soft.RosaRuntime(1)
 
 
-def test_cpu_runtime_registers_no_cuda_operator_schemas():
-    torch = pytest.importorskip("torch")
+def test_partial_cuda_registration_is_rejected():
+    pytest.importorskip("torch")
     import rosa_soft
 
-    if rosa_soft.BUILD_CAPABILITIES["variant"] != "cpu-runtime":
-        pytest.skip("requires the CPU runtime extension variant")
-
-    operators = [
-        "rosa_soft::soft_forward",
-        "rosa_soft::soft_backward",
-        "rosa_soft::rwkv7_clampw_forward",
-        "rosa_soft::rwkv7_albatross_forward_w0_fp16_dither",
-    ]
-    for operator in operators:
-        with pytest.raises(RuntimeError):
-            torch._C._dispatch_find_schema_or_throw(operator, "")
+    assert rosa_soft._required_cuda_operators == (
+        "hard_forward",
+        "hard_forward_varlen",
+        "surrogate_vjp_masked",
+        "surrogate_vjp_varlen_masked",
+    )
+    assert not rosa_soft._require_complete_cuda_registration(False, False)
+    assert rosa_soft._require_complete_cuda_registration(True, True)
+    with pytest.raises(RuntimeError, match="incomplete CUDA operator"):
+        rosa_soft._require_complete_cuda_registration(True, False)
+    with pytest.raises(RuntimeError, match="incomplete CUDA operator"):
+        rosa_soft._require_complete_cuda_registration(False, True)

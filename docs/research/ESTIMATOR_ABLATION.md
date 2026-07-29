@@ -2,8 +2,22 @@
 
 > Historical research record. The private `experiments/` workspace is not
 > shipped with the package, and its original scripts target deleted prototype
-> APIs. Results below inform the fixed production estimator but are not part of
-> the current executable validation suite.
+> APIs. Sections 1 through 7 document estimators that existed before the
+> deterministic-minimal reduction; they do not describe current production
+> code. Section 8 records the retained estimator shape, and section 9 records
+> the current static-default correction after dropout entered the operator.
+>
+> Sections 1 through 6.12 predate mismatch-fraction normalization, hard-tier
+> proxy scores, and candidate-normalized null allocation. Their absolute
+> lambda and null-score conclusions must not be applied to the current
+> estimator. The normalized tiered-prototype recalibration begins in section
+> 7; the current default correction is in section 9.
+>
+> Terminology mapping for the current API: `scale = 1 / route_temperature`,
+> `mismatch_scale = mismatch_penalty`, and training `payload` is now `value`.
+> The post-softmax attention-dropout candidate recorded here was subsequently
+> promoted to the optional production control `dropout_p`; the measurements
+> below remain the historical evidence, not a current API description.
 
 ## 1. Scope
 
@@ -13,7 +27,7 @@ Every variant keeps:
 - exact hard Q/K/V signs in forward;
 - causal shifted actions, finite suffixes, latest hard ties, and hard null;
 - softsign STE for Q/K/V;
-- the hard-Hamming Jacobian anchor;
+- the hard-Hamming Jacobian target;
 - multiplicative suffix scores;
 - dense probabilities over every causal action;
 - separated route and value VJPs.
@@ -71,7 +85,7 @@ Two deterministic controls are separate from the factorial:
 | Control | Purpose |
 | --- | --- |
 | `cubic_expected` | Removes random exploration while exactly matching the expected one-bit cubic gate for each lambda. |
-| `hard_hamming` | Uses `exp(-lambda*h)` numerically and in the anchored Jacobian. |
+| `hard_hamming` | Uses `exp(-lambda*h)` numerically and in the target Jacobian. |
 
 ## 3. Experimental Layers
 
@@ -282,7 +296,8 @@ with exact `p=1`. On jointly successful long-suffix runs, antithetic is faster
 in 10 pairs, slower in 28, and tied in 2; the two-sided sign test is
 `p=0.00510` in the direction of single being faster. The predeclared retention
 threshold is not met. The production estimator therefore deletes the second
-branch; the research variant remains available to reproduce the decision.
+branch. The antithetic result remains a historical record; its obsolete local
+script is not shipped and cannot be run through the current API unchanged.
 
 ### 6.8 Null Retention
 
@@ -394,46 +409,386 @@ The controlled route tasks favor lambda `0.5`, but the full-model fit at
 lambda `0.5` fails with either V estimator. Lambda `1` fits under the PyTorch
 random stream but not the seed-0 CUDA counter stream; lambda `3` fits both
 implementations and also reaches `100%` on CUDA seed 2. The conservative
-production default therefore remains `mismatch_penalty=3`. This is a default, not
-a D/T/W formula: active Hamming distance and competition geometry explain why
-different tasks reverse the ranking.
+historical estimator default therefore remained `mismatch_penalty=3` at that
+stage. This value does not apply to the post-rewrite estimator in section 7.
 
-## 7. Current Decisions
+## 7. Tiered-Prototype Recalibration
 
-- Keep the cubic single-branch numerical gate.
-- Keep stochastic exploration.
-- Delete antithetic averaging from the production estimator.
-- Fix the internal null score at `0.5`.
-- Keep the hard-distance Jacobian anchor.
-- Retain distributed soft V credit; hard-selected V failed full-model fitting.
-- Do not derive lambda from `D` or configured `W`. Select one static value per
-  declared initialization regime using its observed Hamming-distance
-  distribution.
-- Use static `mismatch_penalty=3` and `route_temperature=1` as production defaults.
-- Retain the public route_temperature control: it did not change final reachable
-  length in the isolated ladder, but changes optimization speed and can lock
-  out longer routes in competitive contexts.
-- Stop broad route_temperature tuning. Any further static comparison is restricted
-  to `0.5/1/2`; no D/T/W-derived schedule is allowed.
-- Stratify calibration by T. Candidate normalization reduced route gradients
-  and success from short to long contexts; this does not justify an in-operator
-  dynamic schedule.
+The then-current tiered prototype changed three coupled definitions:
 
-## 8. Remaining Decision Gates
+```text
+h_bar = hard_mismatch_count / D
+H_bar = stochastic_mismatch_mass / D
+local_gate = exp(-lambda * H_bar)
 
-The estimator-level gates in this matrix are closed. The remaining external
-validation is full-model pretraining at realistic depth and context, with
-active Hamming distance, candidate entropy, hard-route recall, and suffix
-length reported. Such runs may motivate explicit per-run parameter choices,
-but not an in-operator adaptive schedule.
+tail = max(stochastic_suffix_score - exact_suffix_length, 0)
+tiered_score = exact_suffix_length + 0.5 * tail / (1 + tail)
 
-## 9. Reproduction Status
+nonnull_logit = tiered_score / temperature - log(candidate_count)
+```
 
-The original local scripts are intentionally excluded from the public branch
-and no longer match the production API. A new experiment must port the desired
-variant onto `rosa_soft.testing`, pin its random samples, and compare its VJP
-against `rosa_soft_reference`; the obsolete commands are not a supported
-validation path.
+These changes invalidate the old `lambda=3` scale and the old null-score
+interpretation.
 
-Invalid shared-logit and all-failure `-0.5` pilots are discarded and must not
-be used for success-rate conclusions.
+### 7.1 Structural Factorial
+
+A `2 x 2 x 2` seed-0 pilot crossed hard tiers, candidate normalization, and
+mismatch-fraction normalization for 600 repeated-motif steps. The useful
+interaction was hard tiers plus candidate normalization; mismatch fractions
+needed a new lambda calibration rather than direct reuse of `3`.
+
+With all three prototype components enabled, the reference lambda sweep gave:
+
+| Lambda | Final hard CE |
+| ---: | ---: |
+| `3` | `0.157` |
+| `6` | `0.157` |
+| `9` | `3.10e-4` |
+| `12` | `4.26e-4` |
+| `16` | `0.157` |
+| `24` | `0.157` |
+
+This is non-monotone. Increasing lambda is not a generic cure for gradient
+leakage or long suffixes.
+
+### 7.2 Fixed Estimator Shape
+
+Single-variable four-seed comparisons retained the existing fixed choices:
+
+| Variant | `<1e-3` successes |
+| --- | ---: |
+| cubic + softsign, `temperature=1` | `3/4` |
+| `temperature=0.5` | `2/4` |
+| `temperature=2` | `2/4` |
+| no stochastic mismatch perturbation | `2/4` |
+| linear perturbation | `2/4` |
+| identity sign STE | `2/4` |
+
+Tier residual spans `0.5/0.75/1.0` later gave `2/4`, `1/4`, and `0/4` on
+matched reference streams. Null scores from `-2` through `3` moved which
+stream succeeded but did not create a robust plateau. The fixed cubic,
+softsign, residual span `0.5`, null score `0.5`, and temperature `1` remain.
+
+### 7.3 Prototype Lambda
+
+Reference-only seed 0 favored both `9` and `12`, but the CUDA counter stream
+exposed a robustness difference. On eight CUDA model/perturbation seeds:
+
+| Lambda | CE `<1e-3` | 100% accuracy |
+| ---: | ---: | ---: |
+| `3` | `1/8` | `2/8` |
+| `6` | `2/8` | `2/8` |
+| `9` | `3/8` | `3/8` |
+| `12` | `1/8` | `3/8` |
+
+That prototype selected `mismatch_penalty=9`. It was an empirical compromise
+across two random implementations, not a D/T/W formula or a universal
+optimum. Section 9 explains why it is not the current default.
+
+### 7.4 D/T/W Matrix
+
+At `T=16,W=8`, 600-step reference/CUDA fits with lambda `9` gave:
+
+| D | Reference `<1e-3` | CUDA `<1e-3` |
+| ---: | ---: | ---: |
+| `4` | `2/4` | `2/4` |
+| `8` | `2/4` | `3/4` |
+| `16` | `2/4` | `2/4` |
+| `32` | `2/4` | `2/4` |
+
+There is no monotone D collapse in this tiny fit, but success is only partial.
+At `T=16,D=4`, windows `4/8/16` gave `2/4`, `3/4`, and `2/4` reference
+successes under the then-tested lambda `12`; a larger configured horizon was
+not monotonically easier.
+
+At `T=32,W=16`, lambda `9`, both implementations and both `D=4/32` gave
+`0/4` successes. This longer repeated-motif configuration is a documented
+failure boundary, not a passing operator gate.
+
+The historical, no-longer-shipped `estimator_stability.py` matrix crossed
+`D=1/4/8/16/32`, `T=16/32/64`, `W=4/16/32`, and eight fixed perturbation
+seeds. At lambda `9`, its worst relative seed RMS is `0.0676` and minimum
+cosine to the mean gradient is `0.9951`. Directional noise is controlled, but
+mean Q/K gradient norm falls from `0.378..1.836` at `D=4` to
+`0.00475..0.00635` at `D=32` on random codes. Mismatch-fraction normalization
+stabilizes the scalar definition; it does not remove the scarcity of exact
+collisions in high-dimensional random codes.
+
+### 7.5 Final Estimator Checks
+
+A final controlled matrix targeted the remaining plausible deletions rather
+than adding new objectives.
+
+Flat, tiered, and hierarchical candidate priors produced identical outcomes
+when every candidate occupied exact tier zero. That control shows the prior
+implementation itself does not create recall; it does not invalidate hard
+tiering once candidates have different exact suffix lengths.
+
+Restricting suffix credit to the current frontier improved the short
+association probe to `16/20`, but failed the long-suffix construction `0/8`
+and remained stuck at hard suffix length `4`. A conditional-tail variant also
+gave `0/8`. Frontier-weighted hybrids reached at most `13/20` on the short
+probe and did not establish a robust long-route result. The complete
+multiplicative tail is therefore necessary: it gives every suffix position a
+path to improve before that position becomes the current hard frontier.
+
+On the same long construction, the prototype full-tail estimator reached
+`8/8` at `temperature=2, lambda=9` in `11..48` steps. Lowering lambda to `6`
+also reached `8/8`, but in `19..75` steps. This confirms that the long-suffix
+failure of the frontier variants was structural, not just an unlucky static
+lambda.
+
+A paired positive/null sweep used 40 seeds for every combination of
+`temperature in {0.5,1,2}` and `lambda in {6,9}`. Fixed null score `0.5`
+passed all `40/40` positive cases and produced zero false routes in null
+cases. Higher null scores `3..5` introduced positive-case failures. No
+learned or context-dependent null calibration is justified.
+
+Temperature remains task-sensitive. The short discovery task favors `0.5`;
+the explicit long-suffix competition favors `2`. Temperature sharpens or
+widens credit among routes but does not itself create longer support. Static
+`1` remains the least specialized default, with `0.5/1/2` reserved for
+declared run-level comparisons.
+
+These checks retain the single cubic branch. Antithetic sampling is not
+needed, and replacing the cubic shape did not supply evidence strong enough
+to justify another public control.
+
+### 7.6 Historical Decision
+
+At this point the prototype retained cubic sampling and exact hard tiers.
+That decision was later superseded by the reduction in section 8.
+
+## 8. Deterministic-Minimal Reduction
+
+The final reduction tested which mechanisms were actually carrying useful
+training signal. All variants retained exact hard forward, every causal
+candidate, candidate normalization, distributed value credit, and static
+controls.
+
+### 8.1 Multi-Seed Fitting
+
+Twelve development seeds followed by twenty held-out seeds gave:
+
+| Estimator | Near-zero fits | Route tasks | Relative step cost |
+| --- | ---: | ---: | ---: |
+| Sampled cubic plus hard tier | `17/32` | `32/32` | baseline |
+| Deterministic raw Hamming gate, null `0` | `19/32` | `32/32` | about `5x..7x` faster |
+| Sampled raw Hamming gate | `20/32` | `32/32` | slower than deterministic |
+| Deterministic raw Hamming gate, null `0.5` | `17/32` | `32/32` | about `5x..7x` faster |
+
+The one-seed fitting difference between sampled and deterministic raw gates
+was insufficient to retain RNG, random state, or estimator variance. Null
+`0.5` was retained despite the small fit-count difference because it gives
+the intended hard-limit separation: no exact match has score `0`, while the
+first exact match has score at least `1`.
+
+### 8.2 Symbol VJP
+
+Identity STE looked locally aligned on some tiny probes but failed the actual
+fitting gate: it reached `4/12` versus `8/12` for softsign under the minimal
+raw estimator. Softsign therefore remains the only symbol VJP.
+
+An exhaustive 90-configuration hard-bit-flip comparison measured:
+
+| Estimator | Cosine | Sign agreement | Useful-coordinate agreement |
+| --- | ---: | ---: | ---: |
+| Sampled tier prototype | `0.5179` | `0.8304` | `0.5383` |
+| Deterministic raw plus softsign | `0.5214` | `0.8056` | `0.5249` |
+
+The minimal estimator missed no coordinate that the exact bit-flip oracle
+marked useful. The differences do not justify the prototype's extra state.
+
+The broader current executable matrix spans 144 configurations and 4320 Q/K
+coordinates. It reports cosine `0.4844`, sign agreement `0.8642`, and misses
+`6/720` oracle-useful flips (`0.83%`). This is the maintained diagnostic
+baseline; the earlier 90-configuration comparison above remains the paired
+prototype-versus-minimal ablation.
+
+### 8.3 Long-Suffix Signal
+
+An adversarial construction placed a target route one bit from the desired
+long suffix and a decoy at exact length `W-1`. The bounded hard-tier residual
+made the target gradient decay exponentially and become nearly zero by
+`W=16..32`. The raw expected-prefix score retained more than four orders of
+magnitude more gradient at `W=16`.
+
+This establishes the key simplification: exact tiers are useful for hard
+forward but harmful in the discovery VJP. The backward score is now the raw
+complete expected-prefix sum.
+
+The same probe also separated the two static controls in current terminology:
+
+- increasing `scale` sharpens existing route competition;
+- lowering `mismatch_scale` keeps near-match prefix products alive.
+
+At `W=32`, `mismatch_scale=9` could still make the target signal tiny while
+`mismatch_scale=1` retained it. Attention-logit scale cannot substitute for
+mismatch leakage.
+
+### 8.4 Four-Way Hard-Forward Fitting Pilot
+
+The deterministic reduction was reopened after the single-seed fit gate was
+found to hide two stable failure basins. A current executable benchmark
+compares four VJPs while requiring bitwise-identical hard output:
+
+1. the deterministic production surrogate;
+2. independent per-mismatch cubic perturbations without antithetic or tiers;
+3. exhaustive single-bit hard counterfactuals for Q, K, and value;
+4. inverted dropout on post-softmax route probabilities in the backward
+   carrier.
+
+The fourth variant follows standard attention-dropout placement:
+
+```text
+p_drop = p_route * Bernoulli(1 - r) / (1 - r)
+```
+
+It does not mask logits, renormalize surviving routes, or alter the hard
+forward. At `r=0`, its VJP is exactly the deterministic VJP.
+
+The paired RTX 2080 Ti pilot used eight model/data seeds, matched noise seeds,
+1000 AdamW steps, `D=4`, `T=16`, `W=8`, static `scale=1`,
+`mismatch_scale=9`, and success threshold CE `<1e-3`.
+
+| Backward estimator | Ever `<1e-3` | Final `<1e-3` | Median success step | PyTorch step |
+| --- | ---: | ---: | ---: | ---: |
+| Deterministic | `6/8` | `6/8` | `442.0` | `9.81 ms` |
+| Mismatch random | `6/8` | `6/8` | `435.5` | `10.26 ms` |
+| Exact bitflip | `6/8` | `5/8` | `386.0` | `11.79 ms` |
+| Attention dropout, `r=0.1` | `7/8` | `7/8` | `424.0` | `9.69 ms` |
+
+The aggregate counts hide important behavior:
+
+- deterministic training failed model seeds 1 and 6;
+- mismatch randomness rescued seed 6 but regressed seed 4;
+- attention dropout rescued seed 6 without regressing a deterministic
+  success in this matrix, but still failed seed 1;
+- exact bitflip reached `<1e-3` on seed 6 and later escaped to CE `1.455`;
+  final-only reporting would incorrectly classify its exploration ability.
+
+The dropout-rate check was not a broad tuning exercise:
+
+| Dropout rate | Ever `<1e-3` | Final `<1e-3` |
+| ---: | ---: | ---: |
+| `0` | `6/8` | `6/8` |
+| `0.05` | `6/8` | `6/8` |
+| `0.1` | `7/8` | `7/8` |
+| `0.2` | `6/8` | `6/8` |
+
+This is not a broad optimum. To separate model geometry from stochastic luck,
+the two deterministic failures were each crossed with eight independent noise
+seeds at rate `0.1`:
+
+| Estimator | Model seed 1 | Model seed 6 | Combined | Median success step |
+| --- | ---: | ---: | ---: | ---: |
+| Mismatch random | `0/8` | `5/8` | `5/16` | `554` |
+| Attention dropout | `1/8` | `6/8` | `7/16` | `790` |
+
+Only four paired noise cases disagreed: dropout won three and mismatch
+randomness won one. This sample is too small for a statistical superiority
+claim. It does show that post-softmax dropout has real, though probabilistic,
+basin-escape behavior and can sometimes supply a useful direction that the
+tested mismatch perturbation does not.
+
+The reported latency is for research-only PyTorch implementations. The
+mismatch prototype materializes `O(BHT^2D)` random values and dropout
+materializes `O(BHT^2)` values. A fused kernel can reconstruct either with a
+counter-based RNG, but dropout needs one draw per route rather than one per
+route-bit. No production-kernel decision should use these PyTorch timings as
+its final cost estimate.
+
+### 8.5 Estimator-Shape Decision
+
+This reduction kept only:
+
+- hard signs with softsign VJP;
+- normalized Hamming mismatch;
+- deterministic `exp(-mismatch_scale * mismatch_rate)` gates;
+- the raw complete suffix prefix-product sum;
+- fixed null score `0.5` and non-null `-log(candidate_count)`;
+- distributed soft value credit;
+- the then-tested controls `scale=1` and `mismatch_scale=9`;
+- every causal candidate in backward.
+
+It removed:
+
+- sampled mismatch perturbations and RNG state;
+- antithetic branches and cubic shape controls;
+- exact hard-tier and bounded-residual wrappers;
+- separate numerical and Jacobian gates;
+- all adaptive schedules.
+
+At that point, the four-way pilot did not change the static controls.
+Attention dropout became the first stochastic candidate because it improved
+the pilot, preserved the estimator mean, used a standard placement, and was
+cheaper to kernelize than per-mismatch perturbation. It was subsequently
+implemented as the optional production `dropout_p` control. Exact bitflip
+remains an oracle/control, not a scalable training implementation.
+
+## 9. Current Static-Default Correction
+
+The `mismatch_scale=9` choice above was calibrated before hard tiers and
+mismatch perturbations were removed. The deterministic-minimal reduction
+retained `9` without a matched `3` versus `9` default comparison, so that
+inheritance was reopened after `dropout_p` entered the CUDA operator.
+
+A matched RTX 2080 Ti rerun used the current production CUDA operator, model
+and data seeds `0..7`, 1000 AdamW steps, `D=4`, `T=16`, `W=8`, `scale=1`,
+and success threshold CE `<=1e-3`:
+
+| `mismatch_scale` | `dropout_p` | Ever successful | Final successful |
+| ---: | ---: | ---: | ---: |
+| `3` | `0` | `7/8` | `7/8` |
+| `9` | `0` | `6/8` | `6/8` |
+| `3` | `0.1` | `6/8` | `6/8` |
+| `9` | `0.1` | `7/8` | `7/8` |
+
+Neither scale dominates across dropout settings. Because production defaults
+to `dropout_p=0`, the public default is restored to `mismatch_scale=3`.
+`9` remains a valid explicit experiment value, especially for the tested
+`dropout_p=0.1` recipe, but it is not a universal default and must not be
+selected implicitly.
+
+## 10. Remaining Research Gates
+
+Dropout is now an optional production control. Its implementation has fixed
+seed PyTorch/CUDA parity, counter-based mask reconstruction without a stored
+`O(BHT^2)` mask, packed-varlen coverage, compile/checkpoint integration, and
+a shortcut-free associative-recall gate. These engineering results do not
+make nonzero dropout a training default. Before changing `dropout_p=0` or
+revising `mismatch_scale` again, require:
+
+1. a larger paired model-seed matrix with independent noise replicates;
+2. long-suffix competition, associative recall, and null-retention tasks;
+3. realistic full-model pretraining with exact hard-route recall and learned
+   suffix length reported alongside loss;
+4. matched static `mismatch_scale` comparisons under each declared dropout
+   recipe.
+
+These runs should also report active mismatch rate, route entropy, and
+sensitivity to explicit `scale` and `mismatch_scale` choices. They may
+motivate different run-level defaults, but not hidden adaptive schedules. A
+dropout schedule is out of scope unless a fixed probability first clears
+these gates.
+
+## 11. Reproduction Status
+
+The obsolete stochastic and tier scripts were removed because they targeted
+deleted private APIs. Current executable checks are:
+
+```text
+tests/test_soft_reference.py
+tests/test_soft_cuda.py
+tests/test_soft_varlen.py
+tests/test_discrete_gradient_alignment.py
+tests/test_estimator_fit_ablation.py
+examples/fit_soft_reference.py
+examples/associative_recall_gate.py
+benchmarks/discrete_gradient_alignment.py
+benchmarks/estimator_fit_ablation.py
+```
+
+Any future estimator experiment must be a separately named research path and
+compare against the deterministic `rosa_soft_reference` without changing the
+default operator.

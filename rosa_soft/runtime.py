@@ -4,6 +4,7 @@ import operator
 import threading
 from collections.abc import Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
@@ -12,15 +13,17 @@ from torch import Tensor
 
 from . import _C  # noqa: F401 - registers torch.classes.rosa_soft.RosaRuntime
 
-__all__ = ["RosaRuntime", "RosaRuntimeWork"]
+__all__ = ["RosaRuntime"]
+
+_MAX_PENDING_OPERATIONS = 2
 
 
-def _dense_cu_seqlens(batch: int, tokens: int) -> Tensor:
+def _dense_cu_seqlens(slot_count: int, tokens: int) -> Tensor:
     if tokens == 0:
-        return torch.zeros(batch + 1, dtype=torch.int64)
+        return torch.zeros(slot_count + 1, dtype=torch.int64)
     return torch.arange(
         0,
-        (batch + 1) * tokens,
+        (slot_count + 1) * tokens,
         tokens,
         dtype=torch.int64,
         device="cpu",
@@ -48,7 +51,7 @@ def _normalize_cu_seqlens(cu_seqlens: Tensor) -> Tensor:
 
 def _normalize_sequence_ids(
     sequence_ids: Optional[Sequence[int] | Tensor],
-    batch: int,
+    slot_count: int,
 ) -> Optional[Tuple[int, ...]]:
     if sequence_ids is None:
         return None
@@ -76,24 +79,23 @@ def _normalize_sequence_ids(
         _integer_parameter("sequence_ids", sequence_id)
         for sequence_id in raw_ids
     )
-    if len(normalized) != batch:
+    if len(normalized) != slot_count:
         raise ValueError(
-            f"sequence_ids must contain one ID per slot ({batch})"
+            f"sequence_ids must contain one ID per slot ({slot_count})"
         )
     if len(set(normalized)) != len(normalized):
         raise ValueError("sequence_ids must be unique")
     return normalized
 
 
-def _copy_to_cpu(
+def _stage_to_cpu(
     tensor: Tensor,
     *,
-    pin_memory: bool = False,
     non_blocking: bool = False,
 ) -> Tensor:
     if tensor.device.type == "cpu":
-        return tensor.contiguous()
-    if pin_memory:
+        return tensor.contiguous().clone()
+    if non_blocking:
         try:
             output = torch.empty(
                 tensor.shape,
@@ -107,16 +109,11 @@ def _copy_to_cpu(
             pass
     return tensor.contiguous().to(
         device="cpu",
-        non_blocking=non_blocking,
+        non_blocking=False,
     )
 
 
-def _snapshot_to_cpu(tensor: Tensor) -> Tensor:
-    cpu = _copy_to_cpu(tensor)
-    return cpu.clone() if tensor.device.type == "cpu" else cpu
-
-
-def _pin_cpu(tensor: Tensor) -> Tensor:
+def _try_pin(tensor: Tensor) -> Tensor:
     try:
         output = torch.empty(
             tensor.shape,
@@ -202,23 +199,23 @@ def _flatten_packed(
             raise ValueError(
                 "dense query and payload dimensions B,T must match"
             )
-        batch, tokens, _ = query_symbols.shape
-        if batch < 1:
+        slot_count, tokens, _ = query_symbols.shape
+        if slot_count < 1:
             raise ValueError("dense batch size must be >= 1")
         return (
             query_symbols.reshape(
-                batch * tokens,
+                slot_count * tokens,
                 query_symbols.size(2),
             ).contiguous(),
             key_symbols.reshape(
-                batch * tokens,
+                slot_count * tokens,
                 key_symbols.size(2),
             ).contiguous(),
             payload_symbols.reshape(
-                batch * tokens,
+                slot_count * tokens,
                 payload_symbols.size(2),
             ).contiguous(),
-            _dense_cu_seqlens(batch, tokens),
+            _dense_cu_seqlens(slot_count, tokens),
             tuple(payload_symbols.shape),
             True,
         )
@@ -242,7 +239,7 @@ def _flatten_packed(
     )
 
 
-class RosaRuntimeWork:
+class _RuntimeWork:
     def __init__(
         self,
         runtime: "RosaRuntime",
@@ -274,12 +271,12 @@ class RosaRuntimeWork:
                 return self._result
             future = self._future
             if future is None:
-                raise RuntimeError("RosaRuntimeWork has no pending result")
+                raise RuntimeError("Runtime work has no pending result")
             try:
-                packed_output, end_positions = future.result()
+                packed_output, matched_key_end_positions = future.result()
                 self._result = self._runtime._finish_output(
                     packed_output,
-                    end_positions,
+                    matched_key_end_positions,
                     self._device,
                     self._output_shape,
                     self._dense,
@@ -302,11 +299,22 @@ class _RuntimeState(Enum):
     FAILED = "FAILED"
 
 
-class RosaRuntime:
-    """Finite-horizon runtime for exact RosaSoft hard routing.
+@dataclass(frozen=True)
+class _RuntimeConfig:
+    num_heads: int
+    num_payload_heads: int
+    qk_bits: int
+    payload_bits: int
+    max_suffix_length: int
 
-    Runtime slots are fixed by the first update. Supplying ``sequence_ids``
-    on that update enables reorder checks.
+
+class RosaRuntime:
+    """Packed deployment runtime for exact RosaSoft hard routing.
+
+    This is the 1..8-bit packed deployment subset of the RosaSoft training
+    contract. It preserves exact latest-longest matching semantics. Runtime
+    slots are fixed by the first update; supplying ``sequence_ids`` on that
+    update enables reorder checks.
     """
 
     def __init__(
@@ -314,110 +322,117 @@ class RosaRuntime:
         num_heads: int,
         num_payload_heads: Optional[int] = None,
         qk_bits: int = 8,
-        payload_bits: Optional[int] = None,
+        payload_bits: int = 8,
         max_suffix_length: int = 32,
-        *,
-        num_value_heads: Optional[int] = None,
-        value_bits: Optional[int] = None,
     ) -> None:
-        if (
-            num_payload_heads is not None
-            and num_value_heads is not None
-        ):
-            raise TypeError(
-                "specify only one of num_payload_heads and "
-                "num_value_heads"
-            )
-        if payload_bits is not None and value_bits is not None:
-            raise TypeError(
-                "specify only one of payload_bits and value_bits"
-            )
         if num_payload_heads is None:
-            num_payload_heads = (
-                num_heads
-                if num_value_heads is None
-                else num_value_heads
-            )
-        if payload_bits is None:
-            payload_bits = 8 if value_bits is None else value_bits
-        self.num_heads = _integer_parameter("num_heads", num_heads)
-        self.num_payload_heads = _integer_parameter(
-            "num_payload_heads",
-            num_payload_heads,
+            num_payload_heads = num_heads
+        config = _RuntimeConfig(
+            num_heads=_integer_parameter("num_heads", num_heads),
+            num_payload_heads=_integer_parameter(
+                "num_payload_heads",
+                num_payload_heads,
+            ),
+            qk_bits=_integer_parameter("qk_bits", qk_bits),
+            payload_bits=_integer_parameter(
+                "payload_bits",
+                payload_bits,
+            ),
+            max_suffix_length=_integer_parameter(
+                "max_suffix_length",
+                max_suffix_length,
+            ),
         )
-        self.qk_bits = _integer_parameter("qk_bits", qk_bits)
-        self.payload_bits = _integer_parameter(
-            "payload_bits",
-            payload_bits,
-        )
-        self.max_suffix_length = _integer_parameter(
-            "max_suffix_length",
-            max_suffix_length,
-        )
+        for name, bit_width in (
+            ("qk_bits", config.qk_bits),
+            ("payload_bits", config.payload_bits),
+        ):
+            if not 1 <= bit_width <= 8:
+                raise ValueError(
+                    f"{name} must be in [1, 8]; RosaRuntime implements "
+                    "only the packed 1..8-bit deployment subset of the "
+                    "RosaSoft training contract"
+                )
+        self._config = config
         self._native = torch.classes.rosa_soft.RosaRuntime(
-            self.num_heads,
-            self.num_payload_heads,
-            self.qk_bits,
-            self.payload_bits,
-            self.max_suffix_length,
+            config.num_heads,
+            config.num_payload_heads,
+            config.qk_bits,
+            config.payload_bits,
+            config.max_suffix_length,
         )
         self._executor = ThreadPoolExecutor(
             max_workers=1,
             thread_name_prefix="rosa-runtime",
         )
-        self._lifecycle = threading.Condition()
+        self._state_condition = threading.Condition()
         self._state = _RuntimeState.OPEN
         self._failure: Optional[BaseException] = None
-        self._close_error: Optional[BaseException] = None
         self._executor_shutdown = False
+        self._pending_operations = 0
         self._slots_initialized = False
         self._sequence_ids: Optional[Tuple[int, ...]] = None
 
     @property
-    def num_value_heads(self) -> int:
-        """Compatibility alias for ``num_payload_heads``."""
-        return self.num_payload_heads
+    def num_heads(self) -> int:
+        return self._config.num_heads
 
     @property
-    def value_bits(self) -> int:
-        """Compatibility alias for ``payload_bits``."""
-        return self.payload_bits
+    def num_payload_heads(self) -> int:
+        return self._config.num_payload_heads
+
+    @property
+    def qk_bits(self) -> int:
+        return self._config.qk_bits
+
+    @property
+    def payload_bits(self) -> int:
+        return self._config.payload_bits
+
+    @property
+    def max_suffix_length(self) -> int:
+        return self._config.max_suffix_length
 
     @property
     def state(self) -> str:
-        with self._lifecycle:
+        with self._state_condition:
             return self._state.value
 
     def close(self) -> None:
-        with self._lifecycle:
+        with self._state_condition:
             while self._state is _RuntimeState.CLOSING:
-                self._lifecycle.wait()
+                self._state_condition.wait()
             if self._state is _RuntimeState.CLOSED:
                 return
             if self._executor_shutdown:
-                if self._close_error is not None:
-                    raise self._close_error
+                if self._failure is not None:
+                    raise self._failure
                 return
             self._state = _RuntimeState.CLOSING
+            self._state_condition.notify_all()
+            while self._pending_operations:
+                self._state_condition.wait()
 
         error: Optional[BaseException] = None
         try:
-            future = self._executor.submit(self._native.close)
-            future.result()
+            self._native.close()
         except BaseException as close_error:
             error = close_error
         finally:
-            self._executor.shutdown(wait=True)
-            with self._lifecycle:
+            try:
+                self._executor.shutdown(wait=True)
+            except BaseException as shutdown_error:
+                if error is None:
+                    error = shutdown_error
+            with self._state_condition:
                 self._executor_shutdown = True
-                self._close_error = error
                 if error is None:
                     self._state = _RuntimeState.CLOSED
                     self._failure = None
                 else:
                     self._state = _RuntimeState.FAILED
                     self._failure = error
-                self._lifecycle.notify_all()
+                self._state_condition.notify_all()
         if error is not None:
             raise error
 
@@ -429,7 +444,10 @@ class RosaRuntime:
         self.close()
 
     def _state_error_locked(self) -> RuntimeError:
-        if self._state is _RuntimeState.FAILED:
+        if (
+            self._state is _RuntimeState.FAILED
+            or self._failure is not None
+        ):
             detail = (
                 f": {self._failure}"
                 if self._failure is not None
@@ -441,21 +459,56 @@ class RosaRuntime:
         )
 
     def _require_open(self) -> None:
-        with self._lifecycle:
+        with self._state_condition:
             if self._state is not _RuntimeState.OPEN:
                 raise self._state_error_locked()
+
+    def _reserve_operation(self) -> None:
+        with self._state_condition:
+            while (
+                self._state is _RuntimeState.OPEN
+                and self._pending_operations
+                >= _MAX_PENDING_OPERATIONS
+            ):
+                self._state_condition.wait()
+            if self._state is not _RuntimeState.OPEN:
+                raise self._state_error_locked()
+            self._pending_operations += 1
+
+    def _release_operation(self) -> None:
+        with self._state_condition:
+            self._pending_operations -= 1
+            self._state_condition.notify_all()
+
+    def _submit_reserved(self, function, *args) -> Future:
+        def run_queued_operation():
+            with self._state_condition:
+                if (
+                    self._state is _RuntimeState.FAILED
+                    or self._failure is not None
+                ):
+                    raise self._state_error_locked()
+            return function(*args)
+
+        try:
+            future = self._executor.submit(run_queued_operation)
+        except BaseException:
+            self._release_operation()
+            raise
+        future.add_done_callback(lambda _: self._release_operation())
+        return future
 
     def _submit(self, function, *args) -> Future:
-        with self._lifecycle:
-            if self._state is not _RuntimeState.OPEN:
-                raise self._state_error_locked()
-            return self._executor.submit(function, *args)
+        self._reserve_operation()
+        return self._submit_reserved(function, *args)
 
     def _mark_failed(self, error: BaseException) -> None:
-        with self._lifecycle:
-            self._failure = error
+        with self._state_condition:
+            if self._failure is None:
+                self._failure = error
             if self._state is _RuntimeState.OPEN:
                 self._state = _RuntimeState.FAILED
+            self._state_condition.notify_all()
 
     def _check_sequence_ids(
         self,
@@ -481,15 +534,12 @@ class RosaRuntime:
                 "sequence_ids changed; RosaRuntime slots are fixed"
             )
 
-    def _submit_update(
+    def _submit_update_reserved(
         self,
         function,
         sequence_ids: Optional[Tuple[int, ...]],
     ) -> Future:
         def run_update():
-            with self._lifecycle:
-                if self._failure is not None:
-                    raise self._state_error_locked()
             self._check_sequence_ids(sequence_ids)
             try:
                 return function()
@@ -497,12 +547,12 @@ class RosaRuntime:
                 self._mark_failed(error)
                 raise
 
-        return self._submit(run_update)
+        return self._submit_reserved(run_update)
 
     def stats(self) -> Tuple[int, int, int]:
         """Return exact state, edge, and deduplicated payload-symbol counts."""
         result = self._submit(self._native.stats).result()
-        return tuple(int(value) for value in result)
+        return tuple(int(value) for value in result[:3])
 
     def memory_stats(self) -> Dict[str, int]:
         """Return exact logical state counts and bytes.
@@ -511,7 +561,7 @@ class RosaRuntime:
         symbols, and payload symbols. It excludes allocator capacity and
         container overhead, so it is stable across standard-library builds.
         """
-        result = self._submit(self._native.detailed_stats).result()
+        result = self._submit(self._native.stats).result()
         names = (
             "states",
             "edges",
@@ -527,9 +577,6 @@ class RosaRuntime:
 
     def reset(self) -> None:
         def reset_native() -> None:
-            with self._lifecycle:
-                if self._failure is not None:
-                    raise self._state_error_locked()
             try:
                 self._native.reset()
             except BaseException as error:
@@ -637,10 +684,10 @@ class RosaRuntime:
             raise ValueError(
                 "packed payload head count must equal num_payload_heads"
             )
-        batch = offsets.numel() - 1
+        slot_count = offsets.numel() - 1
         normalized_sequence_ids = _normalize_sequence_ids(
             sequence_ids,
-            batch,
+            slot_count,
         )
 
         device = payload_symbols.device
@@ -656,69 +703,80 @@ class RosaRuntime:
                 "output_dtype must be floating-point when unpacking"
             )
 
-        offsets = offsets.clone()
-        if stream is None:
-            query_cpu = _snapshot_to_cpu(query_symbols)
-            key_cpu = _snapshot_to_cpu(key_symbols)
-            payload_cpu = _snapshot_to_cpu(payload_symbols)
+        self._reserve_operation()
+        permit_owned = True
+        try:
+            offsets = offsets.clone()
+            if stream is None:
+                query_cpu = _stage_to_cpu(query_symbols)
+                key_cpu = _stage_to_cpu(key_symbols)
+                payload_cpu = _stage_to_cpu(payload_symbols)
 
-            def update_cpu():
-                return self._native.update_packed(
-                    offsets,
-                    query_cpu,
-                    key_cpu,
-                    payload_cpu,
-                )
-
-            future = self._submit_update(
-                update_cpu,
-                normalized_sequence_ids,
-            )
-        else:
-            stream.wait_stream(torch.cuda.current_stream(device))
-            with torch.cuda.stream(stream):
-                query_cpu = _copy_to_cpu(
-                    query_symbols,
-                    pin_memory=True,
-                    non_blocking=True,
-                )
-                key_cpu = _copy_to_cpu(
-                    key_symbols,
-                    pin_memory=True,
-                    non_blocking=True,
-                )
-                payload_cpu = _copy_to_cpu(
-                    payload_symbols,
-                    pin_memory=True,
-                    non_blocking=True,
-                )
-                query_symbols.record_stream(stream)
-                key_symbols.record_stream(stream)
-                payload_symbols.record_stream(stream)
-                ready = torch.cuda.Event()
-                ready.record(stream)
-
-            def update_after_transfer():
-                ready.synchronize()
-                packed_output, end_positions = (
-                    self._native.update_packed(
+                def update_cpu():
+                    return self._native.update_packed(
                         offsets,
                         query_cpu,
                         key_cpu,
                         payload_cpu,
                     )
-                )
-                return (
-                    _pin_cpu(packed_output),
-                    _pin_cpu(end_positions),
-                )
 
-            future = self._submit_update(
-                update_after_transfer,
-                normalized_sequence_ids,
-            )
+                permit_owned = False
+                future = self._submit_update_reserved(
+                    update_cpu,
+                    normalized_sequence_ids,
+                )
+            else:
+                source_stream = torch.cuda.current_stream(device)
+                query_stage = query_symbols.clone()
+                key_stage = key_symbols.clone()
+                payload_stage = payload_symbols.clone()
+                stream.wait_stream(source_stream)
+                with torch.cuda.stream(stream):
+                    query_cpu = _stage_to_cpu(
+                        query_stage,
+                        non_blocking=True,
+                    )
+                    key_cpu = _stage_to_cpu(
+                        key_stage,
+                        non_blocking=True,
+                    )
+                    payload_cpu = _stage_to_cpu(
+                        payload_stage,
+                        non_blocking=True,
+                    )
+                    query_stage.record_stream(stream)
+                    key_stage.record_stream(stream)
+                    payload_stage.record_stream(stream)
+                    ready = torch.cuda.Event()
+                    ready.record(stream)
 
-        work = RosaRuntimeWork(
+                def update_after_transfer():
+                    ready.synchronize()
+                    (
+                        packed_output,
+                        matched_key_end_positions,
+                    ) = self._native.update_packed(
+                        offsets,
+                        query_cpu,
+                        key_cpu,
+                        payload_cpu,
+                    )
+                    return (
+                        _try_pin(packed_output),
+                        _try_pin(matched_key_end_positions),
+                    )
+
+                permit_owned = False
+                future = self._submit_update_reserved(
+                    update_after_transfer,
+                    normalized_sequence_ids,
+                )
+        except BaseException:
+            if permit_owned:
+                self._release_operation()
+            raise
+
+        work = _RuntimeWork(
             self,
             future,
             device,
@@ -733,7 +791,7 @@ class RosaRuntime:
     def _finish_output(
         self,
         packed_output_cpu: Tensor,
-        end_positions_cpu: Tensor,
+        matched_key_end_positions_cpu: Tensor,
         device: torch.device,
         output_shape: Tuple[int, ...],
         dense: bool,
@@ -746,7 +804,7 @@ class RosaRuntime:
                 device=device,
                 non_blocking=False,
             )
-            end_positions = end_positions_cpu.to(
+            matched_key_end_positions = matched_key_end_positions_cpu.to(
                 device=device,
                 non_blocking=False,
             )
@@ -757,13 +815,15 @@ class RosaRuntime:
                     device=device,
                     non_blocking=True,
                 )
-                end_positions = end_positions_cpu.to(
-                    device=device,
-                    non_blocking=True,
+                matched_key_end_positions = (
+                    matched_key_end_positions_cpu.to(
+                        device=device,
+                        non_blocking=True,
+                    )
                 )
             current_stream.wait_stream(stream)
             packed_output.record_stream(current_stream)
-            end_positions.record_stream(current_stream)
+            matched_key_end_positions.record_stream(current_stream)
 
         if dense:
             packed_output = packed_output.reshape(
@@ -771,13 +831,13 @@ class RosaRuntime:
                 output_shape[1],
                 self.num_heads,
             )
-            end_positions = end_positions.reshape(
+            matched_key_end_positions = matched_key_end_positions.reshape(
                 output_shape[0],
                 output_shape[1],
                 self.num_heads,
             )
         if return_packed:
-            return packed_output, end_positions
+            return packed_output, matched_key_end_positions
 
         unpacked = _unpack_sign_bits(
             packed_output,
@@ -785,7 +845,7 @@ class RosaRuntime:
             output_dtype,
         )
         unpacked = torch.where(
-            end_positions.unsqueeze(-1) >= 0,
+            matched_key_end_positions.unsqueeze(-1) >= 0,
             unpacked,
             torch.zeros(
                 (),
@@ -793,4 +853,4 @@ class RosaRuntime:
                 device=device,
             ),
         )
-        return unpacked, end_positions
+        return unpacked, matched_key_end_positions

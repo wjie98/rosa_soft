@@ -3,6 +3,8 @@
 > Historical research record. The private script used for this sweep is not
 > shipped and targets a deleted prototype API. The decisions remain design
 > evidence; current validation uses the production tests and fitting example.
+> Current production uses the reciprocal attention convention
+> `scale = 1 / route_temperature`.
 
 ## 1. Decision Under Test
 
@@ -164,6 +166,6 @@ selected from only one positive-route objective.
 ## 9. Reproduction Status
 
 The old local command is not supported by the current package. Recreate this
-sweep only as a new test or experiment against `rosa_soft.testing`, with
-explicit noise and the production `route_temperature`/`mismatch_penalty`
-contract.
+sweep only as a new test or experiment against `rosa_soft.testing`, translating
+the historical controls to `scale = 1 / route_temperature` and
+`mismatch_scale = mismatch_penalty`.
