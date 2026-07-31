@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,6 +33,10 @@ fit_script = _load_script(
 recall_script = _load_script(
     "_rosa_soft_recall_cli",
     "examples/associative_recall_gate.py",
+)
+contextual_recall_script = _load_script(
+    "_rosa_soft_contextual_recall_cli",
+    "examples/contextual_rnn_recall_gate.py",
 )
 
 
@@ -158,6 +163,33 @@ def test_fit_mask_selects_only_targets_with_a_correct_historical_route():
     )
 
 
+def test_fit_strict_mask_rejects_a_correct_but_unselected_candidate():
+    tokens = torch.tensor([[0, 1, 0, 2, 0, 1]])
+
+    any_candidate = fit_script.build_target_mask(
+        tokens,
+        max_suffix_length=4,
+        target_mode="any-candidate",
+    )
+    strict = fit_script.build_target_mask(
+        tokens,
+        max_suffix_length=4,
+        target_mode="strict-longest-latest",
+    )
+
+    assert any_candidate[0, 4]
+    assert not strict[0, 4]
+
+
+def test_fit_target_mode_rejects_unknown_values():
+    with pytest.raises(ValueError, match="target_mode"):
+        fit_script.build_target_mask(
+            torch.tensor([[0, 1]]),
+            max_suffix_length=1,
+            target_mode="unknown",
+        )
+
+
 def test_fit_loss_excludes_cold_start_targets():
     tokens = torch.tensor([[0, 1, 0, 1, 0]])
     mask = fit_script.historical_target_mask(tokens, max_suffix_length=4)
@@ -179,6 +211,49 @@ def test_fit_loss_excludes_cold_start_targets():
     assert fit_loss < 1e-6
     assert fit_accuracy == 1.0
     assert full_accuracy == 0.5
+
+
+def test_fit_hard_feature_collision_stats_classify_route_collisions():
+    tokens = torch.tensor([[5, 1, 0, 2, 0, 3]])
+    target_mask = torch.tensor([[False, False, True, False, True]])
+    routed = torch.zeros(1, 6, 1, 1)
+    selected_routes = torch.zeros(1, 1, 6, dtype=torch.int64)
+    selected_routes[0, 0, 2] = 1
+    selected_routes[0, 0, 4] = 1
+
+    stats = fit_script.hard_feature_collision_stats(
+        tokens,
+        target_mask,
+        routed,
+        selected_routes,
+    )
+
+    assert stats["hard_feature_conditional_entropy"] == pytest.approx(
+        math.log(2.0)
+    )
+    assert stats["hard_feature_conflicting_group_count"] == 1.0
+    assert stats["hard_feature_conflicting_target_count"] == 2.0
+    assert stats["hard_route_value_collision_group_count"] == 1.0
+    assert stats["hard_quantized_value_collision_group_count"] == 0.0
+
+
+def test_fit_hard_feature_collision_stats_classify_value_code_collisions():
+    tokens = torch.tensor([[5, 1, 0, 2, 0, 3]])
+    target_mask = torch.tensor([[False, False, True, False, True]])
+    routed = torch.zeros(1, 6, 1, 1)
+    selected_routes = torch.zeros(1, 1, 6, dtype=torch.int64)
+    selected_routes[0, 0, 2] = 1
+    selected_routes[0, 0, 4] = 3
+
+    stats = fit_script.hard_feature_collision_stats(
+        tokens,
+        target_mask,
+        routed,
+        selected_routes,
+    )
+
+    assert stats["hard_route_value_collision_group_count"] == 0.0
+    assert stats["hard_quantized_value_collision_group_count"] == 1.0
 
 
 def test_reference_fit_reaches_near_zero_on_historical_targets(capsys):
@@ -207,7 +282,10 @@ def test_reference_fit_reaches_near_zero_on_historical_targets(capsys):
     assert result["final_accuracy"] == 1.0
     assert result["fit_target_count"] == 12
     assert result["excluded_cold_start_target_count"] == 4
+    assert result["target_mode"] == "any-candidate"
     assert 0.0 < result["hard_nonnull_route_fraction"] <= 1.0
+    assert result["hard_feature_conditional_entropy"] == 0.0
+    assert result["fit_loss_above_hard_feature_entropy"] < 0.01
 
 
 def test_recall_cli_runs_multiple_seeds_and_writes_json(tmp_path, capsys):
@@ -238,6 +316,104 @@ def test_recall_cli_runs_multiple_seeds_and_writes_json(tmp_path, capsys):
         for run in report["runs"]
     )
     assert json.loads(output_path.read_text(encoding="utf-8")) == report
+
+
+def test_contextual_recall_batch_has_a_proven_residual_only_ceiling():
+    recall_batch = contextual_recall_script.make_contextual_recall_batch(
+        seed=17,
+        pairs=3,
+        associations=4,
+        value_bits=4,
+    )
+
+    assert torch.equal(
+        recall_batch.targets[0::2],
+        -recall_batch.targets[1::2],
+    )
+    assert torch.equal(
+        recall_batch.tokens[:, recall_batch.query_positions],
+        recall_batch.tokens[:1, recall_batch.query_positions].expand(
+            recall_batch.tokens.size(0),
+            -1,
+        ),
+    )
+    assert torch.all(
+        recall_batch.payload_route_indices
+        < recall_batch.query_positions
+    )
+
+
+def test_contextual_rnn_reset_makes_query_residuals_identical():
+    recall_batch = contextual_recall_script.make_contextual_recall_batch(
+        seed=23,
+        pairs=2,
+        associations=2,
+        value_bits=2,
+    )
+    model = contextual_recall_script.ResetRnnRosaLM(
+        associations=2,
+        hidden_size=8,
+        num_heads=1,
+        qk_bits=2,
+        value_heads=1,
+        value_bits=2,
+        context_scale=0.25,
+        scale=1.0,
+        dropout_p=0.0,
+        mismatch_scale=3.0,
+        operator="reference",
+    )
+
+    residual = model.encode_residual(recall_batch.tokens)
+    query_residual = residual[:, recall_batch.query_positions]
+
+    assert torch.equal(
+        query_residual,
+        query_residual[:1].expand_as(query_residual),
+    )
+
+
+def test_contextual_recall_gate_smoke_schema():
+    args = contextual_recall_script.build_parser().parse_args(
+        [
+            "--seeds",
+            "0",
+            "--train-pairs",
+            "2",
+            "--validation-pairs",
+            "2",
+            "--associations",
+            "2",
+            "--hidden-size",
+            "8",
+            "--heads",
+            "1",
+            "--qk-bits",
+            "2",
+            "--value-heads",
+            "1",
+            "--value-bits",
+            "2",
+            "--steps",
+            "1",
+            "--baseline-steps",
+            "1",
+        ]
+    )
+
+    report = contextual_recall_script.run_gate(args)
+    run = report["runs"][0]
+
+    assert report["schema_version"] == 1
+    assert run["validation"]["query_residual_max_difference"] == 0.0
+    assert 0.0 <= (
+        run["validation"]["historical_route_any_head_accuracy"]
+    ) <= 1.0
+    assert 0.0 <= (
+        run["validation"]["paired_routed_value_difference_fraction"]
+    ) <= 1.0
+    assert run["residual_only_baseline"]["exact_accuracy_ceiling"] == 0.5
+    assert report["summary"]["run_count"] == 1
 
 
 @pytest.mark.parametrize(

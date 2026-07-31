@@ -65,6 +65,7 @@ def _inputs(requires_grad=True):
         ablation.rosa_soft_mismatch_random,
         ablation.rosa_soft_exact_bitflip,
         ablation.make_attention_dropout_estimator(0.25),
+        ablation.make_suffix_dropout_estimator(0.9),
     ],
 )
 def test_research_estimators_preserve_hard_forward(estimator):
@@ -129,6 +130,7 @@ def test_zero_attention_dropout_matches_deterministic_vjp():
     [
         lambda: ablation.rosa_soft_mismatch_random,
         lambda: ablation.make_attention_dropout_estimator(0.5),
+        lambda: ablation.make_suffix_dropout_estimator(0.5),
     ],
 )
 def test_random_estimators_change_vjp_not_hard_output(make_estimator):
@@ -219,6 +221,137 @@ def test_exact_bitflip_vjp_matches_exhaustive_hard_counterfactuals():
 def test_attention_dropout_rejects_invalid_probability(probability):
     with pytest.raises(ValueError, match="attention dropout"):
         ablation.make_attention_dropout_estimator(probability)
+
+
+@pytest.mark.parametrize("probability", [-0.1, 1.0, float("nan")])
+def test_suffix_dropout_rejects_invalid_probability(probability):
+    with pytest.raises(ValueError, match="suffix dropout"):
+        ablation.make_suffix_dropout_estimator(probability)
+
+
+def test_zero_suffix_dropout_matches_deterministic_vjp():
+    deterministic_inputs = _inputs()
+    dropout_inputs = tuple(
+        tensor.detach().clone().requires_grad_()
+        for tensor in deterministic_inputs
+    )
+    loss_weights = torch.randn_like(deterministic_inputs[2])
+    deterministic_output = ablation.rosa_soft_reference(
+        *deterministic_inputs,
+        max_suffix_length=4,
+        mismatch_scale=3.0,
+    )
+    dropout_output = ablation.make_suffix_dropout_estimator(0.0)(
+        *dropout_inputs,
+        max_suffix_length=4,
+        mismatch_scale=3.0,
+    )
+    deterministic_gradients = torch.autograd.grad(
+        (deterministic_output * loss_weights).sum(),
+        deterministic_inputs,
+    )
+    dropout_gradients = torch.autograd.grad(
+        (dropout_output * loss_weights).sum(),
+        dropout_inputs,
+    )
+
+    assert torch.equal(dropout_output, deterministic_output)
+    for actual, expected in zip(
+        dropout_gradients,
+        deterministic_gradients,
+    ):
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+
+
+def test_stratified_row_weights_are_balanced_and_fixed_count():
+    sample_count = 80
+    row_uniforms = torch.zeros(
+        sample_count,
+        1,
+        8,
+        dtype=torch.float64,
+    )
+    grid = (
+        torch.arange(sample_count, dtype=torch.float64) + 0.5
+    ) / sample_count
+    row_uniforms[:, 0, 0] = grid
+    row_uniforms[:, 0, 1] = grid.roll(1)
+    weights = ablation._stratified_row_weights(
+        sample_count,
+        1,
+        8,
+        0.75,
+        row_uniforms,
+        torch.float64,
+    )
+
+    assert torch.equal(
+        (weights > 0).sum(dim=-1),
+        torch.full((sample_count, 1), 2),
+    )
+    torch.testing.assert_close(
+        weights.mean(dim=0),
+        torch.ones(1, 8, dtype=torch.float64),
+        rtol=0,
+        atol=0,
+    )
+
+
+def test_suffix_dropout_vjp_is_unbiased_over_all_stratified_samples():
+    detached = tuple(tensor.detach() for tensor in _inputs())
+    loss_weights = torch.randn(
+        detached[2].shape,
+        generator=torch.Generator().manual_seed(71),
+        dtype=torch.float64,
+    )
+    dense_inputs = tuple(
+        tensor.clone().requires_grad_() for tensor in detached
+    )
+    dense_output = ablation.rosa_soft_reference(
+        *dense_inputs,
+        max_suffix_length=3,
+        scale=1.0,
+        mismatch_scale=3.0,
+    )
+    expected = torch.autograd.grad(
+        (dense_output * loss_weights).sum(),
+        dense_inputs,
+    )
+
+    sampled_gradients = []
+    for first_offset in range(2):
+        for second_offset in range(3):
+            inputs = tuple(
+                tensor.clone().requires_grad_() for tensor in detached
+            )
+            row_uniforms = torch.zeros(1, 1, 5, dtype=torch.float64)
+            row_uniforms[0, 0, 0] = (first_offset + 0.5) / 2
+            row_uniforms[0, 0, 1] = (second_offset + 0.5) / 3
+            output = ablation._HardForwardSuffixDropout.apply(
+                *inputs,
+                row_uniforms,
+                3,
+                1.0,
+                0.6,
+                3.0,
+            )
+            sampled_gradients.append(
+                torch.autograd.grad(
+                    (output * loss_weights).sum(),
+                    inputs,
+                )
+            )
+
+    for role, dense_gradient in enumerate(expected):
+        sampled_mean = torch.stack(
+            [gradients[role] for gradients in sampled_gradients]
+        ).mean(dim=0)
+        torch.testing.assert_close(
+            sampled_mean,
+            dense_gradient,
+            rtol=1e-12,
+            atol=1e-12,
+        )
 
 
 def test_exact_bitflip_rejects_batched_inputs():

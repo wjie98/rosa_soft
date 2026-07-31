@@ -49,22 +49,73 @@ materialize these tensors because it is the correctness oracle, not the
 production kernel.
 
 Current shape-matched measurements do not justify a dedicated `D=8` template:
-it doubled backward kernel instances without improving latency. Likewise,
-using total packed token count to select the dense score-cache plan increased
-register/shared-memory pressure and regressed tested varlen shapes. Do not
-reintroduce either choice without a new shape matrix that demonstrates a
-consistent win.
+it doubled backward kernel instances without improving latency. Likewise, a
+full-row packed score cache selected from total token count increased
+register/shared-memory pressure and regressed tested varlen shapes. This does
+not prohibit the retained Q-only bounded tail cache, which uses average
+segment length and recomputes every older score. Do not reintroduce the broad
+choices without a new shape matrix that demonstrates a consistent win.
 
-Dense packed Q/K symbols are head-major `[B,H,T]`. Dense K VJP accumulates in
-FP32 `[B,H,D,T]`, then returns a contiguous public `[B,T,H,D]` tensor. This
-costs one additional key-gradient-sized FP32 temporary at the final transpose,
-but coalesces route-lane atomics and won the tested K, QK, and QKV matrices.
-Packed varlen deliberately remains token-major `[N,H]` with direct
-`[N,H,D]` K accumulation. Extending the dense accumulator layout to varlen
-regressed measured QK/QKV paths by `3.6%..26.1%`; do not repeat that change
-without solving the occupancy and transpose costs on a representative
-gradient-mask matrix. Packed-varlen register pressure remains an optimization
-target and must be reported for every estimator change.
+Private Q/K sign-bit buffers are head-major: dense uses `[B,H,T]` and packed
+varlen uses `[H,N]`. Public packed inputs and gradients remain token-major
+`[N,H,D]`. Dense K VJP accumulates in FP32 `[B,H,D,T]`, then returns a
+contiguous public `[B,T,H,D]` tensor. This costs one additional
+key-gradient-sized FP32 temporary at the final transpose, but coalesces
+route-lane atomics and won the tested K, QK, and QKV matrices. Packed K VJP
+still accumulates directly into `[N,H,D]`; extending the dense accumulator
+layout to varlen regressed measured QK/QKV paths by `3.6%..26.1%`. Do not
+repeat that change without solving the occupancy and transpose costs on a
+representative gradient-mask matrix.
+
+The current row kernel maps lanes to route candidates. Its suffix loop has no
+data-dependent mismatch exit, so assigning a whole warp to one candidate
+reduces useful route parallelism. A warp prefix scan is appropriate only as
+part of a diagonal-recurrence kernel that also solves row-softmax staging,
+finite-window correction, reverse adjoints, and workspace bounds. Do not add
+a warp-per-route path to the current kernel or restrict the public suffix
+window to multiples of 32 based on scan convenience.
+
+The retained private fast paths are narrowly gated:
+
+- dense Q-only utility caching requires `Dv >= 32` and a shared-memory fit;
+- cooperative route-utility/value tiling requires a Q or K gradient,
+  `Dv >= 64`, a sufficiently long dense row or average packed segment, and a
+  shared-memory fit; packed QK-only starts at `Dv >= 128`;
+- dense and packed value-only route/value tiling requires `Dv >= 32` and a
+  shared-memory fit, independent of whether dense scores are cached or
+  recomputed;
+- packed K aggregation requires an enabled K gradient, `D <= 8`, average and
+  local segment length at least 256, and a shared-memory fit;
+- packed Q-only score caching requires average segment length at least 256 and
+  stores only the most recent 1024 exact scores; every older score is
+  recomputed, never omitted.
+
+These thresholds are measured execution choices, not public semantics.
+Broadening them requires all-gradient-mask A/B measurements and reference VJP
+parity.
+
+Dense score-plan selection is conservative. Recompute is considered only for
+`T >= 4096`; value-only backward additionally requires `T >= 64 W`, because
+its second score scan is a larger fraction of total work. The host then
+queries active blocks for the exact cache and recompute kernel instances,
+including their complete dynamic shared layouts, and compares total launch
+waves over the actual dense row count. Recompute is selected only when it
+passes the work gate and reduces launch waves; equal waves prefer cache. These
+SM75-calibrated constants are private execution thresholds, not estimator
+semantics. Do not use total packed token count as a dense-cache proxy.
+
+Cooperative temporary route-utility tiles are warp-owned: each warp produces
+and consumes its own 32 route slots, with synchronization before consumption
+and before slot reuse. The full dense Q-only utility cache is block-produced,
+uses a block barrier before cross-warp consumption, and is not overwritten
+between route tiles. Changes to either ownership rule require CUDA racecheck
+and synccheck coverage, not only numerical parity.
+
+The backward CTA size remains 128 threads. Global 64- and 256-thread builds
+both won isolated masks but regressed other dense or packed paths by much
+larger margins. Do not add a block-size ladder without a representative
+dense/packed, all-mask matrix and a simpler selection law than the rejected
+layout/mask/length heuristics.
 
 ## Packed Variable-Length Contract
 
@@ -115,7 +166,11 @@ therefore affects Q/K/value VJPs; hard forward must never read dropout state.
 The implementation may store one scalar seed and reconstruct each route mask
 with a counter-based RNG, but must not materialize or save an
 `O(B H T^2)` random tensor. `dropout_p=0` must be an exact deterministic path
-that does not advance RNG state.
+that does not advance RNG state. This excludes intentional sampling only:
+the CUDA VJP uses global FP32 atomics and is not bitwise reproducible across
+launches. Repeated fitting runs can therefore enter different hard-symbol
+basins even when `dropout_p=0`; production training comparisons must include
+repeated launches rather than treating one run per model seed as deterministic.
 
 `mismatch_scale` is a static mismatch control with default `3.0`. Do not derive
 it from configured D, T, or W: those bounds do not determine the active
@@ -138,6 +193,36 @@ Distributed soft value credit is part of the validated estimator.
 Hard-selected value won a direct structural probe but failed the
 repeated-motif full-model fit for all tested mismatch scales, so it must
 remain research-only unless a replacement passes both gates.
+
+The repeated-motif fit is a combinatorial estimator stress test, not a pure
+recall benchmark. Its historical-target mask requires a correct candidate to
+exist, but does not require exact token-equality ROSA to select that candidate
+under longest/latest routing. Every reported run must therefore include the
+hard-feature conditional-entropy lower bound and the loss above that bound.
+Do not attribute a plateau to value/readout optimization when the bound
+already explains it, and do not use this fit alone to claim semantic route
+learning. Direct recall claims require the shortcut-free associative gate or
+an explicitly strict longest/latest target mask.
+
+The two repeated-motif target modes must remain explicit:
+
+- `any-candidate` asks whether any correct historical continuation exists and
+  is the harder combinatorial recoding stress test;
+- `strict-longest-latest` retains only rows where the raw token ROSA route
+  already selects the target and is the cleaner automaton-recall probe.
+
+Gradient-alignment claims must include trained checkpoints, tensor-space
+alignment, shared Q/K parameter-space alignment, and the hard-feature entropy
+floor. Random-tensor bitflip probes alone do not explain a trained plateau.
+
+The contextual reset-RNN gate must preserve its causal proof: paired episodes
+have complementary payloads, post-reset query inputs and residuals are
+exactly identical, and zero-route, current-value, and residual-only ablations
+cannot solve the pair. Require actual hard routes into earlier history and a
+different hard routed value across complementary pairs. A payload position is
+a canonical diagnostic route, not the only valid route: contextual values and
+multiple heads may carry the same useful history through another earlier
+slot.
 
 Do not reintroduce dynamic schedules, window-derived mismatch scales,
 confidence weighting, winner margins, recency bias, configurable perturbation

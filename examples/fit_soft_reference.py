@@ -28,6 +28,12 @@ from rosa_soft.soft_contract import (
 from rosa_soft.testing import inspect_rosa_soft
 
 
+TARGET_MODES = (
+    "any-candidate",
+    "strict-longest-latest",
+)
+
+
 def make_copy_tokens(
     seq_len: int,
     vocab_size: int,
@@ -128,6 +134,83 @@ def historical_target_mask(
     return mask.to(tokens.device)
 
 
+def strict_longest_latest_target_mask(
+    tokens: Tensor,
+    max_suffix_length: int,
+) -> Tensor:
+    """Select targets returned by exact token longest/latest routing."""
+
+    if tokens.ndim != 2 or tokens.size(1) < 2:
+        raise ValueError("tokens must have shape (B, T) with T >= 2")
+    if max_suffix_length < 1:
+        raise ValueError("max_suffix_length must be >= 1")
+
+    working_tokens = tokens.detach().cpu()
+    batch, sequence_length = working_tokens.shape
+    mask = torch.zeros(
+        batch,
+        sequence_length - 1,
+        dtype=torch.bool,
+    )
+    for batch_index in range(batch):
+        for query_position in range(sequence_length - 1):
+            selected_route = 0
+            selected_length = 0
+            for route_value_position in range(1, query_position + 1):
+                suffix_steps = min(
+                    max_suffix_length,
+                    query_position + 1,
+                    route_value_position,
+                )
+                suffix_length = 0
+                for candidate_length in range(1, suffix_steps + 1):
+                    query_start = (
+                        query_position + 1 - candidate_length
+                    )
+                    key_start = (
+                        route_value_position - candidate_length
+                    )
+                    if not torch.equal(
+                        working_tokens[
+                            batch_index,
+                            query_start : query_position + 1,
+                        ],
+                        working_tokens[
+                            batch_index,
+                            key_start:route_value_position,
+                        ],
+                    ):
+                        break
+                    suffix_length = candidate_length
+                if suffix_length >= selected_length and suffix_length > 0:
+                    selected_route = route_value_position
+                    selected_length = suffix_length
+            if (
+                selected_route > 0
+                and working_tokens[batch_index, selected_route]
+                == working_tokens[batch_index, query_position + 1]
+            ):
+                mask[batch_index, query_position] = True
+    return mask.to(tokens.device)
+
+
+def build_target_mask(
+    tokens: Tensor,
+    max_suffix_length: int,
+    target_mode: str,
+) -> Tensor:
+    if target_mode == "any-candidate":
+        return historical_target_mask(tokens, max_suffix_length)
+    if target_mode == "strict-longest-latest":
+        return strict_longest_latest_target_mask(
+            tokens,
+            max_suffix_length,
+        )
+    raise ValueError(
+        f"target_mode must be one of {TARGET_MODES}, got {target_mode!r}"
+    )
+
+
 def loss_and_accuracy(
     logits: Tensor,
     tokens: Tensor,
@@ -146,6 +229,108 @@ def loss_and_accuracy(
     )
     accuracy = float((prediction.argmax(dim=-1) == targets).float().mean().item())
     return loss, accuracy
+
+
+@torch.no_grad()
+def hard_feature_collision_stats(
+    tokens: Tensor,
+    target_mask: Tensor,
+    routed: Tensor,
+    selected_route_indices: Tensor,
+) -> Dict[str, float]:
+    """Measure the irreducible target entropy of this tiny model's hard input."""
+
+    if target_mask.shape != tokens[:, :-1].shape:
+        raise ValueError("target_mask must have shape (B, T - 1)")
+    if routed.shape[:2] != tokens.shape:
+        raise ValueError("routed must have leading shape (B, T)")
+    if selected_route_indices.shape[:1] != tokens.shape[:1] or (
+        selected_route_indices.shape[2] != tokens.shape[1]
+    ):
+        raise ValueError(
+            "selected_route_indices must have shape (B, H, T)"
+        )
+
+    tokens_cpu = tokens.detach().cpu()
+    target_mask_cpu = target_mask.detach().cpu()
+    routed_cpu = routed.detach().cpu()
+    routes_cpu = selected_route_indices.detach().cpu()
+    groups: Dict[Tuple[int, ...], list[Tuple[int, Tuple[int, ...]]]] = {}
+    for batch_index, query_position in target_mask_cpu.nonzero().tolist():
+        feature = (
+            int(tokens_cpu[batch_index, query_position]),
+            *(
+                int(value)
+                for value in routed_cpu[
+                    batch_index,
+                    query_position,
+                ].reshape(-1).tolist()
+            ),
+        )
+        route_tokens = tuple(
+            -1
+            if route_index == 0
+            else int(tokens_cpu[batch_index, route_index])
+            for route_index in routes_cpu[
+                batch_index,
+                :,
+                query_position,
+            ].tolist()
+        )
+        target = int(tokens_cpu[batch_index, query_position + 1])
+        groups.setdefault(feature, []).append((target, route_tokens))
+
+    target_count = sum(len(rows) for rows in groups.values())
+    conditional_entropy = 0.0
+    conflicting_groups = 0
+    conflicting_targets = 0
+    route_value_collision_groups = 0
+    quantized_value_collision_groups = 0
+    largest_conflicting_group = 0
+    for rows in groups.values():
+        target_counts: Dict[int, int] = {}
+        route_token_signatures = set()
+        for target, route_tokens in rows:
+            target_counts[target] = target_counts.get(target, 0) + 1
+            route_token_signatures.add(route_tokens)
+        row_count = len(rows)
+        for count in target_counts.values():
+            probability = count / row_count
+            conditional_entropy -= (
+                row_count / target_count
+            ) * probability * math.log(probability)
+        if len(target_counts) <= 1:
+            continue
+        conflicting_groups += 1
+        conflicting_targets += row_count
+        largest_conflicting_group = max(
+            largest_conflicting_group,
+            row_count,
+        )
+        if len(route_token_signatures) == 1:
+            route_value_collision_groups += 1
+        else:
+            quantized_value_collision_groups += 1
+
+    return {
+        "hard_feature_conditional_entropy": conditional_entropy,
+        "hard_feature_unique_count": float(len(groups)),
+        "hard_feature_conflicting_group_count": float(
+            conflicting_groups
+        ),
+        "hard_feature_conflicting_target_count": float(
+            conflicting_targets
+        ),
+        "hard_feature_largest_conflicting_group": float(
+            largest_conflicting_group
+        ),
+        "hard_route_value_collision_group_count": float(
+            route_value_collision_groups
+        ),
+        "hard_quantized_value_collision_group_count": float(
+            quantized_value_collision_groups
+        ),
+    }
 
 
 class TinyRosaFitLM(nn.Module):
@@ -238,7 +423,7 @@ class TinyRosaFitLM(nn.Module):
         target_mask: Tensor,
     ) -> Dict[str, float]:
         _, query, key, value = self.project_symbols(tokens)
-        _, inspection = inspect_rosa_soft(
+        routed, inspection = inspect_rosa_soft(
             query,
             key,
             value,
@@ -264,6 +449,12 @@ class TinyRosaFitLM(nn.Module):
             ),
             "observed_max_suffix_length": float(
                 inspection.exact_suffix_lengths.max().item()
+            ),
+            **hard_feature_collision_stats(
+                tokens,
+                target_mask,
+                routed,
+                inspection.selected_route_indices,
             ),
         }
 
@@ -335,9 +526,10 @@ def fit(args: argparse.Namespace) -> Dict[str, object]:
         motif_max=args.motif_max,
         seed=100_000 + args.seed,
     )
-    target_mask = historical_target_mask(
+    target_mask = build_target_mask(
         tokens,
         args.max_suffix_length,
+        args.target_mode,
     )
     if not bool(target_mask.any()):
         raise ValueError(
@@ -422,12 +614,17 @@ def fit(args: argparse.Namespace) -> Dict[str, object]:
         best_accuracy = final_accuracy
         best_step = args.steps
     stats = model.route_stats(tokens, target_mask)
+    stats["fit_loss_above_hard_feature_entropy"] = max(
+        0.0,
+        final_loss - stats["hard_feature_conditional_entropy"],
+    )
     success = evaluate_success(final_loss, success_loss_threshold)
     result: Dict[str, object] = {
         "operator": args.operator,
         "device": str(device),
         "seed": args.seed,
         "dropout_seed": dropout_seed,
+        "target_mode": args.target_mode,
         "steps": args.steps,
         "tokens": tokens[0].tolist(),
         "max_suffix_length": args.max_suffix_length,
@@ -475,6 +672,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vocab-size", type=int, default=8)
     parser.add_argument("--motif-min", type=int, default=4)
     parser.add_argument("--motif-max", type=int, default=8)
+    parser.add_argument(
+        "--target-mode",
+        choices=TARGET_MODES,
+        default="any-candidate",
+        help=(
+            "any-candidate is the historical combinatorial stress mask; "
+            "strict-longest-latest keeps only targets selected by exact "
+            "token routing"
+        ),
+    )
     parser.add_argument("--heads", type=int, default=2)
     parser.add_argument("--qk-bits", type=int, default=4)
     parser.add_argument("--value-heads", type=int, default=2)

@@ -94,8 +94,8 @@ def test_raw_and_fake_packed_symbol_layout_contracts():
     assert dense[1].shape == dense[2].shape == (2, 3, 5)
     assert dense[1].stride() == dense[2].stride() == (15, 5, 1)
     assert varlen[0].shape == (10, 3, 2)
-    assert varlen[1].shape == varlen[2].shape == (10, 3)
-    assert varlen[1].stride() == varlen[2].stride() == (3, 1)
+    assert varlen[1].shape == varlen[2].shape == (3, 10)
+    assert varlen[1].stride() == varlen[2].stride() == (10, 1)
 
     fake_mode = torch._subclasses.fake_tensor.FakeTensorMode()
     with fake_mode:
@@ -205,6 +205,167 @@ def test_cuda_vjp_matches_minimal_reference(
             rtol=rtol,
             atol=atol,
         )
+
+
+@pytest.mark.parametrize("dropout_p", [0.0, 0.2])
+@pytest.mark.parametrize("value_dim", [32, 64, 128])
+def test_cuda_query_only_large_value_utility_matches_reference(
+    value_dim,
+    dropout_p,
+):
+    query = _nonzero_randn((1, 9, 2, 4), seed=18)
+    key = _nonzero_randn((1, 9, 2, 4), seed=19)
+    value = _nonzero_randn((1, 9, 1, value_dim), seed=20)
+    grad_output = _nonzero_randn(
+        (1, 9, 2, value_dim),
+        seed=21,
+    )
+    controls = {
+        "max_suffix_length": 6,
+        "scale": 1.4,
+        "dropout_p": dropout_p,
+        "mismatch_scale": 3.0,
+    }
+
+    reference_query = query.detach().clone().requires_grad_()
+    torch.cuda.manual_seed(22)
+    reference_output = rosa_soft_reference(
+        reference_query,
+        key,
+        value,
+        **controls,
+    )
+    reference_gradient = torch.autograd.grad(
+        reference_output,
+        reference_query,
+        grad_output,
+    )[0]
+
+    cuda_query = query.detach().clone().requires_grad_()
+    torch.cuda.manual_seed(22)
+    cuda_output = rosa_soft.rosa_soft(
+        cuda_query,
+        key,
+        value,
+        **controls,
+    )
+    cuda_gradient = torch.autograd.grad(
+        cuda_output,
+        cuda_query,
+        grad_output,
+    )[0]
+
+    assert torch.equal(cuda_output, reference_output)
+    torch.testing.assert_close(
+        cuda_gradient,
+        reference_gradient,
+        rtol=6e-5,
+        atol=1e-5,
+    )
+
+
+def test_cuda_dense_query_utility_cache_matches_reference():
+    seq_len = 129
+    query = _nonzero_randn((1, seq_len, 1, 8), seed=220)
+    key = _nonzero_randn((1, seq_len, 1, 8), seed=221)
+    value = _nonzero_randn((1, seq_len, 1, 64), seed=222)
+    grad_output = _nonzero_randn(
+        (1, seq_len, 1, 64),
+        seed=223,
+    )
+    controls = {
+        "max_suffix_length": 8,
+        "scale": 1.4,
+        "dropout_p": 0.0,
+        "mismatch_scale": 3.0,
+    }
+
+    reference_query = query.detach().clone().requires_grad_()
+    reference_output = rosa_soft_reference(
+        reference_query,
+        key,
+        value,
+        **controls,
+    )
+    reference_gradient = torch.autograd.grad(
+        reference_output,
+        reference_query,
+        grad_output,
+    )[0]
+
+    cuda_query = query.detach().clone().requires_grad_()
+    cuda_output = rosa_soft.rosa_soft(
+        cuda_query,
+        key,
+        value,
+        **controls,
+    )
+    cuda_gradient = torch.autograd.grad(
+        cuda_output,
+        cuda_query,
+        grad_output,
+    )[0]
+
+    assert torch.equal(cuda_output, reference_output)
+    torch.testing.assert_close(
+        cuda_gradient,
+        reference_gradient,
+        rtol=6e-5,
+        atol=1e-5,
+    )
+
+
+@pytest.mark.parametrize("dropout_p", [0.0, 0.2])
+def test_cuda_recompute_tiled_value_only_matches_reference(dropout_p):
+    seq_len = 67
+    query = _nonzero_randn((1, seq_len, 2, 8), seed=23)
+    key = _nonzero_randn((1, seq_len, 2, 8), seed=24)
+    value = _nonzero_randn((1, seq_len, 1, 64), seed=25)
+    grad_output = _nonzero_randn(
+        (1, seq_len, 2, 64),
+        seed=26,
+    )
+    controls = {
+        "max_suffix_length": 1,
+        "scale": 1.4,
+        "dropout_p": dropout_p,
+        "mismatch_scale": 3.0,
+    }
+    reference_value = value.detach().clone().requires_grad_()
+    cuda_value = value.detach().clone().requires_grad_()
+
+    torch.cuda.manual_seed(27)
+    reference_output = rosa_soft_reference(
+        query,
+        key,
+        reference_value,
+        **controls,
+    )
+    reference_gradient = torch.autograd.grad(
+        reference_output,
+        reference_value,
+        grad_output,
+    )[0]
+    torch.cuda.manual_seed(27)
+    cuda_output = rosa_soft.rosa_soft(
+        query,
+        key,
+        cuda_value,
+        **controls,
+    )
+    cuda_gradient = torch.autograd.grad(
+        cuda_output,
+        cuda_value,
+        grad_output,
+    )[0]
+
+    assert torch.equal(cuda_output, reference_output)
+    torch.testing.assert_close(
+        cuda_gradient,
+        reference_gradient,
+        rtol=6e-5,
+        atol=1e-5,
+    )
 
 
 @pytest.mark.parametrize("dropout_p", [0.1, 0.5])
@@ -394,6 +555,58 @@ def test_cuda_nonfinite_policy_matches_reference():
             reference[finite],
             rtol=2e-5,
             atol=2e-6,
+        )
+
+
+def test_cuda_factored_softsign_jacobian_matches_saturated_reference():
+    magnitudes = torch.tensor(
+        [1e-6, -1e-3, 0.2, -1.0, 10.0, -100.0, 1e4, -1e8],
+        device="cuda",
+    )
+    seq_len = magnitudes.numel()
+    query = torch.stack(
+        [magnitudes.roll(index) for index in range(seq_len)]
+    ).reshape(1, seq_len, 1, -1)
+    key = torch.stack(
+        [magnitudes.flip(0).roll(index) for index in range(seq_len)]
+    ).reshape_as(query)
+    value = torch.stack(
+        [magnitudes[:5].roll(index) for index in range(seq_len)]
+    ).reshape(1, seq_len, 1, 5)
+    grad_output = torch.stack(
+        [
+            (magnitudes[:5].abs() + 1e-4).roll(-index)
+            for index in range(seq_len)
+        ]
+    ).reshape_as(value)
+    controls = {
+        "max_suffix_length": 7,
+        "scale": 1.7,
+        "mismatch_scale": 3.0,
+    }
+
+    _, expected_gradients = _run_vjp(
+        rosa_soft_reference,
+        (query, key, value),
+        grad_output,
+        **controls,
+    )
+    _, actual_gradients = _run_vjp(
+        rosa_soft.rosa_soft,
+        (query, key, value),
+        grad_output,
+        **controls,
+    )
+
+    for observed, reference in zip(
+        actual_gradients,
+        expected_gradients,
+    ):
+        torch.testing.assert_close(
+            observed,
+            reference,
+            rtol=4e-5,
+            atol=3e-6,
         )
 
 

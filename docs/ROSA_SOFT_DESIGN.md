@@ -40,8 +40,10 @@ linear in input size, not quadratic in route count.
 The no-gradient public path calls hard forward directly and discards packed
 symbols.
 
-Packed variable-length forward uses `[N,H]` packed symbols and applies the same
-state machine independently inside every `cu_seqlens` segment.
+Packed variable-length forward stores private Q/K sign bits as head-major
+`[H,N]` tensors for coalesced route-lane reads. Public query/key/value tensors
+remain token-major, and the same state machine runs independently inside every
+`cu_seqlens` segment.
 
 ## 3. Autograd State
 
@@ -98,17 +100,65 @@ The backward kernel has two internal shared-memory plans:
 
 - `RecomputeSuffixScores` for shapes where caching is not profitable or does
   not fit;
-- `CacheSuffixScores`, which stores one row of scalar route scores when the
-  complete shared layout fits.
+- `CacheSuffixScores`, which stores one row of scalar route scores plus the
+  row query symbols and `grad_output` when the complete shared layout fits.
 
 Both plans compute the same VJP. They are not estimator modes and never alter
-candidate support. Plan choice stays private because it depends on compiled
-kernel resource use, not model semantics.
+candidate support. Dense CUDA first applies a measured work gate: recompute
+is considered at `T >= 4096`, and value-only backward also requires
+`T >= 64 W`. It then queries active blocks for the exact dtype, gradient-mask,
+cooperative mode, and complete dynamic shared layout, converts occupancy into
+total grid waves for the actual row count, and recomputes only when the launch
+needs fewer waves. Equal waves prefer cache. Plan choice stays private because
+it depends on compiled kernel resources, not model semantics. Packed varlen
+always uses the recompute base plan because segment lengths vary inside one
+launch; its bounded Q-only tail cache is a separate exact reuse layer, not a
+full-row plan.
 
 Dense K gradients use a head-major FP32 accumulation layout to coalesce
 route-lane atomics, followed by a transpose to public `[B,T,H,D]`. Packed
 variable-length K gradients remain token-major because the dense layout
-increased register pressure and regressed measured SM75 kernels.
+increased register pressure and regressed measured SM75 kernels. For long
+packed segments only, small-symbol K contributions are first aggregated in a
+block-local FP32 tile and then flushed to token-major global memory. This
+private path requires `D <= 8`, average and local segment length at least 256,
+an enabled K gradient, and a shared-memory fit; all other shapes use direct
+atomics.
+
+Several narrowly gated paths remove avoidable value-dimension serialization
+without changing route support:
+
+- Q-only backward with `Dv >= 32` caches one route utility per candidate.
+  Groups of 8 lanes cooperate at `Dv=32`; groups of 16 cooperate at larger
+  dimensions.
+- value-only backward with `Dv >= 32` caches one route tile of probabilities,
+  then flattens route and value dimensions so adjacent lanes update adjacent
+  value elements.
+- Dense and packed Q/K paths use the same cooperative utility tile for
+  sufficiently long sequences with `Dv >= 64`. Packed QK-only requires
+  `Dv >= 128`; other packed masks start at 64.
+- Packed Q-only backward with average segment length at least 256 caches the
+  most recent 1024 exact route scores. Earlier routes are still visited and
+  their scores are recomputed in the second pass.
+
+Every path is selected only when its complete shared layout fits the portable
+48 KiB limit. Small or unsupported shapes retain the generic path. These are
+execution plans, not estimator variants. The backward CTA remains a fixed 128
+threads: 64 and 256 won conflicting subsets of dense and packed masks, so a
+runtime block-size ladder was rejected.
+
+Temporary cooperative utility tiles are warp-owned: one warp produces and
+consumes 32 route slots and synchronizes before consumption and reuse. The
+full dense Q-only utility cache is produced across the block, synchronized
+before cross-warp reads, and never reuses a route slot. Representative dense
+full-cache, packed Q-only, and packed QKV paths pass both CUDA racecheck and
+synccheck.
+
+The row kernel accumulates raw FP32 Q/K/value symbol adjoints. A single
+finalize kernel then applies each input's softsign Jacobian once; for dense K
+it also transposes the head-major accumulator into public layout. This removes
+repeated Jacobian loads from the route/suffix hot loops without changing the
+surrogate.
 
 All score, normalizer, and gradient accumulation arithmetic is FP32. Public
 gradients are cast back to the input dtype in Python. `dropout_p=0` consumes no
@@ -197,6 +247,14 @@ Kernel work may be reduced by:
 It may not be reduced by omitting valid routes. Any new cache must account for
 bytes, occupancy, registers, spills, and the shapes where it is selected.
 
+The current row kernel assigns one lane to one route candidate. Its suffix
+loop has a static bound and does not branch on mismatch content. Assigning a
+whole warp to one candidate therefore loses route parallelism and is not a
+valid optimization by itself. Warp prefix scans become relevant only after a
+complete diagonal-recurrence redesign; that research result and its staging
+constraints are recorded in
+[KERNEL_OPTIMIZATION.md](research/KERNEL_OPTIMIZATION.md).
+
 ## 11. Required Validation
 
 A semantic or kernel change must pass:
@@ -210,5 +268,9 @@ A semantic or kernel change must pass:
 - full-graph `torch.compile` with the `aot_eager` backend, autocast,
   GradScaler, and RNG-preserving checkpoint integration;
 - exhaustive small-problem hard-bit-flip alignment;
-- multi-seed fitting and route-discovery probes;
+- multi-seed fitting, trained-checkpoint alignment, and route-discovery
+  probes;
+- contextual reset-RNN recall with identical post-reset residuals,
+  complementary targets, and zero-route/current-value/residual-only
+  ablations;
 - latency, memory, registers, and spill reporting on the target GPU.

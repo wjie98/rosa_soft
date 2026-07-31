@@ -1,4 +1,4 @@
-"""Paired fitting comparison for four hard-forward RosaSoft VJPs.
+"""Paired fitting comparison for hard-forward RosaSoft VJPs.
 
 This is a research benchmark, not a production API. Every estimator returns
 the same exact hard ROSA value. They differ only in the custom backward:
@@ -6,7 +6,8 @@ the same exact hard ROSA value. They differ only in the custom backward:
 1. deterministic raw Hamming surrogate;
 2. independently perturbed mismatch scores;
 3. exact single-bit hard counterfactuals;
-4. production deterministic surrogate with post-softmax attention dropout.
+4. production deterministic surrogate with post-softmax attention dropout;
+5. research-only long-suffix residual dropout.
 
 Model/data seeds and stochastic-estimator seeds can be crossed independently.
 """
@@ -46,6 +47,7 @@ from rosa_soft.soft_reference import (
     _hard_sign,
     _hard_sign_with_softsign_vjp,
     _masked_route_scores,
+    _pairwise_soft_match_gates,
     _reference_compute_dtype,
     _route_probabilities,
     _suffix_prefix_product_scores,
@@ -60,6 +62,7 @@ ESTIMATOR_NAMES = (
     "mismatch_random",
     "bitflip",
     "attention_dropout",
+    "suffix_dropout",
 )
 _MISMATCH_RANDOM_MODE = 1
 
@@ -305,6 +308,259 @@ def make_attention_dropout_estimator(
     return estimator
 
 
+def _stratified_row_weights(
+    batch: int,
+    heads: int,
+    seq_len: int,
+    dropout_p: float,
+    row_uniforms: Tensor,
+    dtype: torch.dtype,
+) -> Tensor:
+    """Select one query row per stratum and return unbiased row weights."""
+
+    if (
+        not math.isfinite(dropout_p)
+        or not 0.0 <= dropout_p <= 1.0 - 2.0**-24
+    ):
+        raise ValueError(
+            "suffix dropout must be finite and in [0, 1 - 2^-24]"
+        )
+    if float(dropout_p) == 0.0:
+        return torch.ones(
+            batch,
+            heads,
+            seq_len,
+            device=row_uniforms.device,
+            dtype=dtype,
+        )
+
+    keep_probability = 1.0 - float(dropout_p)
+    sample_count = max(1, min(seq_len, round(keep_probability * seq_len)))
+    stratum_index = torch.arange(
+        sample_count,
+        device=row_uniforms.device,
+        dtype=torch.int64,
+    )
+    starts = torch.div(
+        stratum_index * seq_len,
+        sample_count,
+        rounding_mode="floor",
+    )
+    ends = torch.div(
+        (stratum_index + 1) * seq_len,
+        sample_count,
+        rounding_mode="floor",
+    )
+    widths = ends - starts
+    offsets = torch.floor(
+        row_uniforms[..., :sample_count]
+        * widths.to(row_uniforms.dtype)
+    ).to(torch.int64)
+    selected_rows = starts + offsets
+    weights = torch.zeros(
+        batch,
+        heads,
+        seq_len,
+        device=row_uniforms.device,
+        dtype=dtype,
+    )
+    return weights.scatter(
+        dim=-1,
+        index=selected_rows,
+        src=widths.to(dtype).view(1, 1, -1).expand(
+            batch,
+            heads,
+            -1,
+        ),
+    )
+
+
+class _HardForwardSuffixDropout(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        row_uniforms: Tensor,
+        max_suffix_length: int,
+        scale: float,
+        dropout_p: float,
+        mismatch_scale: float,
+    ) -> Tensor:
+        compute_dtype = _reference_compute_dtype(query.dtype)
+        hard_output, _, _, _ = _hard_route_forward(
+            query.to(compute_dtype),
+            key.to(compute_dtype),
+            value.to(compute_dtype),
+            int(max_suffix_length),
+        )
+        ctx.max_suffix_length = int(max_suffix_length)
+        ctx.scale = float(scale)
+        ctx.dropout_p = float(dropout_p)
+        ctx.mismatch_scale = float(mismatch_scale)
+        ctx.save_for_backward(query, key, value, row_uniforms)
+        return hard_output.to(query.dtype)
+
+    @staticmethod
+    @once_differentiable
+    def backward(ctx, grad_output: Tensor):
+        query, key, value, row_uniforms = ctx.saved_tensors
+        needs = ctx.needs_input_grad[:3]
+        with torch.enable_grad():
+            leaves = tuple(
+                tensor.detach().requires_grad_(need)
+                for tensor, need in zip((query, key, value), needs)
+            )
+            query_leaf, key_leaf, value_leaf = leaves
+            compute_dtype = _reference_compute_dtype(query.dtype)
+            query_work = query_leaf.to(compute_dtype)
+            key_work = key_leaf.to(compute_dtype)
+            value_work = value_leaf.to(compute_dtype)
+            causal_route_mask = _causal_route_mask(
+                query.size(1),
+                query.device,
+            )
+            local_match_gates = _pairwise_soft_match_gates(
+                query_work,
+                key_work,
+                causal_route_mask,
+                ctx.mismatch_scale,
+            )
+            full_suffix_scores = _suffix_prefix_product_scores(
+                local_match_gates,
+                ctx.max_suffix_length,
+            )
+            full_probabilities = _route_probabilities(
+                _masked_route_scores(
+                    full_suffix_scores,
+                    causal_route_mask,
+                ),
+                causal_route_mask,
+                ctx.scale,
+            )
+            full_carrier = _build_vjp_carrier(
+                value_work,
+                full_probabilities,
+                query.size(2),
+            )
+            row_weights = _stratified_row_weights(
+                query.size(0),
+                query.size(2),
+                query.size(1),
+                ctx.dropout_p,
+                row_uniforms,
+                compute_dtype,
+            ).permute(0, 2, 1).unsqueeze(-1)
+            local_probabilities = _route_probabilities(
+                _masked_route_scores(
+                    local_match_gates,
+                    causal_route_mask,
+                ),
+                causal_route_mask,
+                ctx.scale,
+            )
+            local_carrier = _build_vjp_carrier(
+                value_work,
+                local_probabilities,
+                query.size(2),
+            )
+            carrier = (
+                local_carrier
+                + row_weights * (full_carrier - local_carrier)
+            )
+
+            carrier = carrier.to(query.dtype)
+            required_indices = [
+                index for index, need in enumerate(needs) if need
+            ]
+            required_grads = torch.autograd.grad(
+                carrier,
+                tuple(leaves[index] for index in required_indices),
+                grad_output,
+                create_graph=False,
+            )
+            gradients = [None, None, None]
+            for index, gradient in zip(
+                required_indices,
+                required_grads,
+            ):
+                gradients[index] = gradient
+
+        return (
+            gradients[0],
+            gradients[1],
+            gradients[2],
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+
+
+def make_suffix_dropout_estimator(dropout_p: float) -> Estimator:
+    if (
+        not math.isfinite(dropout_p)
+        or not 0.0 <= dropout_p <= 1.0 - 2.0**-24
+    ):
+        raise ValueError(
+            "suffix dropout must be finite and in [0, 1 - 2^-24]"
+        )
+
+    def estimator(
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        *,
+        max_suffix_length: int = 32,
+        scale: float = ROSA_SOFT_DEFAULT_SCALE,
+        mismatch_scale: float = ROSA_SOFT_DEFAULT_MISMATCH_SCALE,
+    ) -> Tensor:
+        max_suffix_length = _validate_reference_call(
+            query,
+            key,
+            value,
+            max_suffix_length,
+            scale,
+            0.0,
+            mismatch_scale,
+        )
+        if float(dropout_p) == 0.0 or not _needs_backward(
+            query,
+            key,
+            value,
+        ):
+            return rosa_soft_reference(
+                query,
+                key,
+                value,
+                max_suffix_length=max_suffix_length,
+                scale=scale,
+                mismatch_scale=mismatch_scale,
+            )
+        batch, seq_len, heads, _ = query.shape
+        row_uniforms = torch.rand(
+            batch,
+            heads,
+            seq_len,
+            device=query.device,
+            dtype=_reference_compute_dtype(query.dtype),
+        )
+        return _HardForwardSuffixDropout.apply(
+            query,
+            key,
+            value,
+            row_uniforms,
+            max_suffix_length,
+            float(scale),
+            float(dropout_p),
+            float(mismatch_scale),
+        )
+
+    return estimator
+
+
 def _bitflip_vjp_for_input(
     role: int,
     query: Tensor,
@@ -478,6 +734,8 @@ def _make_estimator(
         return rosa_soft_exact_bitflip
     if name == "attention_dropout":
         return make_attention_dropout_estimator(dropout_p)
+    if name == "suffix_dropout":
+        return make_suffix_dropout_estimator(dropout_p)
     raise ValueError(f"unknown estimator: {name}")
 
 
@@ -665,7 +923,10 @@ def run_matrix(args: argparse.Namespace) -> Dict[str, object]:
         "steps": args.steps,
         "success_threshold": args.success_threshold,
         "dropout_p": args.dropout_p,
-        "dropout_location": "post_softmax_attention_weights",
+        "attention_dropout_location": "post_softmax_attention_weights",
+        "suffix_dropout_sample_unit": "query_row",
+        "suffix_dropout_base_length": 1,
+        "suffix_dropout_sampling": "fixed_count_stratified",
         "sequence_length": args.sequence_length,
         "vocab_size": args.vocab_size,
         "motif_length_range": [args.motif_min, args.motif_max],

@@ -365,10 +365,10 @@ void check_varlen_packed_symbols(
   TORCH_CHECK(
       packed_symbols.dim() == 2,
       name,
-      " must have shape (N, H)");
+      " must have shape (H, N)");
   TORCH_CHECK(
-      packed_symbols.size(0) == query.size(0) &&
-          packed_symbols.size(1) == query.size(1),
+      packed_symbols.size(0) == query.size(1) &&
+          packed_symbols.size(1) == query.size(0),
       name,
       " shape mismatch");
 }

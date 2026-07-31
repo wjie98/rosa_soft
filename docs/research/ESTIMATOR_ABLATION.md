@@ -698,7 +698,178 @@ counter-based RNG, but dropout needs one draw per route rather than one per
 route-bit. No production-kernel decision should use these PyTorch timings as
 its final cost estimate.
 
-### 8.5 Estimator-Shape Decision
+### 8.5 Softmax-Proportional High-Dropout Probe
+
+A 2026-07-30 follow-up tested whether choosing retained routes from the
+current softmax distribution makes `dropout_p=0.9` usable. This is a research
+estimator only; production attention-dropout semantics were not changed.
+
+Two detached sampling laws were tested. For non-null conditional probability
+`r_i` and target keep count `K=(1-dropout_p)N`:
+
+1. PPS-Bernoulli uses `pi_i=min(1,c*r_i)`, with `c` chosen so
+   `sum_i pi_i=K`, then weights a retained route by `1/pi_i`.
+2. Categorical sampling draws `max(1,floor(K))` routes with replacement from
+   `r_i`, then weights route counts by `1/(sample_count*r_i)`.
+
+The sampling distribution, inclusion probabilities, and sampled decisions
+are all stop-gradient. Each law was crossed with:
+
+- dense VJP, which retains the complete softmax score Jacobian;
+- selected VJP, which stops score gradients for routes not selected.
+
+Both return the exact hard ROSA forward. Dense variants preserve the
+deterministic soft-carrier VJP in expectation. Selected variants deliberately
+omit unselected score derivatives and are biased.
+
+The first matrix used the same RTX 2080 Ti fitting geometry as Section 8.4,
+with two stochastic streams for each of eight model/data seeds. Results are
+aggregated over 16 trajectories:
+
+| Estimator | Ever `<1e-3` | Final `<1e-3` | Median success step | Median final CE |
+| --- | ---: | ---: | ---: | ---: |
+| Standard dropout, `p=0.1` | `12/16` | `12/16` | `412.5` | `3.44e-4` |
+| Standard dropout, `p=0.9` | `10/16` | `10/16` | `416.0` | `5.08e-4` |
+| PPS, `p=0.9`, dense VJP | `11/16` | `10/16` | `442.0` | `3.87e-4` |
+| PPS, `p=0.9`, selected VJP | `10/16` | `9/16` | `460.0` | `3.89e-4` |
+| Categorical, `p=0.9`, dense VJP | `8/16` | `8/16` | `420.5` | `3.32e-3` |
+| Categorical, `p=0.9`, selected VJP | `10/16` | `10/16` | `414.5` | `4.61e-4` |
+
+PPS looked competitive in the first `6/8` run but fell to `4/8` final
+successes under the second random stream. One dense PPS trajectory and one
+selected PPS trajectory crossed the threshold and later returned to CE near
+`0.19`. Categorical selected VJP similarly changed from `6/8` to `4/8`.
+The aggregate result does not support a reliable improvement over standard
+`p=0.9`, and all `p=0.9` variants remained below the `p=0.1` baseline.
+
+Short rows matter in this matrix. At `T=16`, standard or PPS `p=0.9` retains
+at least one non-null route in only about `54%` of nonempty rows. Initial
+softmax-proportional allocation raised that average to only about `55%`;
+initial scores were usually too flat for probability weighting to help.
+Categorical sampling guarantees one route but consequently retains
+`16/136=11.8%` of all non-null row-route pairs, an effective dropout rate of
+about `0.882`.
+
+A four-seed `T=64` control reduced that boundary effect. Categorical retained
+`189/2080=9.09%`, an effective dropout rate of about `0.909`. No estimator
+reached CE `<1e-3` in 1000 steps, so final loss was compared:
+
+| Estimator | Median final CE |
+| --- | ---: |
+| Standard dropout, `p=0.1` | `0.324` |
+| Standard dropout, `p=0.9` | `0.365` |
+| PPS, `p=0.9`, dense VJP | `0.365` |
+| Categorical, `p=0.9`, selected VJP | `0.365` |
+
+These prototypes still compute the complete dense route distribution before
+sampling, so their measured latency is not evidence of kernel speedup.
+Computational savings would additionally require a cheap detached proposal
+or sampled partition estimate. The training result does not justify that
+kernel work yet: selecting from the current softmax protects current winners
+but weakens the broad exploration that made uniform attention dropout useful.
+
+The executable PPS and categorical branches were removed after this negative
+gate. This section retains the experiment and result; it does not describe
+currently selectable benchmark estimators.
+
+### 8.6 High-Dropout Stabilization
+
+A second 2026-07-30 probe tested five ways to make a nominal
+`dropout_p=0.9` useful without changing the exact hard forward:
+
+1. fixed-count, stratified query-row sampling of the complete soft VJP;
+2. the same row sampling applied only to the residual above a dense
+   suffix-length-one carrier;
+3. fixed-count systematic route sampling with Horvitz-Thompson weights;
+4. the same route sampling with per-row self-normalized weights;
+5. estimator 1 with an exact dense VJP every eighth training call.
+
+For estimator 2, let `C_W` be the complete soft carrier, let `C_1` use only
+the local length-one match score, and let `m_q` be a detached stratified row
+weight. One row is sampled uniformly from each contiguous stratum and is
+weighted by that stratum's width, so `E[m_q]=1`. The estimator is:
+
+```text
+C_hat(q) = C_1(q) + m_q * (C_W(q) - C_1(q))
+```
+
+This is an exact control variate for the deterministic soft VJP:
+`E[C_hat]=C_W`. It is not an extra training objective and introduces no soft
+value into forward. `dropout_p` has PyTorch's drop-probability meaning; the
+number of sampled rows per `(batch, head)` is
+`max(1, round((1-dropout_p)*T))`.
+
+The first screen used `T=16`, `W=8`, two heads, `mismatch_scale=9`, 1000
+steps, eight model/data seeds, and matched stochastic seeds. Only candidates
+with independent value were advanced to a second stochastic stream:
+
+| Candidate, all at `p=0.9` | Matched final | Noise 17 final | Combined final |
+| --- | ---: | ---: | ---: |
+| 1. Stratified row VJP | `5/8` | `5/8` | `10/16` |
+| 2. Length-one control variate | `6/8` | `7/8` | `13/16` |
+| 3. Fixed-count route HT | `7/8` | `4/8` | `11/16` |
+| 4. Self-normalized route weights | `2/8` | not run | rejected |
+| 5. Dense every eighth call | `5/8` | not run | rejected |
+| Standard attention dropout, `p=0.1` | `6/8` | `6/8` | `12/16` |
+| Standard attention dropout, `p=0.9` | `5/8` | `5/8` | `10/16` |
+
+Estimator 2 reached the threshold at least once in `14/16` runs and ended
+below it in `13/16`. Its median final CE was `3.74e-4` and median first
+success step was `428.5`. Candidate 1 did no better than ordinary
+high-rate dropout. Candidate 3 was sensitive to the random stream. Candidate
+4 changed the gradient scale and null competition. Candidate 5 added dense
+work without improving its underlying row estimator.
+
+A fixed-input, fixed-upstream-gradient Monte Carlo check separated estimator
+variance from fitting luck. It used 512 samples at `T=8`, `W=6`, and
+`p=0.9`; normalized variance is
+`E[||g-Eg||^2] / ||g_dense||^2`:
+
+| Estimator | Normalized variance | Median sample cosine | Negative cosine |
+| --- | ---: | ---: | ---: |
+| Standard attention dropout | `11.83` | `0.110` | `28.9%` |
+| Stratified row VJP | `7.50` | `0.179` | `7.6%` |
+| Length-one control variate | `0.90` | `0.943` | `0/512` |
+| Fixed-count route HT selected VJP | `1.73` | `0.657` | `0.2%` |
+
+The selected-route HT mean remained `22.8%` from the dense gradient after
+512 samples. Sampling attention values with HT weights is not sufficient to
+recover the complete softmax score Jacobian after unselected score paths are
+detached. By contrast, the retained control variate is also covered by an
+exhaustive test over all stratified row selections; its mean VJP matches the
+dense reference to float64 tolerance.
+
+The `T=64` check did not converge to CE `<1e-3` for any method in 1000 steps.
+Across matched and noise-17 streams, median final CE was `0.36466` for the
+control variate, `0.36462` for standard `p=0.1`, and `0.36456` for standard
+`p=0.9`. This length is therefore an inconclusive quality gate, not evidence
+of a long-context improvement.
+
+The PyTorch prototype still builds `C_W` for every row and is intentionally
+not faster. A fused backward can sample rows before the suffix recurrence,
+compute `W=1` for all rows, and compute lengths `2..W` only for selected
+rows. Under a uniform per-length cost approximation, its suffix-depth work
+fraction is:
+
+```text
+1/W + keep_fraction * (W - 1)/W
+```
+
+That fraction is `23.4%` for the tested `T=16,W=8`, `20.7%` for
+`T=64,W=8`, and about `12.8%` for large `T,W=32,p=0.9`. These are bounds for
+the soft suffix recurrence only; local pairwise gates, the length-one
+carrier, softmax/value work, and the exact hard forward remain.
+The prototype stores `O(BHT)` row uniforms for simple autograd replay. A CUDA
+kernel should instead reconstruct each selected-row draw from a counter keyed
+by dropout seed, logical batch index, head, and stratum.
+
+Decision: retain only estimator 2 as the research-only `suffix_dropout`
+benchmark option. Delete candidates 1, 3, 4, and 5, along with the earlier
+PPS/categorical implementations. Do not add it to the production API or CUDA
+kernel until a larger fitting task demonstrates a quality/compute tradeoff
+and a row-selective kernel realizes actual savings.
+
+### 8.7 Estimator-Shape Decision
 
 This reduction kept only:
 
@@ -733,8 +904,8 @@ mismatch perturbations were removed. The deterministic-minimal reduction
 retained `9` without a matched `3` versus `9` default comparison, so that
 inheritance was reopened after `dropout_p` entered the CUDA operator.
 
-A matched RTX 2080 Ti rerun used the current production CUDA operator, model
-and data seeds `0..7`, 1000 AdamW steps, `D=4`, `T=16`, `W=8`, `scale=1`,
+An earlier matched RTX 2080 Ti rerun used one production CUDA trajectory per
+model/data seed `0..7`, 1000 AdamW steps, `D=4`, `T=16`, `W=8`, `scale=1`,
 and success threshold CE `<=1e-3`:
 
 | `mismatch_scale` | `dropout_p` | Ever successful | Final successful |
@@ -749,6 +920,266 @@ to `dropout_p=0`, the public default is restored to `mismatch_scale=3`.
 `9` remains a valid explicit experiment value, especially for the tested
 `dropout_p=0.1` recipe, but it is not a universal default and must not be
 selected implicitly.
+
+### 9.1 Production Recheck and Atomic Variability
+
+A 2026-07-31 recheck used the current production CUDA operator on an RTX
+2080 Ti. The fitting geometry remained `D=4`, `T=16`, `W=8`, two heads,
+1000 AdamW steps, and CE `<=1e-3`. Each of eight model/data seeds was run
+four times. Nonzero-dropout runs used dropout seeds `0,17,29,43`;
+`dropout_p=0` repeated the same nominally RNG-free launch.
+
+| Configuration | Ever successful | Final successful | Any success by model seed | Majority success by model seed | Median final CE | Median success step |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `mismatch_scale=3, dropout_p=0` | `27/32` | `26/32` | `7/8` | `7/8` | `2.95e-4` | `412` |
+| `mismatch_scale=3, dropout_p=0.1` | `26/32` | `26/32` | `8/8` | `6/8` | `3.17e-4` | `406` |
+| `mismatch_scale=3, dropout_p=0.9` | `26/32` | `25/32` | `8/8` | `6/8` | `3.61e-4` | `416.5` |
+| `mismatch_scale=9, dropout_p=0.1` | `25/32` | `25/32` | `7/8` | `6/8` | `3.83e-4` | `426` |
+
+`Any success` asks whether at least one of four launches solved a model seed.
+`Majority success` requires at least three. Dropout widened the set of
+reachable basins: at `mismatch_scale=3`, seeds 1 and 7 each succeeded under
+some dropout streams. It did not improve per-run success. The default and
+`dropout_p=0.1` both ended at `26/32`; `dropout_p=0.9` ended at `25/32` and
+had one trajectory cross the threshold before rebounding to CE `0.012`.
+The prior `mismatch_scale=9, dropout_p=0.1` recipe also fell to `25/32`.
+
+The repeated `dropout_p=0` result exposed an important CUDA distinction.
+The path consumes no RNG, but global FP32 atomic accumulation is not bitwise
+deterministic. A dedicated repeat of model seed 7 succeeded in `5/8` launches,
+with final CE split between roughly `2.4e-4` and `0.139`. The dense reference
+solved the same seed. At initialization, CUDA/reference query and key
+parameter gradients had relative L2 errors of only `2.47e-7` and `2.07e-7`,
+respectively, with cosine `1.0`; Q/K hard signs remained identical through
+200 lockstep steps. The small accumulation difference was later amplified by
+hard sign crossings. The CUDA correctness suite still passed `84` tests with
+one hardware skip, including the deterministic-algorithm guard. This is
+optimization-path sensitivity within the documented VJP tolerance, not a
+hard-forward mismatch, but single-run fitting counts are not stable enough to
+select defaults.
+
+The shortcut-free associative-recall gate used eight seeds, four
+associations, `D=8`, `W=1`, and at most 250 steps:
+
+| `dropout_p` at `mismatch_scale=3` | Passed | Median success step | Slowest |
+| ---: | ---: | ---: | ---: |
+| `0` | `8/8` | `31.5` | `37` |
+| `0.1` | `8/8` | `30.5` | `40` |
+| `0.9` | `8/8` | `39.0` | `88` |
+
+High dropout preserved direct historical route discovery, but increased the
+tail of training time.
+
+A four-model-seed `T=64,W=8` fit did not reach CE `1e-3` under any
+configuration in 1000 steps:
+
+| `dropout_p` at `mismatch_scale=3` | Matched median final CE | Noise-17 median final CE |
+| ---: | ---: | ---: |
+| `0` | `0.272` | not applicable |
+| `0.1` | `0.321` | `0.352` |
+| `0.9` | `0.320` | `0.343` |
+
+This small longer-sequence check favors the default but remains
+under-converged and seed-sensitive.
+
+Finally, an interleaved, warmed production microbenchmark used dense QKV
+backward, `B=1`, four heads, `D=8`, `D_v=8`, and `W=32`. Each cell is the
+median of three 50-iteration measurements:
+
+| `T` | `dropout_p=0` | `dropout_p=0.1` | `dropout_p=0.9` |
+| ---: | ---: | ---: | ---: |
+| `64` | `0.410 ms` | `0.402 ms` | `0.463 ms` |
+| `128` | `0.440 ms` | `0.449 ms` | `0.461 ms` |
+| `256` | `0.733 ms` | `0.756 ms` | `0.758 ms` |
+
+At `T=256`, nonzero dropout added about 3% and increased measured operator
+allocation from `0.14844 MiB` to `0.14893 MiB`. The production implementation
+computes every suffix and route before applying dropout, so `dropout_p=0.9`
+costs essentially the same as `0.1`; it is not a compute-sparsity mechanism.
+
+Decision: keep `dropout_p=0, mismatch_scale=3` as the conservative production
+default. `dropout_p=0.1` remains a valid explicit exploration control because
+it expanded any-run model-seed coverage, but it did not improve aggregate
+success. `dropout_p=0.9` is trainable on the tiny tasks and passed recall, but
+its higher variance, slower tail, lack of speedup, and weaker `T=64` result do
+not justify a recommended production recipe. Future fitting comparisons must
+repeat `dropout_p=0` launches as well as dropout seeds.
+
+### 9.2 Failure Anatomy and Benchmark Correction
+
+A follow-up analyzed the failed trajectories at individual target positions
+instead of treating final CE as an opaque success count. For this tiny model,
+the downstream network receives:
+
+```text
+embedding(current_token) + output(flatten(hard_routed_values))
+```
+
+The embedding has no positional or contextual input. Therefore rows with the
+same current token and the same hard routed value bits are exactly
+indistinguishable to every downstream parameter. Grouping supervised rows by
+that hard feature and computing empirical `H(target | hard_feature)` gives a
+model-independent lower bound on CE for the current discrete state.
+
+Representative production CUDA runs were:
+
+| Run | Final CE | Hard-feature entropy | Excess CE | Conflict |
+| --- | ---: | ---: | ---: | --- |
+| `T=16`, seed 1, `dropout_p=0` | `0.154814` | `0.154033` | `0.000781` | 1 group, 2 rows |
+| `T=16`, seed 1, `dropout_p=0.1`, noise 29 | `0.616434` | `0.616131` | `0.000303` | 2 groups, 6 rows |
+| `T=16`, seed 1, `dropout_p=0.1`, noise 43 | `0.000236` | `0` | `0.000236` | none |
+| `T=64`, seed 0, `dropout_p=0` | `0.517467` | `0.517117` | `0.000350` | 3 groups, 48/60 rows |
+| `T=64`, seed 2, `dropout_p=0` | `0.107924` | `0.107169` | `0.000755` | 1 group, 10/57 rows |
+
+The seed-1 plateau has a particularly direct explanation. Query positions 9
+and 10 both have current token 7 and end with the same two-head routed value,
+but their targets are 7 and 4. Their best possible contribution to the
+9-target mean loss is:
+
+```text
+2 * log(2) / 9 = 0.154033
+```
+
+The measured CE converges to that value. Across the inspected failures, the
+conflicts came from routing to the same raw value-token signature, not from
+different value tokens quantizing to the same value bits. The fitting script
+now reports both collision classes explicitly.
+
+The cancellation is visible before the optimizer. At the failed seed-1
+checkpoint, the two conflicting rows had:
+
+| Parameter path | Per-row gradient cosine | Residual norm after summing |
+| --- | ---: | ---: |
+| Q/K | `-0.952` | `18.2%` of the sum of norms |
+| value | `-0.963` | `14.2%` |
+| output/readout | approximately `-1.000` | `0.038%` |
+
+The remaining Q/K signal is then divided across all nine targets, diffuse
+soft routes, and the softsign VJP. This explains why a discrete collision can
+remain stable even though the soft carrier differs between the two rows.
+
+An exhaustive check at a failed checkpoint found 18 individually useful
+Q/K bit flips. The production tensor-level direction had cosine `0.160` with
+their hard linearized loss deltas; the parameter-level cosine was `0.375`.
+The production Q/K parameter-gradient norm was `0.00399`, versus `0.0524`
+for exact bitflip. This is a real proxy weakness, but exact bitflip did not
+solve the optimization problem: four nominal repeats for each of seeds 1 and
+7 all failed, ending near `0.15448` and `0.13933`. Its mean step time was
+about `12.3 ms`, compared with roughly `3.4 ms` for the production CUDA
+operator. A one-bit output counterfactual is not a realizable independent
+parameter update after shared projections aggregate positions.
+
+Several targeted interventions were rejected:
+
+- per-head QK RMS normalization kept softsign derivatives active but did not
+  improve the hard seeds;
+- copied or fully shared Q/K projections moved failures between seeds and
+  remained `0/4` at `T=64`;
+- changing the sign-VJP tail from `(1+|x|)^-2` to `(1+|x|)^-1` rescued seed 1
+  but regressed other trajectories, ending `6/8`; exponent `1.5` ended `5/8`;
+- exact bitflip failed both selected hard seeds despite its better local
+  direction;
+- sampling half the supervised token rows demonstrated basin escape, but its
+  matched eight-seed result was only `5/8`; sampling one row was too noisy.
+
+These negatives do not support another production mechanism or parameter.
+They do show that stochastic asymmetry can break a cancellation, which is
+consistent with attention dropout expanding any-run seed coverage without
+improving aggregate per-run success.
+
+The target-mask definition was also found to confound the old long-sequence
+result. `historical_target_mask` asks whether any correct historical suffix
+candidate exists. It does not ask whether exact token-equality ROSA's
+longest/latest rule selects that candidate. The raw token automaton's route
+accuracy was:
+
+| Length | Seeds | Raw longest/latest route accuracy |
+| --- | --- | --- |
+| `T=16` | `0,2,5,6` | `0.917, 0.900, 0.900, 0.889` |
+| `T=64` | `0,1,2,3` | `0.667, 0.717, 0.842, 0.839` |
+
+Thus, part of the old fitting task rewards Q/K recodings that intentionally
+depart from token equality. A strict mask that retains only targets selected
+by raw longest/latest routing improved `T=16` to `7/8`, and produced one
+success out of four at `T=64`; the latter remained an optimization challenge,
+with median CE about `0.193`. The original mask remains useful as a hard
+combinatorial fitting stress test, but it must not be described as a pure
+semantic-recall gate.
+
+Decision:
+
+1. keep the production VJP and static defaults unchanged;
+2. require hard-feature entropy, excess CE, and collision class in future
+   repeated-motif reports;
+3. keep the existing any-candidate stress task separate from a strict
+   longest/latest task;
+4. include trained-failure checkpoints in gradient-alignment studies instead
+   of relying only on random tensors;
+5. require realistic contextual-residual pretraining tests in addition to the
+   token-only fitting task.
+
+### 9.3 Trained Checkpoints and Contextual Recall
+
+The five follow-up actions above were implemented and run on 2026-07-31 on an
+RTX 2080 Ti. Production defaults remained `dropout_p=0` and
+`mismatch_scale=3`; nonzero dropout was passed explicitly.
+
+At trained repeated-motif checkpoints, the hard-feature entropy floor still
+separated representational collisions from optimizer failure:
+
+| Seed | Final CE | Entropy floor | Excess CE | Tensor QK cosine | Shared-parameter cosine |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | `0.154476` | `0.154033` | `0.000444` | `0.5198` | `-0.0322` |
+| 7 | `0.000226` | `0` | `0.000226` | `0.4443` | `0.3585` |
+
+The first row is already at the best loss permitted by its hard features.
+Its positive tensor-space alignment does not survive aggregation through the
+shared Q/K projections. This confirms both conclusions: the observed plateau
+is primarily a discrete feature collision, and the production estimator still
+has a parameter-space bias worth measuring. Exact bit flips are a diagnostic
+oracle here, not a drop-in optimizer.
+
+Target modes were then paired on seeds `0,2,10,27,29`, chosen because their
+masks actually differ:
+
+| Target mode | Collision-free runs | Mean final CE | Mean tensor cosine | Mean parameter cosine |
+| --- | ---: | ---: | ---: | ---: |
+| `any-candidate` | `2/5` | `0.337655` | `0.2760` | `0.1154` |
+| `strict-longest-latest` | `4/5` | `0.135956` | `0.3130` | `0.1308` |
+
+Strict targets remove rows whose desired continuation conflicts with the raw
+longest/latest automaton and materially reduce ambiguity. They do not make
+the learned hard state collision-free by construction: strict seed 27 ended
+at CE `0.678826` with an entropy floor of `0.678765`.
+
+A second gate trains an embedding plus resettable GRU residual, Q/K/value
+projections, RosaSoft, and a readout from scratch. Each episode stores four
+cue/payload pairs, clears the recurrent state, then issues four queries.
+Paired episodes have complementary payloads but exactly identical post-reset
+tokens and residuals. Consequently a residual-only predictor has bit loss
+`log(2)` and exact accuracy at most `0.5`; in practice all three no-recall
+ablations were near random.
+
+One paired four-seed run produced:
+
+| Recipe | Passed runs | Mean validation exact | Minimum exact | Mean step |
+| --- | ---: | ---: | ---: | ---: |
+| `dropout_p=0` | `2/4` | `0.993164` | `0.988281` | `12.408 ms` |
+| `dropout_p=0.1` | `4/4` | `1.000000` | `1.000000` | `12.435 ms` |
+
+For both recipes, every query used an earlier hard route and every
+complementary pair produced a different hard routed value. Mean exact
+accuracy was only `0.0527/0.0771` with the hard route zeroed,
+`0.0693/0.0625` with the current value substituted, and `0.0596` for the
+trained residual-only model. Thus the successful output cannot come from a
+soft forward leak, a post-reset residual shortcut, or a current-token code.
+
+The CUDA VJP uses global atomics, so repeated launches can enter different
+hard-symbol basins even at `dropout_p=0`; another launch reached `4/4`.
+Therefore this small matrix supports `dropout_p=0.1` as an explicit
+exploration control, but not a default change. The production default remains
+zero until larger models, more launch replicates, and longer contextual
+sequences show a stable held-out advantage.
 
 ## 10. Remaining Research Gates
 
@@ -783,10 +1214,14 @@ tests/test_soft_cuda.py
 tests/test_soft_varlen.py
 tests/test_discrete_gradient_alignment.py
 tests/test_estimator_fit_ablation.py
+tests/test_trained_fit_alignment.py
+tests/test_validation_cli.py
 examples/fit_soft_reference.py
 examples/associative_recall_gate.py
+examples/contextual_rnn_recall_gate.py
 benchmarks/discrete_gradient_alignment.py
 benchmarks/estimator_fit_ablation.py
+benchmarks/trained_fit_alignment.py
 ```
 
 Any future estimator experiment must be a separately named research path and

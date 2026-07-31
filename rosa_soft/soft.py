@@ -163,13 +163,17 @@ def _fake_hard_forward_varlen(
     max_suffix_length: int,
 ):
     del key, cu_seqlens, max_suffix_length
-    symbol_shape = query.shape[:2]
+    token_head_shape = query.shape[:2]
+    packed_symbol_shape = (
+        query.shape[1],
+        query.shape[0],
+    )
     return (
         query.new_empty(
-            (*symbol_shape, value.shape[2])
+            (*token_head_shape, value.shape[2])
         ),
-        query.new_empty(symbol_shape, dtype=torch.int32),
-        query.new_empty(symbol_shape, dtype=torch.int32),
+        query.new_empty(packed_symbol_shape, dtype=torch.int32),
+        query.new_empty(packed_symbol_shape, dtype=torch.int32),
     )
 
 

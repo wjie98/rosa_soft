@@ -338,6 +338,14 @@ python examples/fit_soft_reference.py \
   --operator cuda --device cuda --steps 1000 \
   --success-loss-threshold 0.01
 
+python examples/contextual_rnn_recall_gate.py \
+  --operator cuda --device cuda --seeds 0 1 2 3 \
+  --dropout-p 0.1 --steps 1000
+
+python benchmarks/trained_fit_alignment.py \
+  --operator cuda --device cuda --model-seeds 0 2 10 27 29 \
+  --target-mode strict-longest-latest --steps 1000
+
 python benchmarks/rosa_soft.py \
   --operator cuda --sequence-lengths 64 128 256 \
   --max-suffix-length 32 --scale 1 --dropout-p 0.1 \

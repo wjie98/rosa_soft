@@ -82,10 +82,10 @@ def test_packed_symbol_shape_contracts_are_explicit_without_cuda():
         native_source.index("void check_varlen_packed_symbols("):
         native_source.index("}  // namespace")
     ]
-    assert '" must have shape (N, H)"' in varlen_validation
+    assert '" must have shape (H, N)"' in varlen_validation
     assert (
-        "packed_symbols.size(0) == query.size(0) &&\n"
-        "          packed_symbols.size(1) == query.size(1)"
+        "packed_symbols.size(0) == query.size(1) &&\n"
+        "          packed_symbols.size(1) == query.size(0)"
     ) in varlen_validation
 
 

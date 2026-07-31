@@ -1,10 +1,10 @@
 {
-  "schema_version": 9,
-  "generated_at": "2026-07-30T00:13:23+08:00",
+  "schema_version": 11,
+  "generated_at": "2026-07-31T16:34:13+08:00",
   "source": {
-    "base_commit": "f64ad66f4e197068926e97e01dbd2efc052fe036",
+    "base_commit": "ec744df1ff6ab307adfd9e4c23b4d3d6b30898bc",
     "working_tree": true,
-    "note": "Current RosaSoft API, backward-only attention dropout, dense and packed-varlen CUDA implementations."
+    "note": "Current RosaSoft API plus exact dense execution-plan optimizations, bounded packed reuse, trained-checkpoint estimator diagnostics, and shortcut-free contextual reset-RNN recall."
   },
   "environment": {
     "os": "Linux 6.18.33.2-microsoft-standard-WSL2 x86_64",
@@ -73,41 +73,57 @@
     ],
     "surrogate_vjp_resources": {
       "sm_75": {
-        "common_dense_register_range": [
-          70,
-          78
-        ],
-        "packed_varlen_full_gradient_registers": 96
+        "kernel_count": 79,
+        "surrogate_row_instance_count": 63,
+        "surrogate_finalize_instance_count": 6,
+        "dense_register_range": [43, 96],
+        "packed_register_range": [54, 125]
       },
       "sm_86": {
-        "packed_varlen_full_gradient_register_range": [
-          96,
-          102
-        ],
+        "kernel_count": 79,
+        "surrogate_row_instance_count": 63,
+        "surrogate_finalize_instance_count": 6,
+        "dense_register_range": [40, 96],
+        "packed_register_range": [44, 127],
         "note": "Present in the fat binary; execution was isolated to sm_75."
       }
     },
     "local_memory_spills": 0,
-    "fat_binary_bytes": 1699744,
-    "fat_binary_sha256": "ad868c3ef9ceb8151ccece7ea925f89208bfcc38b3fedba869d8c36638b193a1"
+    "fat_binary_bytes": 6737112,
+    "fat_binary_sha256": "53bf51cc3ab9e17105ab899b1bfe73c58ab64fdf684a21ae197ac8c7b4010284"
   },
   "tests": {
     "command": "CUDA_VISIBLE_DEVICES=1 python -m pytest -q",
-    "passed": 276,
+    "passed": 399,
     "skipped": 2,
-    "collection_count": 278,
-    "elapsed_seconds": 9.95,
+    "collection_count": 401,
+    "elapsed_seconds": 13.09,
     "coverage": [
       "exact hard forward and latest tie behavior",
       "all seven nonempty query/key/value gradient masks",
       "dropout_p=0 and dropout_p>0 reference/CUDA parity",
       "dropout seed reproducibility, route independence, and full-seed hashing",
       "dense, grouped-head, and packed-varlen paths including empty segments",
+      "Q-only utility caching including cross-warp full-cache consumption, value-only route tiling, and long packed K aggregation",
+      "exact finite-window diagonal recurrence and adjoint research oracle",
+      "any-candidate and strict-longest-latest target modes",
+      "trained-checkpoint production versus exact-bitflip alignment",
+      "contextual reset-RNN recall and causal ablations",
       "FP32, FP16, BF16, autocast, GradScaler, and checkpoint",
       "full-graph torch.compile with the aot_eager backend for dense and packed calls",
       "invalid scalar and raw native seed contracts",
       "runtime state and lifecycle contracts"
-    ]
+    ],
+    "cuda_sanitizer": {
+      "paths": [
+        "dense Q-only full utility cache",
+        "packed Q-only score cache",
+        "packed cooperative QKV"
+      ],
+      "memcheck_errors": 0,
+      "racecheck_hazards": 0,
+      "synccheck_errors": 0
+    }
   },
   "cuda_reference_parity": {
     "configuration": {
@@ -154,6 +170,36 @@
   "training_gates": {
     "hard_forward_fit": {
       "configuration": "production CUDA, seeds 0..7, 1000 steps, success loss <= 0.001",
+      "idle_sm75_kernel_recheck": {
+        "command": "CUDA_VISIBLE_DEVICES=1 python examples/fit_soft_reference.py --operator cuda --device cuda --seed SEED --steps 1000 --dropout-p 0 --mismatch-scale 3 --success-loss-threshold 0.001",
+        "initial_sweep_final_successes": "7/8",
+        "ever_successes": "7/8",
+        "hard_accuracy_1_successes": "7/8",
+        "median_final_loss": 0.0002873256,
+        "median_step_ms": 3.280113,
+        "initial_sweep": {
+          "0": 0.0002244158,
+          "1": 0.1546044052,
+          "2": 0.0002723188,
+          "3": 0.0003730969,
+          "4": 0.0002945133,
+          "5": 0.0002801379,
+          "6": 0.0005220272,
+          "7": 0.0002329715
+        },
+        "structural_failure": {
+          "1": {
+            "final_loss": 0.1546044052,
+            "best_loss": 0.1544772536,
+            "hard_accuracy": 0.8888888955
+          }
+        },
+        "seed_6_recheck": {
+          "final_loss": 0.0005220272,
+          "best_loss": 0.0003617964,
+          "hard_accuracy": 1.0
+        }
+      },
       "matched_static_matrix": {
         "mismatch_scale_3": {
           "dropout_p_0": {
@@ -201,19 +247,8 @@
       "decision": "Restore mismatch_scale=3 for the default dropout_p=0 recipe. Keep 9 explicit; neither value dominates across dropout settings."
     },
     "shortcut_free_associative_recall": {
-      "command": "CUDA_VISIBLE_DEVICES=1 python examples/associative_recall_gate.py --operator both --device cuda --seeds 0 1 2 3 4 5 6 7 --dropout-p 0.1 --mismatch-scale 3",
-      "reference_passes": "8/8",
+      "command": "CUDA_VISIBLE_DEVICES=1 python examples/associative_recall_gate.py --operator cuda --device cuda --seeds 0 1 2 3 4 5 6 7 --dropout-p 0.1 --mismatch-scale 3",
       "cuda_passes": "8/8",
-      "reference_success_steps": [
-        28,
-        32,
-        24,
-        29,
-        34,
-        40,
-        35,
-        23
-      ],
       "cuda_success_steps": [
         28,
         32,
@@ -225,6 +260,68 @@
         23
       ],
       "passed": true
+    },
+    "trained_checkpoint_alignment": {
+      "command": "CUDA_VISIBLE_DEVICES=1 python benchmarks/trained_fit_alignment.py --operator cuda --device cuda:0 --model-seeds 1 7 --steps 1000 --target-mode any-candidate --dropout-p 0",
+      "seed_1": {
+        "final_loss": 0.1544762701,
+        "hard_feature_conditional_entropy": 0.1540327068,
+        "loss_above_entropy": 0.0004435633,
+        "combined_tensor_cosine": 0.5198405694,
+        "shared_parameter_cosine": -0.032150371
+      },
+      "seed_7": {
+        "final_loss": 0.0002255351,
+        "hard_feature_conditional_entropy": 0.0,
+        "loss_above_entropy": 0.0002255351,
+        "combined_tensor_cosine": 0.4443041538,
+        "shared_parameter_cosine": 0.3584587416
+      },
+      "note": "Exact bit flips are a local diagnostic oracle; shared projection aggregation can reverse tensor-space alignment."
+    },
+    "target_mode_comparison": {
+      "configuration": "production CUDA, paired seeds 0,2,10,27,29 whose masks differ, 1000 steps, dropout_p=0, mismatch_scale=3",
+      "any_candidate": {
+        "collision_free_runs": "2/5",
+        "mean_final_loss": 0.3376545599,
+        "mean_combined_tensor_cosine": 0.275977624,
+        "mean_shared_parameter_cosine": 0.1153744048
+      },
+      "strict_longest_latest": {
+        "collision_free_runs": "4/5",
+        "mean_final_loss": 0.1359563827,
+        "mean_combined_tensor_cosine": 0.3130310078,
+        "mean_shared_parameter_cosine": 0.1308344175
+      },
+      "remaining_structural_failure": {
+        "seed": 27,
+        "final_loss": 0.678826,
+        "hard_feature_conditional_entropy": 0.678765
+      }
+    },
+    "contextual_reset_rnn_recall": {
+      "command_template": "CUDA_VISIBLE_DEVICES=1 python examples/contextual_rnn_recall_gate.py --operator cuda --device cuda:0 --seeds 0 1 2 3 --dropout-p P --steps 1000",
+      "configuration": "64 complementary training pairs, 32 held-out pairs, 4 associations, hidden32, H2, D8, Hv2, Dv4, explicit recurrent reset",
+      "dropout_p_0": {
+        "passed_runs": "2/4",
+        "mean_validation_exact_accuracy": 0.9931640625,
+        "minimum_validation_exact_accuracy": 0.98828125,
+        "mean_step_ms": 12.407732743
+      },
+      "dropout_p_0_1": {
+        "passed_runs": "4/4",
+        "mean_validation_exact_accuracy": 1.0,
+        "minimum_validation_exact_accuracy": 1.0,
+        "mean_step_ms": 12.4352367725
+      },
+      "causal_checks": {
+        "mean_historical_route_any_head_accuracy": 1.0,
+        "mean_paired_routed_value_difference_fraction": 1.0,
+        "dropout_p_0_zero_route_exact_accuracy": 0.052734375,
+        "dropout_p_0_current_value_exact_accuracy": 0.0693359375,
+        "residual_only_exact_accuracy": 0.0595703125
+      },
+      "decision": "Keep dropout_p=0 as the production default. The small paired run supports 0.1 as explicit exploration, not a universal default; dropout_p=0 launch repeats have also reached 4/4."
     }
   },
   "discrete_bit_flip_alignment": {
@@ -244,24 +341,76 @@
     "top_k_oracle_useful_fraction": 0.4406943105,
     "note": "Directional diagnostic against exact hard bit flips, not an exact-gradient claim."
   },
+  "diagonal_recurrence_research": {
+    "production_status": "PyTorch research oracle only; no dispatcher or CUDA production kernel",
+    "fp64_cpu": {
+      "configuration": "N=1..65, W=1..128, 100 cases",
+      "score_max_abs_error": 6.661338147750939e-16,
+      "vjp_max_abs_error": 8.881784197001252e-16
+    },
+    "fp32_cuda": {
+      "command": "CUDA_VISIBLE_DEVICES=1 python benchmarks/diagonal_recurrence.py --device cuda --dtype float32 --lengths 257 1024 4096 --windows 1 32 128 512 --seeds 4",
+      "cases": 48,
+      "score_max_abs_error": 4.76837158203125e-07,
+      "vjp_max_abs_error": 7.152557373046875e-07
+    },
+    "complete_symbol_vjp": {
+      "test_cases": 89,
+      "coverage": "full causal score mapping, log-gate adjoint, FP32/FP64 Q/K symbol VJP, exact/one-mismatch/alternating/random-Hamming gates",
+      "exact_match_unscaled_route_vjp_max_abs_error": 0.0007019043,
+      "exact_match_softmax_route_vjp_max_abs_error": 0.0000308454,
+      "production_blockers": [
+        "row-softmax and diagonal staging",
+        "bounded reverse-pass scratch without O(BHT^2) state",
+        "numerically stable long exact-match FP32 reverse correction",
+        "end-to-end CUDA FP32 parity",
+        "measured speedup at large suffix windows"
+      ]
+    },
+    "fp32_exact_match_long_stress": {
+      "configuration": "N=4096, exact gates, random external route-score VJP",
+      "score_max_abs_error": 0.0,
+      "vjp_max_abs_error": {
+        "W512": 0.05859375,
+        "W4096": 2.7578125
+      },
+      "decision": "Production blocker; the reverse correction requires a numerically different formulation."
+    }
+  },
   "benchmarks": {
     "device": "NVIDIA GeForce RTX 2080 Ti",
-    "configuration": "dense FP32 B1 H4 D8 Hv2 Dv8 W32 scale1 mismatch_scale3 random query/key/value gradients",
-    "method": "six alternating-order rounds, 30 warmups and 200 repeats per sample, median of rounds",
-    "dropout_p_0_step_ms": {
-      "T128": 0.4130565643,
-      "T256": 0.8504558563,
-      "T512": 2.9524763489
+    "method": "Alternating-order direct A/B runs after warmup on physical GPU 1; exact formulas and candidate support were unchanged.",
+    "dense_cache_planner_qkv_fp32_D8_Dv64_W32_ms": {
+      "T2048": {
+        "forced_cache": 5.92,
+        "forced_recompute": 6.51,
+        "selected": "cache",
+        "selected_ms": 6.06
+      },
+      "T4096": {
+        "forced_cache": 30.31,
+        "forced_recompute": 24.11,
+        "selected": "recompute",
+        "selected_ms": 24.12
+      },
+      "T8192": {
+        "forced_cache": 286.77,
+        "forced_recompute": 88.53,
+        "selected": "recompute",
+        "selected_ms": 88.31
+      }
     },
-    "dropout_p_0_1_step_ms": {
-      "T128": 0.4467613602,
-      "T256": 0.8619260788,
-      "T512": 2.9614942932
+    "packed_head_major_hard_forward_T1024_speedup": {
+      "H1": 1.115,
+      "H4": 1.431,
+      "H16": 3.267
     },
-    "dropout_overhead_percent": {
-      "T128": 8.159849945,
-      "T256": 1.3487146203,
-      "T512": 0.3054366325
+    "packed_q_only_tail_cache_speedup": "approximately 1.08x..1.11x for tested average segment lengths >=256",
+    "block_size_ablation": {
+      "tested_threads": [64, 128, 256],
+      "decision": 128,
+      "reason": "256 improved dense Q/K but regressed packed QK/QKV; 64 had the opposite partial win and severe dense Q-only regressions.",
+      "all_variants": "125 passed, 1 skipped; 79 kernels; max 128 registers; zero stack/local spill"
     }
   },
   "historical_evidence": {
@@ -277,6 +426,7 @@
     "A high mismatch_scale can suppress discovery of long near matches; scale cannot restore vanished suffix products.",
     "FP16 can underflow long-tail route gradients; use loss scaling or FP32 projections when full support matters.",
     "CUDA atomic accumulation is numerically reproducible within tolerance, not bitwise deterministic.",
+    "The exact diagonal recurrence is a research oracle only; its FP32 reverse correction is unstable for long exact-match suffixes.",
     "Full-model pretraining at realistic depth and context has not yet been completed."
   ]
 }

@@ -480,6 +480,388 @@ def test_varlen_cuda_variable_lengths_match_reference_vjp(dropout_p):
     or not rosa_soft.BUILD_CAPABILITIES.rosa_soft_cuda,
     reason="RosaSoft CUDA extension is unavailable",
 )
+@pytest.mark.parametrize("dropout_p", [0.0, 0.2])
+def test_varlen_cuda_long_key_aggregation_matches_reference(dropout_p):
+    lengths = (256,)
+    total_tokens = sum(lengths)
+    query = _nonzero_randn(
+        (total_tokens, 1, 8),
+        seed=45,
+        device="cuda",
+    )
+    key = _nonzero_randn(
+        (total_tokens, 1, 8),
+        seed=46,
+        device="cuda",
+    )
+    value = _nonzero_randn(
+        (total_tokens, 1, 3),
+        seed=47,
+        device="cuda",
+    )
+    cu_seqlens = _offsets([0, total_tokens], device="cuda")
+    grad_output = _nonzero_randn(
+        (total_tokens, 1, 3),
+        seed=48,
+        device="cuda",
+    )
+    controls = {
+        "max_suffix_length": 4,
+        "scale": 1.2,
+        "dropout_p": dropout_p,
+        "mismatch_scale": 3.0,
+    }
+    reference_inputs = tuple(
+        tensor.detach().clone().requires_grad_()
+        for tensor in (query, key, value)
+    )
+    cuda_inputs = tuple(
+        tensor.detach().clone().requires_grad_()
+        for tensor in (query, key, value)
+    )
+
+    torch.cuda.manual_seed(49)
+    reference_output = rosa_soft.rosa_soft_varlen_reference(
+        *reference_inputs,
+        cu_seqlens,
+        **controls,
+    )
+    torch.cuda.manual_seed(49)
+    cuda_output = rosa_soft.rosa_soft_varlen(
+        *cuda_inputs,
+        cu_seqlens,
+        **controls,
+    )
+    reference_gradients = torch.autograd.grad(
+        reference_output,
+        reference_inputs,
+        grad_output,
+    )
+    cuda_gradients = torch.autograd.grad(
+        cuda_output,
+        cuda_inputs,
+        grad_output,
+    )
+
+    assert torch.equal(cuda_output, reference_output)
+    for cuda_gradient, reference_gradient in zip(
+        cuda_gradients,
+        reference_gradients,
+    ):
+        torch.testing.assert_close(
+            cuda_gradient,
+            reference_gradient,
+            rtol=8e-5,
+            atol=2e-5,
+        )
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available()
+    or not rosa_soft.BUILD_CAPABILITIES.rosa_soft_cuda,
+    reason="RosaSoft CUDA extension is unavailable",
+)
+def test_varlen_cuda_cooperative_qkv_matches_reference():
+    total_tokens = 256
+    query = _nonzero_randn(
+        (total_tokens, 1, 8),
+        seed=55,
+        device="cuda",
+    )
+    key = _nonzero_randn(
+        (total_tokens, 1, 8),
+        seed=56,
+        device="cuda",
+    )
+    value = _nonzero_randn(
+        (total_tokens, 1, 64),
+        seed=57,
+        device="cuda",
+    )
+    grad_output = _nonzero_randn(
+        (total_tokens, 1, 64),
+        seed=58,
+        device="cuda",
+    )
+    cu_seqlens = _offsets([0, total_tokens], device="cuda")
+    controls = {
+        "max_suffix_length": 4,
+        "scale": 1.2,
+        "dropout_p": 0.2,
+        "mismatch_scale": 3.0,
+    }
+    reference_inputs = tuple(
+        tensor.detach().clone().requires_grad_()
+        for tensor in (query, key, value)
+    )
+    cuda_inputs = tuple(
+        tensor.detach().clone().requires_grad_()
+        for tensor in (query, key, value)
+    )
+
+    torch.cuda.manual_seed(59)
+    reference_output = rosa_soft.rosa_soft_varlen_reference(
+        *reference_inputs,
+        cu_seqlens,
+        **controls,
+    )
+    torch.cuda.manual_seed(59)
+    cuda_output = rosa_soft.rosa_soft_varlen(
+        *cuda_inputs,
+        cu_seqlens,
+        **controls,
+    )
+    reference_gradients = torch.autograd.grad(
+        reference_output,
+        reference_inputs,
+        grad_output,
+    )
+    cuda_gradients = torch.autograd.grad(
+        cuda_output,
+        cuda_inputs,
+        grad_output,
+    )
+
+    assert torch.equal(cuda_output, reference_output)
+    for cuda_gradient, reference_gradient in zip(
+        cuda_gradients,
+        reference_gradients,
+    ):
+        torch.testing.assert_close(
+            cuda_gradient,
+            reference_gradient,
+            rtol=1e-4,
+            atol=1e-6,
+        )
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available()
+    or not rosa_soft.BUILD_CAPABILITIES.rosa_soft_cuda,
+    reason="RosaSoft CUDA extension is unavailable",
+)
+def test_varlen_cuda_query_score_cache_matches_reference():
+    total_tokens = 257
+    query = _nonzero_randn(
+        (total_tokens, 2, 8),
+        seed=60,
+        device="cuda",
+    )
+    key = _nonzero_randn(
+        (total_tokens, 2, 8),
+        seed=61,
+        device="cuda",
+    )
+    value = _nonzero_randn(
+        (total_tokens, 1, 3),
+        seed=62,
+        device="cuda",
+    )
+    grad_output = _nonzero_randn(
+        (total_tokens, 2, 3),
+        seed=63,
+        device="cuda",
+    )
+    cu_seqlens = _offsets([0, total_tokens], device="cuda")
+    controls = {
+        "max_suffix_length": 9,
+        "scale": 1.4,
+        "dropout_p": 0.2,
+        "mismatch_scale": 3.0,
+    }
+    reference_query = query.detach().clone().requires_grad_()
+    cuda_query = query.detach().clone().requires_grad_()
+
+    torch.cuda.manual_seed(64)
+    reference_output = rosa_soft.rosa_soft_varlen_reference(
+        reference_query,
+        key,
+        value,
+        cu_seqlens,
+        **controls,
+    )
+    torch.cuda.manual_seed(64)
+    cuda_output = rosa_soft.rosa_soft_varlen(
+        cuda_query,
+        key,
+        value,
+        cu_seqlens,
+        **controls,
+    )
+    reference_gradient = torch.autograd.grad(
+        reference_output,
+        reference_query,
+        grad_output,
+    )[0]
+    cuda_gradient = torch.autograd.grad(
+        cuda_output,
+        cuda_query,
+        grad_output,
+    )[0]
+
+    assert torch.equal(cuda_output, reference_output)
+    torch.testing.assert_close(
+        cuda_gradient,
+        reference_gradient,
+        rtol=1e-4,
+        atol=2e-5,
+    )
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available()
+    or not rosa_soft.BUILD_CAPABILITIES.rosa_soft_cuda,
+    reason="RosaSoft CUDA extension is unavailable",
+)
+def test_varlen_cuda_query_score_tail_cache_boundary_matches_reference():
+    total_tokens = 1027
+    query = _nonzero_randn(
+        (total_tokens, 1, 4),
+        seed=65,
+        device="cuda",
+    )
+    key = _nonzero_randn(
+        (total_tokens, 1, 4),
+        seed=66,
+        device="cuda",
+    )
+    value = _nonzero_randn(
+        (total_tokens, 1, 1),
+        seed=67,
+        device="cuda",
+    )
+    grad_output = _nonzero_randn(
+        (total_tokens, 1, 1),
+        seed=68,
+        device="cuda",
+    )
+    cu_seqlens = _offsets([0, total_tokens], device="cuda")
+    controls = {
+        "max_suffix_length": 2,
+        "scale": 1.4,
+        "dropout_p": 0.2,
+        "mismatch_scale": 3.0,
+    }
+    reference_query = query.detach().clone().requires_grad_()
+    cuda_query = query.detach().clone().requires_grad_()
+
+    torch.cuda.manual_seed(69)
+    reference_output = rosa_soft.rosa_soft_varlen_reference(
+        reference_query,
+        key,
+        value,
+        cu_seqlens,
+        **controls,
+    )
+    reference_gradient = torch.autograd.grad(
+        reference_output,
+        reference_query,
+        grad_output,
+    )[0]
+    torch.cuda.manual_seed(69)
+    cuda_output = rosa_soft.rosa_soft_varlen(
+        cuda_query,
+        key,
+        value,
+        cu_seqlens,
+        **controls,
+    )
+    cuda_gradient = torch.autograd.grad(
+        cuda_output,
+        cuda_query,
+        grad_output,
+    )[0]
+
+    assert torch.equal(cuda_output, reference_output)
+    torch.testing.assert_close(
+        cuda_gradient,
+        reference_gradient,
+        rtol=2e-4,
+        atol=3e-5,
+    )
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available()
+    or not rosa_soft.BUILD_CAPABILITIES.rosa_soft_cuda,
+    reason="RosaSoft CUDA extension is unavailable",
+)
+@pytest.mark.parametrize("dropout_p", [0.0, 0.2])
+def test_varlen_cuda_tiled_value_only_matches_reference(dropout_p):
+    total_tokens = 67
+    heads = 2
+    value_dim = 64
+    query = _nonzero_randn(
+        (total_tokens, heads, 8),
+        seed=50,
+        device="cuda",
+    )
+    key = _nonzero_randn(
+        (total_tokens, heads, 8),
+        seed=51,
+        device="cuda",
+    )
+    value = _nonzero_randn(
+        (total_tokens, 1, value_dim),
+        seed=52,
+        device="cuda",
+    )
+    cu_seqlens = _offsets([0, total_tokens], device="cuda")
+    grad_output = _nonzero_randn(
+        (total_tokens, heads, value_dim),
+        seed=53,
+        device="cuda",
+    )
+    controls = {
+        "max_suffix_length": 9,
+        "scale": 1.2,
+        "dropout_p": dropout_p,
+        "mismatch_scale": 3.0,
+    }
+    reference_value = value.detach().clone().requires_grad_()
+    cuda_value = value.detach().clone().requires_grad_()
+
+    torch.cuda.manual_seed(54)
+    reference_output = rosa_soft.rosa_soft_varlen_reference(
+        query,
+        key,
+        reference_value,
+        cu_seqlens,
+        **controls,
+    )
+    torch.cuda.manual_seed(54)
+    cuda_output = rosa_soft.rosa_soft_varlen(
+        query,
+        key,
+        cuda_value,
+        cu_seqlens,
+        **controls,
+    )
+    reference_gradient = torch.autograd.grad(
+        reference_output,
+        reference_value,
+        grad_output,
+    )[0]
+    cuda_gradient = torch.autograd.grad(
+        cuda_output,
+        cuda_value,
+        grad_output,
+    )[0]
+
+    assert torch.equal(cuda_output, reference_output)
+    torch.testing.assert_close(
+        cuda_gradient,
+        reference_gradient,
+        rtol=3e-5,
+        atol=3e-6,
+    )
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available()
+    or not rosa_soft.BUILD_CAPABILITIES.rosa_soft_cuda,
+    reason="RosaSoft CUDA extension is unavailable",
+)
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_varlen_cuda_long_boundaries_and_dtypes_match_dense_reference(dtype):
     if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
