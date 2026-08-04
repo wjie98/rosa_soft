@@ -1,4 +1,5 @@
 import importlib.util
+import re
 import sys
 import tomllib
 from dataclasses import FrozenInstanceError, is_dataclass
@@ -54,6 +55,25 @@ def test_default_cuda_build_contains_only_core_translation_units():
     assert BUILD_SETUP.define_macros_for(config) == [
         ("ROSA_WITH_CUDA", "1"),
     ]
+
+
+def test_frozen_cuda_schema_contains_only_production_operators():
+    export_source = (ROOT / "rosa_soft" / "csrc" / "export.cpp").read_text()
+    registered = re.findall(r'm\.def\("([a-z_]+)\(', export_source)
+
+    assert registered == [
+        "hard_forward",
+        "hard_forward_varlen",
+        "surrogate_vjp_masked",
+        "surrogate_vjp_varlen_masked",
+    ]
+    assert "research_" not in export_source
+
+    for source_name in ("rosa_soft.cpp", "cuda/rosa_soft_kernels.cu"):
+        source = (ROOT / "rosa_soft" / "csrc" / source_name).read_text()
+        assert "research_" not in source
+        assert "hard_forward_indexed" not in source
+        assert "surrogate_vjp_diagonal" not in source
 
 
 def test_packed_symbol_shape_contracts_are_explicit_without_cuda():

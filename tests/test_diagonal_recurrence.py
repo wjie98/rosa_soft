@@ -6,6 +6,7 @@ from benchmarks.diagonal_recurrence import (
     diagonal_suffix_scores,
     diagonal_symbol_vjp,
     direct_finite_suffix_scores,
+    finite_suffix_log_gate_vjp_local,
     finite_suffix_log_gate_vjp_scan,
     finite_suffix_scores_scan,
 )
@@ -65,6 +66,60 @@ def test_diagonal_scan_matches_direct_scores_and_log_gate_vjp(
         expected_vjp,
         rtol=1e-11,
         atol=1e-11,
+    )
+
+    local_vjp = finite_suffix_log_gate_vjp_local(
+        log_gates.detach(),
+        route_score_vjp,
+        max_suffix_length,
+    )
+    torch.testing.assert_close(
+        local_vjp,
+        expected_vjp,
+        rtol=1e-11,
+        atol=1e-11,
+    )
+
+
+@pytest.mark.parametrize(
+    ("length", "max_suffix_length"),
+    [(4096, 512), (4096, 4096)],
+)
+def test_local_vjp_stays_stable_on_long_exact_match(
+    length,
+    max_suffix_length,
+):
+    generator = torch.Generator().manual_seed(
+        18000 + max_suffix_length
+    )
+    log_gates = torch.zeros(length)
+    route_score_vjp = torch.randn(length, generator=generator)
+
+    # In an all-match diagonal every product is one.  Gate m contributes to
+    # route n once for each valid suffix start at or before m.
+    expected = torch.zeros(length, dtype=torch.float64)
+    route_score_vjp64 = route_score_vjp.double()
+    for distance in range(min(length, max_suffix_length)):
+        count = length - distance
+        positions = torch.arange(count, dtype=torch.float64)
+        multiplicity = torch.minimum(
+            positions + 1.0,
+            torch.full_like(positions, max_suffix_length - distance),
+        )
+        expected[:count] += (
+            route_score_vjp64[distance:] * multiplicity
+        )
+
+    actual = finite_suffix_log_gate_vjp_local(
+        log_gates,
+        route_score_vjp,
+        max_suffix_length,
+    )
+    torch.testing.assert_close(
+        actual,
+        expected.float(),
+        rtol=2e-5,
+        atol=2e-3,
     )
 
 

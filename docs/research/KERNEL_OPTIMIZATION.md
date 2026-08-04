@@ -1,8 +1,9 @@
 # RosaSoft CUDA Optimization Record
 
-This document records the 2026-07-30 SM75 optimization pass. It distinguishes
-production changes from rejected experiments so old branches and benchmark
-artifacts do not become accidental design requirements.
+This document records the 2026-07-30 through 2026-08-04 CUDA optimization
+passes.
+It distinguishes production changes from rejected experiments so old branches
+and benchmark artifacts do not become accidental design requirements.
 
 ## 1. Measurement Contract
 
@@ -28,8 +29,12 @@ per sample; the tables below report medians of those rounds.
 | 4 | Packed sign bits in head-major `[H,N]` | Keep | Coalesces route-lane reads and lowers packed generic register pressure. |
 | 5 | Packed Q-only exact score tail cache | Keep, gated | A 1024-score tail wins long Q-only segments; older scores remain exact recomputes. |
 | 6 | Dense work- and occupancy-aware cache/recompute plan | Keep | Avoids premature recompute, then prevents large score caches from adding launch waves. |
-| 7 | Global 64/128/256-thread CTA choice | Keep 128 | 64 and 256 have conflicting dense/packed wins; a ladder needs brittle heuristics. |
-| 8 | Exact diagonal score and Q/K adjoint | Research only | Full symbol VJP validates; row staging and a production CUDA parity gate remain. |
+| 7 | Dense block-local K VJP aggregation | Keep, gated | Collapses overlapping global atomics for long `D <= 8` rows. |
+| 8 | Global 64/128/256-thread CTA choice | Keep 128 | 64 and 256 have conflicting dense/packed wins; a ladder needs brittle heuristics. |
+| 9 | Cancellation-resistant local diagonal adjoint | Keep as oracle | Removes full-diagonal cancellation and passes long exact-match FP32 stress. |
+| 10 | Multi-stage factorized diagonal CUDA VJP | Archived | Parity passed, but cross-GPU mean latency was `1.30x` production and scratch was quadratic; removed from the frozen build. |
+| 11 | Exact hard diagonal run-length index | Archived | Bit-exact and up to `12x` faster on collapsed all-match codes, but random codes regressed; removed from the frozen build. |
+| 12 | Offline cross-GPU promotion gate | Keep | Rejects candidates with any material regression, parity failure, or excessive workspace. |
 
 ## 3. Rejected Local Changes
 
@@ -71,11 +76,36 @@ thread-local search remains.
 
 ## 4. Retained Paths
 
-### 4.1 Long Packed K Aggregation
+### 4.1 Dense And Packed K Aggregation
 
-For packed segments, route lanes write many K contributions to overlapping
-positions. The retained path accumulates a
+Route lanes write many K contributions to overlapping positions. The retained
+path accumulates a
 `[D, blockDim + W - 1]` FP32 tile in shared memory and flushes it once.
+
+For dense rows it activates only when `D <= 8`, the complete shared layout
+fits 48 KiB, and the sequence passes a gradient-mask-specific threshold:
+
+```text
+K or KV:  T >= 512
+QK or QKV: T >= 1024
+```
+
+The higher mixed-gradient threshold matters. At `Dv=32..64`, enabling the
+tile for QK/QKV at `T=512..768` regressed by roughly `6%..17%`; at `T=1024`
+the same path won. Five-round same-process forced A/B on the idle 2080 Ti gave:
+
+| Shape | `Dv=8` | `Dv=32` | `Dv=64` |
+| --- | ---: | ---: | ---: |
+| K, `T=512` | `2.37x` | `1.62x` | `1.79x` |
+| KV, `T=512` | `2.31x` | `1.45x` | `1.65x` |
+| QK, `T=1024` | `1.29x` | `1.09x` | `1.03x` |
+| QKV, `T=1024` | `1.30x` | `1.09x` | `1.03x` |
+
+The aggregate and direct paths are separate compile-time variants; leaving a
+runtime template branch in the direct path cost `4%..15%`. That split grows
+the extension from 6,757,592 to 10,130,880 bytes, about 50%, but the final
+SM75/SM86 build remains free of stack and local-memory spills. Raw forced A/B
+records are stored in `validation/dense_key_aggregation_ablation.json`.
 
 It activates only when:
 
@@ -87,8 +117,7 @@ local segment length >= 256
 complete shared layout <= 48 KiB
 ```
 
-The aggregate and direct paths are separate compile-time kernel variants. Host
-selection requires average segment length at least 256; inside an aggregate
+Host selection requires average segment length at least 256; inside an aggregate
 launch, a local segment shorter than 256 skips the tile accumulation but still
 shares that launch's template and dynamic shared allocation. The idle-card
 recheck on uniform segment lengths gave:
@@ -100,7 +129,8 @@ recheck on uniform segment lengths gave:
 | 512 | `1.88x` | `1.37x` |
 
 The 128-token negative control is effectively unchanged, which supports the
-256-token threshold. Dense K keeps its existing head-major accumulator.
+256-token threshold. Dense K retains its head-major global accumulator behind
+the shared tile, so public layout and finalization are unchanged.
 
 ### 4.2 Q-Only Cooperative Utility
 
@@ -276,7 +306,7 @@ warp can scan 32 diagonal elements and pass one carry to the next group.
 `p_n` should be reconstructed from a sliding integer mismatch-count sum, not
 by subtracting long FP32 log-prefix sums.
 
-For external route-score VJP `a_n`, define:
+The original algebraic reverse used external route-score VJP `a_n` and:
 
 ```text
 b_n = a_n + x_(n+1) b_(n+1)
@@ -284,9 +314,28 @@ c_n = b_n p_n
 h_m = b_m (s_m + p_m) - sum(c_n, n=m..m+W)
 ```
 
-Then `h_m` is the VJP with respect to `log(x_m)`. The PyTorch research
-implementation emulates 32-element affine scans with sequential group carries
-and local-window reductions; it is not a CUDA warp kernel.
+This is exact over real arithmetic, but it subtracts quantities that can grow
+with the complete diagonal to recover a result supported on only `W` routes.
+Long exact matches therefore lose FP32 precision.
+
+The retained numerical oracle expands only real local contributions. For one
+route output `n` and gate `m`, where `m <= n < m + W`:
+
+```text
+d s_n / d log(x_m)
+  = sum over starts r=max(0,n-W+1)..m of product(x_r ... x_n)
+
+h_m
+  = sum over n=m..min(N-1,m+W-1)
+      a_n * d s_n / d log(x_m)
+```
+
+All products and each inner prefix sum are non-negative. The implementation
+uses compensated accumulation only across the at-most-`W` signed external
+adjoints. It does not form or subtract full-diagonal correction terms. The
+PyTorch oracle intentionally uses `O(NW)` scratch so correctness is explicit;
+a production warp implementation would keep a bounded age/ring state and
+scan starts in 32-element groups.
 
 For the production symbol proxy,
 
@@ -300,51 +349,105 @@ so each local gate is owned once by its diagonal and contributes
 prototype now performs these complete scatter-adds and verifies the final
 unused key position receives exactly zero gradient.
 
-Validation results:
+Validation results for the affine score scan and small exact VJPs remain:
 
 | Matrix | Cases | Max score error | Max VJP error |
 | --- | ---: | ---: | ---: |
 | FP64, `N=1..65`, `W=1..128` | 100 | `6.66e-16` | `8.88e-16` |
 | FP32, `N=257..4096`, `W=1..512` | 48 | `4.77e-7` | `7.15e-7` |
 
-The 89-test research suite additionally covers full causal matrix score and
+The 91-test research suite additionally covers full causal matrix score and
 log-gate mapping, complete FP32/FP64 Q/K symbol VJPs, and exact,
 one-mismatch, alternating, and random-Hamming gate patterns. Exact-match FP32
 adjoints reached about `7.0e-4` maximum absolute error under unscaled random
 route VJPs at `T=257,W=128`; with a real softmax-shaped route-score adjoint the
 maximum fell below `3.1e-5`.
 
-That short-context result does not extrapolate. A deterministic long
-exact-match stress with random external score adjoints produced:
+The old algebraic reverse did not extrapolate. The deterministic long
+exact-match stress now compares both FP32 forms with a direct FP64 formula:
 
-| `N` | `W` | Score error | VJP error |
-| ---: | ---: | ---: | ---: |
-| 4096 | 512 | `0` | `5.86e-2` |
-| 4096 | 4096 | `0` | `2.76` |
+| `N` | `W` | Algebraic max error | Local max error | Local global-relative error |
+| ---: | ---: | ---: | ---: | ---: |
+| 4096 | 512 | `6.59e-3` | `1.08e-3` | `7.67e-8` |
+| 4096 | 4096 | `3.63e-2` | `1.36e-2` | `8.62e-8` |
 
-The cancellation is in the reverse correction expression, not the affine
-score scan. This is now a production blocker: a diagonal CUDA path needs a
-numerically different FP32 adjoint formulation or compensated/higher-precision
-state before end-to-end parity and performance work are meaningful.
+The absolute values grow because exact-match gradients themselves reach about
+`1.4e4` and `1.6e5`; the local form stays near one FP32 ulp globally and has
+much lower error near small outputs. This resolves the numerical formulation
+blocker. It does not by itself establish a faster production schedule.
 
-## 7. Why It Is Not Yet a Production Kernel
+## 7. Multi-Stage CUDA Prototype
 
-The recurrence is diagonal, while softmax statistics, value utilities, and
-value gradients are row-oriented. The validated component is the final
-score-adjoint-to-Q/K stage, not a complete training kernel. A plausible
-workspace-bounded production schedule is:
+The former multi-stage diagonal CUDA prototype had three stages:
 
-1. a row-owned pass stores only max, denominator, and expected utility in
-   `O(BHT)` state;
-2. value-only credit remains row/tile owned;
-3. a diagonal-owned reverse pass reconstructs dropout, route utility, and
-   route-score VJP from row stats, keeps a `W+1` correction ring, and applies
-   each local Q/K bit VJP once.
+1. a row-owned pass stores max, denominator, and expected utility in
+   `O(BHT)` FP32 state;
+2. diagonal route blocks reconstruct every raw suffix score and route adjoint,
+   update value gradients, and accumulate one scalar `dL/dlog(x)` per local
+   Q/K pair;
+3. a final pair-owned pass maps each scalar local-gate adjoint to all Q/K bits
+   once, followed by the production softsign finalize.
 
-That design still needs a numerically stable FP32 reverse correction, a
-concrete CUDA implementation of finite-window score reconstruction, bounded
-worker scratch, packed-varlen and grouped-head scheduling, and measured
-launch/atomic costs. It must preserve full dense route support, avoid an
-`O(BHT^2)` score/adjoint workspace, pass the long exact-match FP32 gate, and
-beat the simpler row kernel at large `W` before it can replace production
-code.
+This prototype preserves every causal candidate, exact score/dropout
+semantics, grouped value heads, all seven gradient masks, and FP32/FP16/BF16.
+Across 44 focused tests its differences from production are only reduction
+order. At `T=33`, maximum absolute gradient error was below `6e-7`; the
+cross-GPU calibration through `T=1024` observed at most `2.67e-5`.
+
+It was not promoted. It materialized `O(BHT^2)` FP32 local-gate scratch, and on
+the RTX 2080 Ti random QKV at `T=128/256/512` was `1.25x/1.27x/1.47x` the
+production latency. Across the common 2080 Ti/3070 matrix its mean ratio was
+`1.30x` and worst ratio `1.59x`. A future version must replace the dense gate
+matrix with block-local diagonal rings and beat the row kernel before the
+extra launches are justified. Its raw operation, benchmark, and default tests
+were removed when `rosa-soft-dense-reference-v1` was frozen; the measurements
+remain here as historical evidence.
+
+## 8. Exact Hard Suffix Index
+
+The former exact hard diagonal prototype assigned one warp to one Q/K
+diagonal. For each 32-position group it computed the nearest preceding
+mismatch with an inclusive prefix maximum; the exact suffix length is the
+distance to that mismatch, capped by `W`. A 64-bit atomic maximum encodes
+`(length, route)` so longest-first and latest-on-tie semantics are unchanged.
+
+The prototype compared every causal Q/K endpoint pair once. It was not a
+bounded candidate lookup, probabilistic hash, or sparse-gradient mechanism.
+Tests and the calibration matrix covered random, all-match, periodic,
+singleton, partial-warp, FP32, FP16, BF16, `W=1..300`, and `T=1..1024`;
+output and both packed symbol tensors are bit-exact with the production scan.
+
+Performance depended on hard-code entropy. On the 2080 Ti with
+`T=4096,W=128`, all-match latency fell from about `6.69 ms` to `0.56 ms`, a
+roughly `12x` speedup. Random codes made the indexed path about `1.1x..1.8x`
+slower because the production route scan usually exits after its first symbol.
+No input-independent `T/D/W` rule distinguished these states, so this path was
+removed from the frozen build. The checkpoint codebook diagnostics in
+`benchmarks/pretraining_codebook.py` provide the missing collapse/entropy
+signal for future model-level dispatch work.
+
+## 9. Cross-GPU Promotion Gate
+
+The archived `validation/execution_plan_calibration.json` records the exact
+device, capability, shape, pattern, parity error, latency ratio, and extra
+workspace. A future candidate is promoted only when all recorded cases satisfy:
+
+```text
+worst latency ratio <= 1.05
+mean latency ratio <= 0.95
+extra workspace <= 64 MiB
+hard parity error == 0
+factorized VJP max error <= 3e-4
+```
+
+The common `T=128/256/512/1024`, random/all-match, QKV matrix produced:
+
+| Candidate | Cases | Mean ratio | Worst ratio | Max error | Decision |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Hard diagonal index | 16 | `1.366` | `1.817` | `0` | research only |
+| Factorized diagonal VJP | 16 | `1.305` | `1.592` | `2.67e-5` | research only |
+
+The production hard forward and row-owned surrogate VJP therefore remain the
+defaults. Existing cache/recompute selection remains occupancy-aware on the
+active GPU and uses the portable 48 KiB shared-memory bound; no startup timing,
+device-name allowlist, or hidden environment override was added.

@@ -20,10 +20,13 @@ constexpr int kWarpSize = 32;
 constexpr int kWarpsPerBlock = kBlockThreads / kWarpSize;
 constexpr size_t kPortableSharedMemoryLimit = 48 * 1024;
 constexpr float kNullScore = 0.5f;
+constexpr float kNormalizedSqrtSuffixScale = 2.414213562373095f;
 constexpr int kGradQuery = 1;
 constexpr int kGradKey = 2;
 constexpr int kGradValue = 4;
 constexpr int kMinKeyAggregationSequenceLength = 256;
+constexpr int kMinDenseKeyAggregationSequenceLength = 512;
+constexpr int kMinDenseQueryKeyAggregationSequenceLength = 1024;
 constexpr int kMinCooperativeSequenceLength = 256;
 constexpr int kMinCooperativeValueDimension = 64;
 constexpr int kMinPackedQkCooperativeValueDimension = 128;
@@ -584,7 +587,7 @@ __device__ __forceinline__ float attention_dropout_scale(
 
 
 template <bool CacheQuery, bool HeadMajor>
-__device__ __forceinline__ float soft_suffix_score(
+__device__ __forceinline__ float raw_suffix_score(
     const int32_t* __restrict__ packed_query_symbols,
     const int32_t* __restrict__ packed_key_symbols,
     const int32_t* __restrict__ cached_query,
@@ -635,6 +638,21 @@ __device__ __forceinline__ float soft_suffix_score(
     score += product;
   }
   return score;
+}
+
+
+struct SuffixScoreTransform {
+  float route_score;
+  float raw_score_vjp_multiplier;
+};
+
+
+__device__ __forceinline__ SuffixScoreTransform transform_suffix_score(
+    float raw_score) {
+  const float root = sqrtf(1.0f + raw_score);
+  return {
+      kNormalizedSqrtSuffixScale * (root - 1.0f),
+      0.5f * kNormalizedSqrtSuffixScale / root};
 }
 
 
@@ -1030,6 +1048,7 @@ __global__ void surrogate_vjp_kernel(
     const int64_t* __restrict__ dropout_seed,
     int gradient_mask,
     bool cache_route_utilities,
+    bool aggregate_key_vjp,
     bool tile_value_vjp,
     const int32_t* __restrict__ cu_seqlens,
     int num_sequences,
@@ -1152,6 +1171,8 @@ __global__ void surrogate_vjp_kernel(
       blockDim.x + max_suffix_length - 1;
   const bool use_key_vjp_aggregation =
       AggregateKeyVjp &&
+      aggregate_key_vjp &&
+      (active_gradient_mask & kGradKey) != 0 &&
       seq_len >= kMinKeyAggregationSequenceLength;
   float* cached_route_probabilities =
       block_grad_key +
@@ -1251,8 +1272,8 @@ __global__ void surrogate_vjp_kernel(
       }
     }
     if (route_position <= i) {
-      const float score =
-          soft_suffix_score<kCacheQuery, true>(
+      const float raw_score =
+          raw_suffix_score<kCacheQuery, true>(
               packed_query_symbols,
               packed_key_symbols,
               cached_query,
@@ -1267,13 +1288,15 @@ __global__ void surrogate_vjp_kernel(
               mismatch_scale,
               inverse_symbol_dim);
       if constexpr (kCacheSuffixScores) {
-        cached_suffix_scores[route_position - 1] = score;
+        cached_suffix_scores[route_position - 1] = raw_score;
       } else if constexpr (CachePackedScores) {
         if (route_position >= packed_score_cache_start) {
           cached_suffix_scores[
-              route_position - packed_score_cache_start] = score;
+              route_position - packed_score_cache_start] = raw_score;
         }
       }
+      const float route_score =
+          transform_suffix_score(raw_score).route_score;
       float utility = 0.0f;
       if (needs_qk_vjp) {
         if constexpr (CooperativeRouteValues) {
@@ -1312,7 +1335,7 @@ __global__ void surrogate_vjp_kernel(
               route_position);
       local_stats = append_softmax_item(
           local_stats,
-          score * scale -
+          route_score * scale -
               log_nonnull_candidate_count,
           route_dropout_scale * utility);
     }
@@ -1365,15 +1388,15 @@ __global__ void surrogate_vjp_kernel(
     }
 
     if (route_position <= i) {
-      float score;
+      float raw_score;
       if constexpr (kCacheSuffixScores) {
-        score = cached_suffix_scores[route_position - 1];
+        raw_score = cached_suffix_scores[route_position - 1];
       } else if constexpr (CachePackedScores) {
         if (route_position >= packed_score_cache_start) {
-          score = cached_suffix_scores[
+          raw_score = cached_suffix_scores[
               route_position - packed_score_cache_start];
         } else {
-          score = soft_suffix_score<kCacheQuery, true>(
+          raw_score = raw_suffix_score<kCacheQuery, true>(
               packed_query_symbols,
               packed_key_symbols,
               cached_query,
@@ -1389,7 +1412,7 @@ __global__ void surrogate_vjp_kernel(
               inverse_symbol_dim);
         }
       } else {
-        score = soft_suffix_score<kCacheQuery, true>(
+        raw_score = raw_suffix_score<kCacheQuery, true>(
                 packed_query_symbols,
                 packed_key_symbols,
                 cached_query,
@@ -1404,9 +1427,11 @@ __global__ void surrogate_vjp_kernel(
                 mismatch_scale,
                 inverse_symbol_dim);
       }
+      const SuffixScoreTransform score_transform =
+          transform_suffix_score(raw_score);
       const float probability =
           __expf(
-              score * scale -
+              score_transform.route_score * scale -
               log_nonnull_candidate_count -
               row_max) /
           denominator;
@@ -1499,10 +1524,13 @@ __global__ void surrogate_vjp_kernel(
         const float route_score_vjp =
             scale * probability *
             (route_dropout_scale * utility - expected_utility);
+        const float raw_score_vjp =
+            route_score_vjp *
+            score_transform.raw_score_vjp_multiplier;
         const int suffix_steps =
             min(max_suffix_length, min(i + 1, route_position));
         float prefix_product = 1.0f;
-        float suffix_tail_sum = score;
+        float suffix_tail_sum = raw_score;
         for (int suffix_offset_tokens = 0;
              suffix_offset_tokens < suffix_steps;
              ++suffix_offset_tokens) {
@@ -1541,7 +1569,7 @@ __global__ void surrogate_vjp_kernel(
           prefix_product *= gate;
           const float local_gate_vjp_scale =
               (mismatch_scale * inverse_symbol_dim) *
-              route_score_vjp *
+              raw_score_vjp *
               fmaxf(suffix_tail_sum, 0.0f);
           accumulate_local_match_qk_vjp<
               !PackedVarlen,
@@ -1959,6 +1987,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
     BackwardPlan plan;
     size_t shared_bytes;
     bool cache_route_utilities;
+    bool aggregate_key_vjp;
     bool cooperative_route_values;
     bool tile_value_vjp;
   };
@@ -1968,6 +1997,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
     DenseBackwardLaunchConfig config{
         plan,
         base_shared_bytes,
+        false,
         false,
         false,
         false};
@@ -1981,6 +2011,23 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
             kPortableSharedMemoryLimit;
     if (config.cache_route_utilities) {
       config.shared_bytes += route_utility_bytes;
+    }
+    const size_t key_vjp_bytes =
+        static_cast<size_t>(
+            kBlockThreads + max_suffix_length - 1) *
+        symbol_dim *
+        sizeof(float);
+    config.aggregate_key_vjp =
+        (gradient_mask & kGradKey) != 0 &&
+        symbol_dim <= 8 &&
+        seq_len >=
+            ((gradient_mask & kGradQuery) == 0
+                 ? kMinDenseKeyAggregationSequenceLength
+                 : kMinDenseQueryKeyAggregationSequenceLength) &&
+        config.shared_bytes + key_vjp_bytes <=
+            kPortableSharedMemoryLimit;
+    if (config.aggregate_key_vjp) {
+      config.shared_bytes += key_vjp_bytes;
     }
     const size_t cooperative_route_value_bytes =
         static_cast<size_t>(
@@ -2028,12 +2075,15 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
         const auto resident_blocks = [&](
             auto plan_tag,
             auto gradient_mask_tag,
+            auto aggregate_key_vjp_tag,
             auto cooperative_route_values_tag,
             size_t dynamic_shared_bytes) {
           constexpr BackwardPlan kPlan =
               decltype(plan_tag)::value;
           constexpr int kStaticGradientMask =
               decltype(gradient_mask_tag)::value;
+          constexpr bool kAggregateKeyVjp =
+              decltype(aggregate_key_vjp_tag)::value;
           constexpr bool kCooperativeRouteValues =
               decltype(cooperative_route_values_tag)::value;
           int blocks = 0;
@@ -2045,7 +2095,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
                       kPlan,
                       false,
                       kStaticGradientMask,
-                      false,
+                      kAggregateKeyVjp,
                       kCooperativeRouteValues,
                       false>,
                   kBlockThreads,
@@ -2056,15 +2106,32 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
             auto plan_tag,
             auto gradient_mask_tag,
             const DenseBackwardLaunchConfig& config) {
+          if (config.aggregate_key_vjp) {
+            return config.cooperative_route_values
+                ? resident_blocks(
+                      plan_tag,
+                      gradient_mask_tag,
+                      std::true_type{},
+                      std::true_type{},
+                      config.shared_bytes)
+                : resident_blocks(
+                      plan_tag,
+                      gradient_mask_tag,
+                      std::true_type{},
+                      std::false_type{},
+                      config.shared_bytes);
+          }
           return config.cooperative_route_values
               ? resident_blocks(
                     plan_tag,
                     gradient_mask_tag,
+                    std::false_type{},
                     std::true_type{},
                     config.shared_bytes)
               : resident_blocks(
                     plan_tag,
                     gradient_mask_tag,
+                    std::false_type{},
                     std::false_type{},
                     config.shared_bytes);
         };
@@ -2132,6 +2199,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
             launch_config.shared_bytes;
         const bool cache_route_utilities =
             launch_config.cache_route_utilities;
+        const bool aggregate_key_vjp =
+            launch_config.aggregate_key_vjp;
         const bool cooperative_route_values =
             launch_config.cooperative_route_values;
         const bool tile_value_vjp =
@@ -2139,11 +2208,14 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
         const auto launch_backward = [&](
             auto plan_tag,
             auto gradient_mask_tag,
+            auto aggregate_key_vjp_tag,
             auto cooperative_route_values_tag) {
           constexpr BackwardPlan kPlan =
               decltype(plan_tag)::value;
           constexpr int kStaticGradientMask =
               decltype(gradient_mask_tag)::value;
+          constexpr bool kAggregateKeyVjp =
+              decltype(aggregate_key_vjp_tag)::value;
           constexpr bool kCooperativeRouteValues =
               decltype(cooperative_route_values_tag)::value;
           surrogate_vjp_kernel<
@@ -2151,7 +2223,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
               kPlan,
               false,
               kStaticGradientMask,
-              false,
+              kAggregateKeyVjp,
               kCooperativeRouteValues,
               false><<<
               symbol_rows,
@@ -2178,6 +2250,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
               dropout_seed_data,
               gradient_mask,
               cache_route_utilities,
+              aggregate_key_vjp,
               tile_value_vjp,
               nullptr,
               0,
@@ -2186,15 +2259,31 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
         const auto launch_selected = [&](
             auto plan_tag,
             auto gradient_mask_tag) {
-          if (cooperative_route_values) {
+          if (aggregate_key_vjp) {
+            if (cooperative_route_values) {
+              launch_backward(
+                  plan_tag,
+                  gradient_mask_tag,
+                  std::true_type{},
+                  std::true_type{});
+            } else {
+              launch_backward(
+                  plan_tag,
+                  gradient_mask_tag,
+                  std::true_type{},
+                  std::false_type{});
+            }
+          } else if (cooperative_route_values) {
             launch_backward(
                 plan_tag,
                 gradient_mask_tag,
+                std::false_type{},
                 std::true_type{});
           } else {
             launch_backward(
                 plan_tag,
                 gradient_mask_tag,
+                std::false_type{},
                 std::false_type{});
           }
         };
@@ -2211,6 +2300,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
               launch_backward(
                   plan_tag,
                   std::integral_constant<int, kGradValue>{},
+                  std::false_type{},
                   std::false_type{});
             } else {
               launch_selected(
@@ -2232,6 +2322,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
                       BackwardPlan,
                       BackwardPlan::RecomputeSuffixScores>{},
                   std::integral_constant<int, kGradValue>{},
+                  std::false_type{},
                   std::false_type{});
             } else {
               launch_selected(
@@ -2448,6 +2539,7 @@ surrogate_vjp_varlen_cuda(
               dropout_seed_data,
               gradient_mask,
               false,
+              aggregate_key_vjp,
               tile_value_vjp,
               cu_seqlens.data_ptr<int32_t>(),
               num_sequences,

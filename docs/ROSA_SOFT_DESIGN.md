@@ -81,14 +81,17 @@ For each batch, head, and query row, CUDA performs:
 
 1. Visit null and every valid non-null causal route.
 2. Reconstruct normalized Hamming mismatch from packed Q/K symbols.
-3. Evaluate exponential gates and the complete suffix prefix sum.
-4. Compute online softmax statistics using the fixed null score and
+3. Evaluate exponential gates and the complete raw suffix prefix sum `S`.
+4. Transform non-null evidence with
+   `U(S)=(sqrt(2)+1)(sqrt(1+S)-1)`.
+5. Compute online softmax statistics using the fixed null score and
    non-null candidate correction.
-5. Apply post-softmax inverted dropout to each route probability.
-6. Accumulate probability-weighted value credit.
-7. For Q/K gradients, compute dropped route utility from `grad_output` and signed
-   value, then apply the exact adjoint of the route softmax, suffix
-   recurrence, exponential gate, and softsign VJP.
+6. Apply post-softmax inverted dropout to each route probability.
+7. Accumulate probability-weighted value credit.
+8. For Q/K gradients, compute dropped route utility from `grad_output` and
+   signed value, then apply the exact adjoint of route softmax, `U`, the suffix
+   recurrence, exponential gate, and softsign VJP. The additional chain factor
+   is `U'(S)=(sqrt(2)+1)/(2 sqrt(1+S))`.
 
 The implementation may scan a row more than once to avoid storing all route
 scores. Recompute is an implementation choice; the visited candidate set and
@@ -100,7 +103,7 @@ The backward kernel has two internal shared-memory plans:
 
 - `RecomputeSuffixScores` for shapes where caching is not profitable or does
   not fit;
-- `CacheSuffixScores`, which stores one row of scalar route scores plus the
+- `CacheSuffixScores`, which stores one row of raw suffix evidence plus the
   row query symbols and `grad_output` when the complete shared layout fits.
 
 Both plans compute the same VJP. They are not estimator modes and never alter
@@ -116,14 +119,15 @@ launch; its bounded Q-only tail cache is a separate exact reuse layer, not a
 full-row plan.
 
 Dense K gradients use a head-major FP32 accumulation layout to coalesce
-route-lane atomics, followed by a transpose to public `[B,T,H,D]`. Packed
-variable-length K gradients remain token-major because the dense layout
-increased register pressure and regressed measured SM75 kernels. For long
-packed segments only, small-symbol K contributions are first aggregated in a
-block-local FP32 tile and then flushed to token-major global memory. This
-private path requires `D <= 8`, average and local segment length at least 256,
-an enabled K gradient, and a shared-memory fit; all other shapes use direct
-atomics.
+route-lane atomics, followed by a transpose to public `[B,T,H,D]`. For
+`D <= 8`, overlapping K contributions may first be aggregated in a
+`[D, blockDim + W - 1]` block-local FP32 tile. K/KV selects this path at
+`T >= 512`; QK/QKV waits until `T >= 1024`, where the saved atomics outweigh
+the tile and synchronization cost. Packed variable-length K gradients remain
+token-major because the dense layout increased register pressure and regressed
+measured SM75 kernels. Their block-local aggregation requires `D <= 8`, average
+and local segment length at least 256, an enabled K gradient, and a shared-memory
+fit. All other shapes use direct atomics.
 
 Several narrowly gated paths remove avoidable value-dimension serialization
 without changing route support:
@@ -175,7 +179,8 @@ The reference deliberately materializes the same computation:
 pairwise hard symbols
   -> pairwise mismatch rates
   -> local gates [B,H,T,T]
-  -> suffix scores [B,H,T,T]
+  -> raw suffix evidence [B,H,T,T]
+  -> normalized square-root route scores [B,H,T,T]
   -> masked candidate-normalized probabilities [B,H,T,T]
   -> optional post-softmax attention dropout
   -> value carrier

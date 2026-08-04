@@ -1,10 +1,29 @@
 {
-  "schema_version": 11,
-  "generated_at": "2026-07-31T16:34:13+08:00",
+  "schema_version": 17,
+  "generated_at": "2026-08-04T12:42:13+08:00",
   "source": {
-    "base_commit": "ec744df1ff6ab307adfd9e4c23b4d3d6b30898bc",
-    "working_tree": true,
-    "note": "Current RosaSoft API plus exact dense execution-plan optimizations, bounded packed reuse, trained-checkpoint estimator diagnostics, and shortcut-free contextual reset-RNN recall."
+    "revision": "rosa-soft-dense-reference-v1",
+    "note": "Frozen exact-hard-forward, dense-surrogate-backward reference. Research measurements remain historical evidence but research-only raw CUDA operations are not part of this revision."
+  },
+  "freeze": {
+    "role": "dense-gradient reference for future ROSA estimator comparisons",
+    "policy": "Only correctness, documentation, and reproducibility repairs may retain this identity; new estimator semantics or raw operators require a new name.",
+    "production_cuda_operators": [
+      "rosa_soft::hard_forward",
+      "rosa_soft::hard_forward_varlen",
+      "rosa_soft::surrogate_vjp_masked",
+      "rosa_soft::surrogate_vjp_varlen_masked"
+    ],
+    "removed_from_build": [
+      "rosa_soft::research_hard_forward_indexed",
+      "rosa_soft::research_surrogate_vjp_diagonal_masked"
+    ],
+    "reproduction": {
+      "full_suite": "500 passed, 2 skipped in 15.26 seconds",
+      "hard_forward_fit": "6/8 total and 6/6 collision-free below 1e-3",
+      "associative_recall": "8/8 passed with success steps [31, 38, 25, 32, 37, 47, 38, 25]",
+      "contextual_recall_repeated_launches": "3/4 then 4/4 passed; mean validation exact accuracy 0.995117 then 0.998047"
+    }
   },
   "environment": {
     "os": "Linux 6.18.33.2-microsoft-standard-WSL2 x86_64",
@@ -18,7 +37,11 @@
       "name": "NVIDIA GeForce RTX 2080 Ti",
       "compute_capability": "7.5",
       "isolation": "CUDA_VISIBLE_DEVICES=1"
-    }
+    },
+    "cuda_calibration_devices": [
+      "NVIDIA GeForce RTX 2080 Ti (sm_75)",
+      "NVIDIA GeForce RTX 3070 (sm_86)"
+    ]
   },
   "api": {
     "dense": "rosa_soft(query, key, value, *, max_suffix_length=32, scale=1.0, dropout_p=0.0, mismatch_scale=3.0)",
@@ -38,7 +61,9 @@
     "symbol_vjp": "1 / (1 + abs(x))^2",
     "mismatch_rate": "popcount(q xor k) / D",
     "local_gate": "exp(-mismatch_scale * mismatch_rate)",
-    "route_score": "raw sum of suffix prefix products",
+    "raw_suffix_evidence": "S = sum of suffix prefix products",
+    "route_score": "U(S) = (sqrt(2) + 1) * (sqrt(1 + S) - 1)",
+    "route_score_vjp": "U'(S) = (sqrt(2) + 1) / (2 * sqrt(1 + S))",
     "attention_weights": "softmax(route_scores * scale - nonnull_log(candidate_count))",
     "null_score": 0.5,
     "value_credit": "distributed over every valid causal route",
@@ -73,31 +98,32 @@
     ],
     "surrogate_vjp_resources": {
       "sm_75": {
-        "kernel_count": 79,
+        "kernel_count": 115,
         "surrogate_row_instance_count": 63,
         "surrogate_finalize_instance_count": 6,
         "dense_register_range": [43, 96],
         "packed_register_range": [54, 125]
       },
       "sm_86": {
-        "kernel_count": 79,
+        "kernel_count": 115,
         "surrogate_row_instance_count": 63,
         "surrogate_finalize_instance_count": 6,
         "dense_register_range": [40, 96],
         "packed_register_range": [44, 127],
-        "note": "Present in the fat binary; execution was isolated to sm_75."
+        "note": "Present in the fat binary; execution-plan calibration below is archived research evidence."
       }
     },
     "local_memory_spills": 0,
-    "fat_binary_bytes": 6737112,
-    "fat_binary_sha256": "53bf51cc3ab9e17105ab899b1bfe73c58ab64fdf684a21ae197ac8c7b4010284"
+    "maximum_registers": 144,
+    "fat_binary_bytes": 10130880,
+    "fat_binary_sha256": "e72c244e091c75080e33f7013e30a96d949f2ce0d1b4805e13f6754857e9d30b"
   },
   "tests": {
     "command": "CUDA_VISIBLE_DEVICES=1 python -m pytest -q",
-    "passed": 399,
+    "passed": 500,
     "skipped": 2,
-    "collection_count": 401,
-    "elapsed_seconds": 13.09,
+    "collection_count": 502,
+    "elapsed_seconds": 15.26,
     "coverage": [
       "exact hard forward and latest tie behavior",
       "all seven nonempty query/key/value gradient masks",
@@ -106,9 +132,21 @@
       "dense, grouped-head, and packed-varlen paths including empty segments",
       "Q-only utility caching including cross-warp full-cache consumption, value-only route tiling, and long packed K aggregation",
       "exact finite-window diagonal recurrence and adjoint research oracle",
+      "2x2 Hamming-normalization and suffix-score geometry ablation with directed long-short competition",
+      "normalized-square-root utility calibration, derivative, hard-forward isolation, and CUDA/reference parity",
       "any-candidate and strict-longest-latest target modes",
       "trained-checkpoint production versus exact-bitflip alignment",
+      "globally shared-bit exact expectation, ARM/DisARM, mean-field, bitflip residual, and margin-edit research oracles",
+      "single-edit and coordinated two-edit hard-route fitting gates",
+      "shared-projection gradient aggregation and hard response fitting",
+      "batched ARM/DisARM group rewards, RNG replay, exact hard forward, and unchanged production V VJP",
+      "W=1 batched mean-field latest-match VJP against the enumerated oracle",
       "contextual reset-RNN recall and causal ablations",
+      "deterministic stateful symbol persistence, reset, separate Q/K heads, and feedback gradients",
+      "strict 2/4/8-position latent-grammar capacity and shortcut-free fitting gates",
+      "two-hop hard-Value causality, conflict statistics, and dormant-bit activation",
+      "cancellation-resistant long exact-match local diagonal VJP oracle",
+      "pretraining Q/K trajectory alignment, conflict entropy, and horizon metrics",
       "FP32, FP16, BF16, autocast, GradScaler, and checkpoint",
       "full-graph torch.compile with the aot_eager backend for dense and packed calls",
       "invalid scalar and raw native seed contracts",
@@ -134,17 +172,17 @@
       "dropout_p_0": {
         "hard_output_mismatches": 0,
         "max_absolute_gradient_error": {
-          "query": 1.1175870895385742e-08,
-          "key": 2.421438694000244e-08,
-          "value": 2.384185791015625e-07
+          "query": 7.916241884231567e-09,
+          "key": 1.862645149230957e-08,
+          "value": 1.7881393432617188e-07
         }
       },
       "dropout_p_0_1": {
         "hard_output_mismatches": 0,
         "max_absolute_gradient_error": {
-          "query": 1.862645149230957e-08,
-          "key": 2.0489096641540527e-08,
-          "value": 1.7881393432617188e-07
+          "query": 9.313225746154785e-09,
+          "key": 3.3527612686157227e-08,
+          "value": 1.1920928955078125e-07
         }
       }
     },
@@ -152,17 +190,17 @@
       "dropout_p_0": {
         "hard_output_mismatches": 0,
         "max_absolute_gradient_error": {
-          "query": 7.450580596923828e-09,
-          "key": 1.4901161193847656e-08,
-          "value": 8.940696716308594e-08
+          "query": 1.6763806343078613e-08,
+          "key": 2.0023435354232788e-08,
+          "value": 5.960464477539063e-08
         }
       },
       "dropout_p_0_1": {
         "hard_output_mismatches": 0,
         "max_absolute_gradient_error": {
-          "query": 7.450580596923828e-09,
-          "key": 2.9802322387695312e-08,
-          "value": 1.1920928955078125e-07
+          "query": 1.30385160446167e-08,
+          "key": 1.1175870895385742e-08,
+          "value": 1.043081283569336e-07
         }
       }
     }
@@ -170,37 +208,43 @@
   "training_gates": {
     "hard_forward_fit": {
       "configuration": "production CUDA, seeds 0..7, 1000 steps, success loss <= 0.001",
-      "idle_sm75_kernel_recheck": {
+      "normalized_sqrt_suffix_sm75_recheck": {
         "command": "CUDA_VISIBLE_DEVICES=1 python examples/fit_soft_reference.py --operator cuda --device cuda --seed SEED --steps 1000 --dropout-p 0 --mismatch-scale 3 --success-loss-threshold 0.001",
-        "initial_sweep_final_successes": "7/8",
-        "ever_successes": "7/8",
-        "hard_accuracy_1_successes": "7/8",
-        "median_final_loss": 0.0002873256,
-        "median_step_ms": 3.280113,
+        "initial_sweep_final_successes": "6/8",
+        "collision_free_final_successes": "6/6",
+        "ever_successes": "6/8",
+        "hard_accuracy_1_successes": "6/8",
+        "median_final_loss": 0.0003023294,
+        "median_step_ms": 3.3885468,
         "initial_sweep": {
-          "0": 0.0002244158,
-          "1": 0.1546044052,
-          "2": 0.0002723188,
-          "3": 0.0003730969,
-          "4": 0.0002945133,
-          "5": 0.0002801379,
-          "6": 0.0005220272,
-          "7": 0.0002329715
+          "0": 0.0002131528,
+          "1": 0.6164203882,
+          "2": 0.0002886034,
+          "3": 0.0003659682,
+          "4": 0.0002359762,
+          "5": 0.0002907559,
+          "6": 0.0003139029,
+          "7": 0.1389804333
         },
-        "structural_failure": {
+        "structural_failures": {
           "1": {
-            "final_loss": 0.1546044052,
-            "best_loss": 0.1544772536,
-            "hard_accuracy": 0.8888888955
+            "final_loss": 0.6164203882,
+            "hard_feature_conditional_entropy": 0.6161308272,
+            "loss_above_entropy": 0.000289561,
+            "hard_accuracy": 0.6666666865,
+            "independent_retries_near_zero": "0/3"
+          },
+          "7": {
+            "final_loss": 0.1389804333,
+            "hard_feature_conditional_entropy": 0.1386294361,
+            "loss_above_entropy": 0.0003509972,
+            "hard_accuracy": 0.9,
+            "independent_retries_near_zero": "0/3"
           }
         },
-        "seed_6_recheck": {
-          "final_loss": 0.0005220272,
-          "best_loss": 0.0003617964,
-          "hard_accuracy": 1.0
-        }
+        "interpretation": "Every collision-free run reached near-zero loss. Both failed seeds optimized to within 0.001 of their hard-feature entropy floor."
       },
-      "matched_static_matrix": {
+      "historical_raw_suffix_score_static_matrix": {
         "mismatch_scale_3": {
           "dropout_p_0": {
             "ever_successes": "7/8",
@@ -244,20 +288,20 @@
           }
         }
       },
-      "decision": "Restore mismatch_scale=3 for the default dropout_p=0 recipe. Keep 9 explicit; neither value dominates across dropout settings."
+      "decision": "Keep mismatch_scale=3 as the default. The 3-versus-9 matrix is historical raw-score evidence; the current normalized-square-root CUDA fit confirms near-zero optimization for every collision-free seed but does not recalibrate lambda."
     },
     "shortcut_free_associative_recall": {
       "command": "CUDA_VISIBLE_DEVICES=1 python examples/associative_recall_gate.py --operator cuda --device cuda --seeds 0 1 2 3 4 5 6 7 --dropout-p 0.1 --mismatch-scale 3",
       "cuda_passes": "8/8",
       "cuda_success_steps": [
-        28,
+        31,
+        38,
+        25,
         32,
-        24,
-        29,
-        34,
-        40,
-        35,
-        23
+        37,
+        47,
+        38,
+        25
       ],
       "passed": true
     },
@@ -314,6 +358,19 @@
         "minimum_validation_exact_accuracy": 1.0,
         "mean_step_ms": 12.4352367725
       },
+      "freeze_recheck_dropout_p_0_1": {
+        "reason_for_two_launches": "Record known atomic and optimizer-basin variability instead of selecting only one launch.",
+        "launch_1": {
+          "passed_runs": "3/4",
+          "mean_validation_exact_accuracy": 0.9951171875,
+          "minimum_validation_exact_accuracy": 0.98828125
+        },
+        "launch_2": {
+          "passed_runs": "4/4",
+          "mean_validation_exact_accuracy": 0.998046875,
+          "minimum_validation_exact_accuracy": 0.9921875
+        }
+      },
       "causal_checks": {
         "mean_historical_route_any_head_accuracy": 1.0,
         "mean_paired_routed_value_difference_fraction": 1.0,
@@ -341,8 +398,205 @@
     "top_k_oracle_useful_fraction": 0.4406943105,
     "note": "Directional diagnostic against exact hard bit flips, not an exact-gradient claim."
   },
+  "suffix_proxy_recalibration": {
+    "artifact": "validation/suffix_proxy_ablation.json",
+    "hard_forward_changed": false,
+    "public_api_changed": false,
+    "gradient_shell_rows": 8640,
+    "hamming_decision": "Retain h/D; reject h/sqrt(D) because D32 lambda3 median QK RMS fell to 2.71% of baseline.",
+    "directed_competition_successes": {
+      "raw_suffix_score": "12/18",
+      "normalized_sqrt_suffix_score": "18/18"
+    },
+    "ordinary_fit_300_step_successes": {
+      "raw_suffix_score": "30/48",
+      "normalized_sqrt_suffix_score": "32/48"
+    },
+    "discordant_1000_step_paired_outcomes": {
+      "both_success": 6,
+      "normalized_sqrt_only": 4,
+      "raw_only": 0
+    },
+    "historical_shape_successes": {
+      "raw_suffix_score": "7/8",
+      "normalized_sqrt_suffix_score": "7/8"
+    },
+    "exact_bitflip_mean_cosine": {
+      "raw_suffix_score": 0.5453680754,
+      "normalized_sqrt_suffix_score": 0.5488342559
+    },
+    "decision": "Use U(S)=(sqrt(2)+1)(sqrt(1+S)-1) as the fixed backward route score and include U'(S) in the Q/K VJP."
+  },
+  "global_shared_bit_oracle_research": {
+    "production_status": "Research-only PyTorch oracle and fitting gate; no public API or CUDA kernel change",
+    "enumeration_contract": "One globally shared assignment for every relevant Q/K bit; exact hard latest-longest ROSA per state",
+    "primary_matrix": {
+      "configuration": "seeds 0..7, random plus repeated-key, T4 D2 Dv3 W3 tau1, 4096 samples, two extra hard evaluations",
+      "state_count_per_case": 4096,
+      "local_expectation_max_abs_error": 3.3306690738754696e-16,
+      "mean_field": {
+        "mean_gradient_cosine": 0.9483205959,
+        "mean_relative_error": 0.2959324139,
+        "route_tv_mean": 0.0379896865,
+        "route_tv_max": 0.1784123107
+      },
+      "arm": {
+        "sample_mean_cosine": 0.995024621,
+        "normalized_variance": 46.0282835608,
+        "median_single_sample_cosine": 0.1505832758,
+        "negative_sample_fraction": 0.2848456499
+      },
+      "disarm": {
+        "sample_mean_cosine": 0.9960258276,
+        "normalized_variance": 34.6735537266,
+        "median_single_sample_cosine": 0.1791706066,
+        "negative_sample_fraction": 0.2598986088
+      },
+      "production_cosine_to_stochastic_oracle": 0.5606401956,
+      "complete_bitflip_cosine_to_stochastic_oracle": 0.4411920787,
+      "two_sample_bitflip_residual_variance_to_own_target": 4.6653712972
+    },
+    "multi_seed_fit": {
+      "configuration": "three trainable shared key bits, fixed query/value, 100 Adam steps, tau0.5, eta1",
+      "matched_seed_joint_suffix_successes": {
+        "production": "16/16",
+        "mean_field": "16/16",
+        "exact_expectation": "16/16",
+        "arm": "16/16",
+        "disarm": "16/16",
+        "exact_bitflip": "0/16",
+        "bitflip_residual_k2": "11/16",
+        "margin_edit": "16/16"
+      },
+      "cartesian_noise_joint_suffix_successes": {
+        "arm": "32/32",
+        "disarm": "32/32",
+        "bitflip_residual_k1": "32/32",
+        "bitflip_residual_k2": "23/32",
+        "bitflip_residual_k3_all_bits": "0/32"
+      },
+      "margin_eta_successes": {
+        "0.05": "0/16",
+        "0.1": "6/16",
+        "0.25": "16/16",
+        "0.5": "16/16",
+        "1.0": "16/16",
+        "2.0": "16/16"
+      }
+    },
+    "shared_projection_fit": {
+      "artifact": "validation/shared_projection_fit.json",
+      "configuration": "two parameters map to three coupled key logits, fixed query/value, W2, tau0.5, 16 matched seeds, 100 Adam steps",
+      "successes": {
+        "production": "16/16",
+        "mean_field": "16/16",
+        "exact_expectation": "16/16",
+        "arm_p1": "16/16",
+        "disarm_p1": "16/16",
+        "exact_bitflip": "0/16",
+        "bitflip_residual_k2": "14/16",
+        "margin_edit": "16/16"
+      },
+      "median_first_success_step": {
+        "production": 64.0,
+        "mean_field": 6.0,
+        "exact_expectation": 6.0,
+        "arm_p1": 18.0,
+        "disarm_p1": 16.5,
+        "margin_edit": 8.0
+      }
+    },
+    "shortcut_free_contextual_fit": {
+      "primary_artifact": "validation/contextual_estimator_recall_t05_p4.json",
+      "one_pair_artifact": "validation/contextual_estimator_recall_t05_p1.json",
+      "configuration": "RTX 2080 Ti, seeds0..3, T13 H2 D8 Hv2 Dv4 W1, 1000 AdamW steps, tau0.5",
+      "primary_four_pair": {
+        "passed_runs": {
+          "production": "4/4",
+          "production_dropout_p0.1": "4/4",
+          "mean_field": "4/4",
+          "arm": "4/4",
+          "disarm": "4/4"
+        },
+        "median_first_train_exact_step": {
+          "production": 92.5,
+          "production_dropout_p0.1": 85.0,
+          "mean_field": 103.0,
+          "arm": 132.0,
+          "disarm": 163.5
+        }
+      },
+      "one_pair": {
+        "arm_passed_runs": "4/4",
+        "disarm_passed_runs": "4/4",
+        "arm_median_first_train_exact_step": 296.0,
+        "disarm_median_first_train_exact_step": 441.0
+      },
+      "shortcut_checks_passed": true
+    },
+    "decision": "Keep the production estimator. Shared projection exposes a real convergence weakness, but mean-field, ARM, and DisARM do not improve shortcut-free contextual recall at matched cost; do not start a CUDA kernel."
+  },
+  "internal_language_research": {
+    "summary_artifact": "validation/internal_language_gates.json",
+    "production_operator_changed": false,
+    "stateful_grammar": {
+      "configuration": "RTX 2080 Ti, four seeds, aligned separate Q/K heads, 500 AdamW steps at lr1e-3",
+      "strict_oracle_full_window_accuracy": {
+        "L2": 1.0,
+        "L4": 1.0,
+        "L8": 1.0
+      },
+      "final_exact_runs": {
+        "L2": "4/4",
+        "L4": "2/4",
+        "L8": "0/4"
+      },
+      "stateless_final_exact_runs": {
+        "L2": "0/4",
+        "L4": "0/4"
+      }
+    },
+    "hard_value_multihop": {
+      "initial_mean_answer_accuracy": 0.8593750149,
+      "final_mean_answer_accuracy": 0.2864583340,
+      "final_passed_runs": "1/4",
+      "zero_feedback_passed_runs": "0/4",
+      "mean_final_shuffled_feedback_accuracy": 0.0468750014
+    },
+    "dormant_bit_growth": {
+      "trained_growth_mean_final_route_accuracy": 0.7265625,
+      "trained_growth_final_exact_runs": "0/4",
+      "frozen_growth_final_exact_runs": "4/4",
+      "frozen_growth_active_bits": 6,
+      "frozen_growth_conflicting_pairs": 0,
+      "boundary": "Continuation-label splits are external supervised edits; frozen growth proves structural capacity but not stability under an unrelated LM gradient."
+    },
+    "pretraining_codebook": {
+      "artifacts": [
+        "validation/pretraining_codebook.json",
+        "validation/pretraining_codebook_long.json"
+      ],
+      "interface": "Matched Q/K logits [occurrence, trajectory, bit] plus continuation labels; no operator or training-objective change",
+      "N64_L8_D4_full_horizon": {
+        "aligned_route_accuracy": 1.0,
+        "corrupted_route_accuracy": 0.43359375,
+        "role_drift_route_accuracy": 0.5234375,
+        "collapsed_route_accuracy": 0.87890625,
+        "collapsed_conditional_entropy_bits": 0.2529487805
+      },
+      "N256_L32_D2": {
+        "aligned_full_route_accuracy": 1.0,
+        "corrupted_full_route_accuracy": 0.404296875,
+        "corrupted_full_trajectory_alignment": 0.001953125,
+        "role_drift_full_route_accuracy": 0.5068359375,
+        "collapsed_full_route_accuracy": 1.0,
+        "finding": "Long trajectories restore low-bit address capacity, while independent bit errors destroy exact full-trajectory agreement; inspect the full horizon curve."
+      }
+    },
+    "decision": "Keep research-only. Preserve active hard bits while resolving under-capacity conflicts, and track key conflicts separately from Q/K self-alignment before testing in the contextual LM."
+  },
   "diagonal_recurrence_research": {
-    "production_status": "PyTorch research oracle only; no dispatcher or CUDA production kernel",
+    "production_status": "Archived PyTorch oracle and measurements only; research raw CUDA operations were removed from the frozen build and the production row VJP is unchanged",
     "fp64_cpu": {
       "configuration": "N=1..65, W=1..128, 100 cases",
       "score_max_abs_error": 6.661338147750939e-16,
@@ -355,27 +609,77 @@
       "vjp_max_abs_error": 7.152557373046875e-07
     },
     "complete_symbol_vjp": {
-      "test_cases": 89,
+      "test_cases": 91,
       "coverage": "full causal score mapping, log-gate adjoint, FP32/FP64 Q/K symbol VJP, exact/one-mismatch/alternating/random-Hamming gates",
       "exact_match_unscaled_route_vjp_max_abs_error": 0.0007019043,
       "exact_match_softmax_route_vjp_max_abs_error": 0.0000308454,
-      "production_blockers": [
-        "row-softmax and diagonal staging",
-        "bounded reverse-pass scratch without O(BHT^2) state",
-        "numerically stable long exact-match FP32 reverse correction",
-        "end-to-end CUDA FP32 parity",
-        "measured speedup at large suffix windows"
+      "remaining_production_blockers": [
+        "bounded diagonal ring scratch without O(BHT^2) state",
+        "packed-varlen diagonal scheduling",
+        "measured cross-GPU speedup over the row kernel"
       ]
     },
     "fp32_exact_match_long_stress": {
       "configuration": "N=4096, exact gates, random external route-score VJP",
       "score_max_abs_error": 0.0,
-      "vjp_max_abs_error": {
-        "W512": 0.05859375,
-        "W4096": 2.7578125
+      "algebraic_vjp_max_abs_error": {
+        "W512": 0.006589443,
+        "W4096": 0.036284584
       },
-      "decision": "Production blocker; the reverse correction requires a numerically different formulation."
+      "local_compensated_vjp_max_abs_error": {
+        "W512": 0.001077794,
+        "W4096": 0.013550779
+      },
+      "local_global_relative_error": {
+        "W512": 7.6670664e-08,
+        "W4096": 8.6221857e-08
+      },
+      "decision": "Numerical formulation blocker resolved; the local oracle sums only the W real contributions and avoids full-diagonal subtraction."
+    },
+    "multi_stage_cuda": {
+      "historical_operation": "rosa_soft::research_surrogate_vjp_diagonal_masked",
+      "present_in_frozen_build": false,
+      "maximum_cross_gpu_abs_error": 2.6702880859375e-05,
+      "workspace": "O(B H T^2) FP32 local-gate VJP prototype",
+      "cross_gpu_mean_latency_ratio": 1.3047245283,
+      "cross_gpu_worst_latency_ratio": 1.5923035177,
+      "decision": "Archived and removed from the package; parity passed, but latency and quadratic workspace failed promotion."
+    },
+    "exact_hard_index": {
+      "historical_operation": "rosa_soft::research_hard_forward_indexed",
+      "present_in_frozen_build": false,
+      "algorithm": "One warp per Q/K diagonal; prefix nearest-mismatch scan and 64-bit longest/latest reduction",
+      "parity": "Bit-exact output and packed Q/K symbols across random/all-match/periodic FP32/FP16/BF16 cases",
+      "all_match_T4096_W128": {
+        "production_ms": 6.6924385,
+        "indexed_ms": 0.5568512,
+        "speedup": 12.0184
+      },
+      "decision": "Archived and removed from the package; random high-entropy codes regress and no input-independent static selector is reliable."
     }
+  },
+  "execution_plan_calibration": {
+    "artifact": "validation/execution_plan_calibration.json",
+    "status": "archived; calibration script and research raw operators are absent from the frozen package",
+    "devices": [
+      "NVIDIA GeForce RTX 2080 Ti (sm_75)",
+      "NVIDIA GeForce RTX 3070 (sm_86)"
+    ],
+    "matrix": "T=128/256/512/1024, random/all-match, B1 H4 D8 Hv2 Dv64 W32 FP32 QKV",
+    "promotion_policy": "Worst ratio <=1.05, mean ratio <=0.95, workspace <=64 MiB, and parity threshold",
+    "hard_diagonal_index": {
+      "mean_latency_ratio": 1.3662714768,
+      "worst_latency_ratio": 1.8165757336,
+      "maximum_error": 0.0,
+      "promoted": false
+    },
+    "factorized_diagonal_vjp": {
+      "mean_latency_ratio": 1.3047245283,
+      "worst_latency_ratio": 1.5923035177,
+      "maximum_error": 2.6702880859375e-05,
+      "promoted": false
+    },
+    "decision": "The archived result supports the frozen production hard scan and occupancy-aware row VJP; no runtime timing or device-name dispatch was added."
   },
   "benchmarks": {
     "device": "NVIDIA GeForce RTX 2080 Ti",
@@ -406,6 +710,42 @@
       "H16": 3.267
     },
     "packed_q_only_tail_cache_speedup": "approximately 1.08x..1.11x for tested average segment lengths >=256",
+    "dense_reference_freeze_spot_check": {
+      "method": "Physical GPU 1, 30 warmups, 200 repeats, B1 H4 D8 Hv2 Dv8 W32 FP32 random QKV backward",
+      "dense_qkv_train_ms": {
+        "T256": 0.6740547,
+        "T512": 1.6213913,
+        "T1024": 5.4420477
+      },
+      "packed_qkv_segment256_train_ms": {
+        "T256_S1": 1.0353989,
+        "T512_S2": 1.4799666,
+        "T1024_S4": 2.8716422
+      },
+      "interpretation": "Smoke-test timing showed no regression after removing research-only compiled kernels; it is not a cross-version performance guarantee."
+    },
+    "normalized_sqrt_suffix_post_change": {
+      "method": "Median of three process runs on physical GPU 1; 10 warmups and 50 repeats; absolute post-change timing, not an old/new A/B.",
+      "shape": "B1 H4 D8 Hv2 Dv8 W32 FP32 random",
+      "dense_qkv_train_ms": {
+        "T64": 0.3888569641,
+        "T128": 0.3895577621,
+        "T256": 0.7330246735,
+        "T512": 2.194165802,
+        "T1024": 6.4933081055
+      },
+      "packed_qkv_segment256_train_ms": {
+        "T256_S1": 1.0062758636,
+        "T512_S2": 1.6649830627,
+        "T1024_S4": 2.4527615356
+      },
+      "dense_hard_forward_ms": {
+        "T256": 0.0480815983,
+        "T512": 0.0454604816,
+        "T1024": 0.0461414385
+      },
+      "operator_memory": "No new route matrix or persistent state; measured allocator growth remained linear in T."
+    },
     "block_size_ablation": {
       "tested_threads": [64, 128, 256],
       "decision": 128,
@@ -420,13 +760,23 @@
   "known_boundaries": [
     "Backward remains dense O(T^2); candidate pruning is prohibited in the default training operator.",
     "The VJP is a useful dense surrogate, not the mathematical derivative of exact hard routing.",
+    "The normalized-square-root route score is a fixed surrogate utility; its monotonicity preserves evidence ordering only inside backward and does not define hard routing.",
     "Dropout changes backward exploration only; it cannot make the hard forward differentiable.",
     "No matched fitting cell exceeded 7/8; the synthetic matrix is not evidence of universal pretraining benefit.",
     "The static scale and mismatch_scale defaults are empirical and are not universally optimal.",
     "A high mismatch_scale can suppress discovery of long near matches; scale cannot restore vanished suffix products.",
     "FP16 can underflow long-tail route gradients; use loss scaling or FP32 projections when full support matters.",
     "CUDA atomic accumulation is numerically reproducible within tolerance, not bitwise deterministic.",
-    "The exact diagonal recurrence is a research oracle only; its FP32 reverse correction is unstable for long exact-match suffixes.",
+    "The cancellation-resistant diagonal VJP is numerically stable, but the tested CUDA factorization is slower and uses O(BHT^2) scratch; production remains row-owned.",
+    "The global-bit oracle is exponential and restricted to B=H=1 tiny cases; its bit temperature defines a stochastic research objective, not a production route temperature.",
+    "Global-bit enumeration shares each activation bit across all of its uses but does not model correlations induced by shared Q/K projection parameters; exact zero logits remain Bernoulli(0.5) rather than the production -1 symbol.",
+    "No new estimator has cleared the shared-parameter, contextual-recall, and matched-cost gates; the new CUDA work changes execution factorization only, not the estimator.",
+    "The stateful grammar uses fixed phase and outline scaffolds; raw-residual grammar discovery is untested.",
+    "Conflict-driven dormant-bit splits consume continuation labels and are not evidence of unsupervised symbol emergence.",
+    "Frozen dormant-bit growth has not been tested while an unrelated language-modeling loss remains active.",
+    "The pretraining codebook diagnostic consumes collected Q/K occurrences and labels; it is not evidence that a full model can discover or preserve those trajectories during pretraining.",
+    "The archived exact hard diagonal index had no safe input-independent auto selector because its benefit depended on hard-code match density; it is absent from the frozen build.",
+    "Archived research CUDA measurements are retained for auditability, but their raw operators and dedicated build-path tests are absent from the frozen package.",
     "Full-model pretraining at realistic depth and context has not yet been completed."
   ]
 }

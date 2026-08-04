@@ -147,6 +147,73 @@ def finite_suffix_log_gate_vjp_scan(
     )
 
 
+def finite_suffix_log_gate_vjp_local(
+    log_gates: Tensor,
+    route_score_vjp: Tensor,
+    max_suffix_length: int,
+) -> Tensor:
+    """Return a cancellation-resistant finite-window VJP oracle.
+
+    The affine reverse scan subtracts two terms whose magnitudes can grow
+    with the full diagonal length.  This formulation instead sums only the
+    at-most-``W`` products that actually contain each gate.  It intentionally
+    uses ``O(NW)`` scratch: the function is a numerical oracle and a model for
+    a future warp-local bounded-state CUDA implementation, not a production
+    PyTorch path.
+    """
+
+    _check_inputs(log_gates, max_suffix_length)
+    if route_score_vjp.shape != log_gates.shape:
+        raise ValueError("route_score_vjp must match log_gates")
+
+    gates = log_gates.exp()
+    length = gates.size(-1)
+    horizon = min(max_suffix_length, length)
+
+    # products[..., l - 1, n] is the product of the length-l suffix
+    # ending at n.  Invalid entries before l - 1 remain zero.
+    products = gates.new_zeros(gates.shape[:-1] + (horizon, length))
+    products[..., 0, :] = gates
+    for suffix_length in range(2, horizon + 1):
+        products[..., suffix_length - 1, suffix_length - 1 :] = (
+            products[
+                ..., suffix_length - 2, suffix_length - 2 : -1
+            ]
+            * gates[..., suffix_length - 1 :]
+        )
+
+    # Cumulative positive products are well conditioned.  For output n=m+d,
+    # a suffix containing gate m consists of the future product [m,n] times
+    # an optional prefix ending at m-1 of length at most W-d-1.
+    suffix_evidence = products.cumsum(dim=-2)
+    log_gate_vjp = torch.zeros_like(gates)
+    compensation = torch.zeros_like(gates)
+    for distance in range(horizon):
+        count = length - distance
+        future_product = products[..., distance, distance:]
+        history_horizon = horizon - distance - 1
+        history_evidence = torch.ones_like(future_product)
+        if history_horizon > 0 and count > 1:
+            history_evidence[..., 1:] += suffix_evidence[
+                ..., history_horizon - 1, : count - 1
+            ]
+        contribution = (
+            route_score_vjp[..., distance:]
+            * future_product
+            * history_evidence
+        )
+
+        # Neumaier/Kahan-style compensation limits cancellation among the W
+        # local external adjoints without introducing full-diagonal terms.
+        corrected = contribution - compensation[..., :count]
+        updated = log_gate_vjp[..., :count] + corrected
+        compensation[..., :count] = (
+            updated - log_gate_vjp[..., :count]
+        ) - corrected
+        log_gate_vjp[..., :count] = updated
+    return log_gate_vjp
+
+
 def direct_finite_suffix_scores(
     log_gates: Tensor,
     max_suffix_length: int,

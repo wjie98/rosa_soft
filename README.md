@@ -2,6 +2,12 @@
 
 Hard-forward ROSA operators for PyTorch.
 
+`rosa-soft-dense-reference-v1` freezes the current exact-hard/dense-gradient
+training implementation. New estimator families should use a separate module
+or operator instead of changing this baseline. The frozen contract and
+reproduction commands are recorded in
+[`docs/DENSE_REFERENCE_FREEZE.md`](docs/DENSE_REFERENCE_FREEZE.md).
+
 The package has three supported implementation families:
 
 - `rosa_soft_reference` and `rosa_soft_varlen_reference`: pure PyTorch
@@ -16,7 +22,8 @@ RosaSoft trains a discrete suffix route without exposing a soft value path:
 
 - forward returns the exact latest-longest hard ROSA match;
 - backward evaluates every valid causal route;
-- query/key receive a dense suffix VJP;
+- query/key receive a dense suffix VJP with a fixed concave route-score
+  transform;
 - values receive probability-weighted dense credit;
 - null output is exactly zero;
 - ties select the latest matching route.

@@ -19,6 +19,7 @@ from .soft_reference import (
     _pairwise_soft_match_gates,
     _reference_compute_dtype,
     _route_probabilities,
+    _suffix_score_utility,
     _suffix_prefix_product_scores,
     _validate_reference_call,
 )
@@ -41,7 +42,7 @@ class RosaSoftInspection:
     @property
     def route_scores(self) -> Tensor:
         return _masked_route_scores(
-            self.soft_suffix_scores,
+            _suffix_score_utility(self.soft_suffix_scores),
             self.causal_route_mask,
         )
 
@@ -94,7 +95,7 @@ def inspect_rosa_soft(
     )
     route_probabilities = _route_probabilities(
         _masked_route_scores(
-            soft_suffix_scores,
+            _suffix_score_utility(soft_suffix_scores),
             causal_route_mask,
         ),
         causal_route_mask,

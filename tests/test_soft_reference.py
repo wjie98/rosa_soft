@@ -13,6 +13,7 @@ from rosa_soft.soft_reference import (
     _causal_route_mask,
     _hard_sign_with_softsign_vjp,
     _pairwise_soft_match_gates,
+    _suffix_score_utility,
     _suffix_prefix_product_scores,
 )
 from rosa_soft.testing import inspect_rosa_soft
@@ -221,6 +222,38 @@ def test_suffix_score_is_sum_of_prefix_products():
     scores = _suffix_prefix_product_scores(local, 3)
     assert scores[0, 0, 3, 3] == pytest.approx(
         0.8 + 0.8 * 0.5 + 0.8 * 0.5 * 0.25
+    )
+
+
+def test_suffix_score_utility_is_normalized_monotone_and_concave():
+    raw_scores = torch.arange(0.0, 33.0, dtype=torch.float64).requires_grad_()
+    route_scores = _suffix_score_utility(raw_scores)
+
+    assert route_scores[0].detach().item() == pytest.approx(0.0)
+    assert route_scores[1].detach().item() == pytest.approx(1.0)
+    increments = route_scores[1:] - route_scores[:-1]
+    assert torch.all(increments > 0)
+    assert torch.all(increments[1:] < increments[:-1])
+
+    route_scores.sum().backward()
+    expected = (math.sqrt(2.0) + 1.0) / (
+        2.0 * torch.sqrt(1.0 + raw_scores.detach())
+    )
+    torch.testing.assert_close(raw_scores.grad, expected)
+
+
+def test_inspection_keeps_raw_suffix_scores_separate_from_route_scores():
+    query = torch.ones(1, 5, 1, 2)
+    key = torch.ones_like(query)
+    value = torch.ones(1, 5, 1, 1)
+    _, inspection = inspect_rosa_soft(query, key, value)
+
+    expected = _suffix_score_utility(inspection.soft_suffix_scores)
+    expected[..., 0] = 0.5
+    valid = inspection.causal_route_mask.view(1, 1, 5, 5)
+    torch.testing.assert_close(
+        inspection.route_scores.masked_select(valid),
+        expected.masked_select(valid),
     )
 
 

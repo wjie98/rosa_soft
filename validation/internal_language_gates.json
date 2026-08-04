@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-02T17:09:27+08:00",
+  "environment": {
+    "device": "NVIDIA GeForce RTX 2080 Ti",
+    "physical_index": 1,
+    "visible_index": 0,
+    "isolation": "CUDA_VISIBLE_DEVICES=1",
+    "python": "3.12.13",
+    "pytorch": "2.11.0+cu128"
+  },
+  "scope": {
+    "production_operator_changed": false,
+    "public_api_changed": false,
+    "forward": "exact hard ROSA",
+    "backward": "production dense soft VJP",
+    "research_only": true
+  },
+  "stateful_symbolizer": {
+    "transition": "s = lerp(s, tanh(Wx LN(x) + Ws s + Wf f), update_rate)",
+    "shared_latent_trunk": true,
+    "separate_query_key_heads": true,
+    "stochastic_state": false,
+    "auxiliary_losses": 0,
+    "unit_tests": 7
+  },
+  "latent_grammar": {
+    "capacity_artifact": "validation/latent_grammar_capacity.json",
+    "primary_artifacts": [
+      "validation/latent_grammar_l2.json",
+      "validation/latent_grammar_l4.json",
+      "validation/latent_grammar_l8.json"
+    ],
+    "configuration": "production CUDA, four seeds, aligned separate Q/K heads, AdamW lr1e-3, 500 steps, scale1, dropout0, mismatch_scale3",
+    "strict_oracle": {
+      "L2": {
+        "candidates": 3,
+        "W1_route_accuracy": 0.3333333433,
+        "W2_route_accuracy": 1.0
+      },
+      "L4": {
+        "candidates": 5,
+        "W3_route_accuracy": 0.4000000060,
+        "W4_route_accuracy": 1.0
+      },
+      "L8": {
+        "candidates": 17,
+        "W7_route_accuracy": 0.4705882370,
+        "W8_route_accuracy": 1.0
+      }
+    },
+    "stateful": {
+      "L2": {
+        "final_exact_runs": "4/4",
+        "ever_exact_runs": "4/4",
+        "mean_initial_route_accuracy": 0.7500000075,
+        "mean_final_route_accuracy": 1.0
+      },
+      "L4": {
+        "final_exact_runs": "2/4",
+        "ever_exact_runs": "2/4",
+        "mean_initial_route_accuracy": 0.5000000075,
+        "mean_final_route_accuracy": 0.6500000022
+      },
+      "L8": {
+        "final_exact_runs": "0/4",
+        "ever_exact_runs": "0/4",
+        "mean_initial_route_accuracy": 0.1176470593,
+        "mean_final_route_accuracy": 0.0
+      }
+    },
+    "stateless": {
+      "L2_final_exact_runs": "0/4",
+      "L2_mean_final_route_accuracy": 0.2500000075,
+      "L4_final_exact_runs": "0/4",
+      "L4_mean_final_route_accuracy": 0.3000000045
+    },
+    "independent_head_L2_ablation": {
+      "final_exact_runs": "4/4",
+      "first_exact_steps": [27, 94, 124, 23],
+      "median_first_exact_step": 60.5,
+      "aligned_median_first_exact_step": 2.0
+    }
+  },
+  "multihop": {
+    "primary_artifact": "validation/multihop_recall_gate.json",
+    "configuration": "six addresses, address/qk bits8, 24 paired episodes, four seeds, 500 AdamW steps at lr1e-3",
+    "causal_contract": "first hard routed Value is the only input to the reset second-query symbolizer",
+    "initial": {
+      "mean_first_value_accuracy": 0.9166666716,
+      "mean_answer_accuracy": 0.8593750149,
+      "mean_zero_feedback_accuracy": 0.0,
+      "mean_shuffled_feedback_accuracy": 0.0729166679
+    },
+    "routed_feedback_final": {
+      "passed_runs": "1/4",
+      "ever_exact_runs": "3/4",
+      "mean_first_value_accuracy": 0.3333333358,
+      "mean_answer_accuracy": 0.2864583340,
+      "mean_zero_feedback_accuracy": 0.0,
+      "mean_shuffled_feedback_accuracy": 0.0468750014
+    },
+    "zero_feedback_training": {
+      "passed_runs": "0/4",
+      "mean_answer_accuracy": 0.0104166670
+    },
+    "detached_feedback_ablation": {
+      "passed_runs": "1/4",
+      "mean_answer_accuracy": 0.2916666679,
+      "decision": "gradient path exists but did not improve this gate"
+    }
+  },
+  "symbol_growth": {
+    "trained_artifact": "validation/symbol_growth_trained.json",
+    "frozen_artifact": "validation/symbol_growth_frozen.json",
+    "configuration": "32 concepts, initial2/max8 bits, W1, 300 steps, conflict check every50 steps",
+    "fixed8_trained": {
+      "mean_initial_route_accuracy": 0.890625,
+      "mean_final_route_accuracy": 0.5703125,
+      "final_exact_runs": "1/4",
+      "mean_final_query_key_alignment": 0.7265625,
+      "mean_final_conflicting_pairs": 5.25
+    },
+    "growth_margin1_trained": {
+      "mean_final_route_accuracy": 0.7265625,
+      "final_exact_runs": "0/4",
+      "mean_final_query_key_alignment": 0.7734375,
+      "mean_final_conflicting_pairs": 1.0
+    },
+    "growth_margin4_ablation": {
+      "mean_final_route_accuracy": 0.84375,
+      "final_exact_runs": "0/4",
+      "mean_final_query_key_alignment": 0.8984375,
+      "mean_final_conflicting_pairs": 1.0
+    },
+    "frozen_gradient_growth": {
+      "final_exact_runs": "4/4",
+      "mean_final_route_accuracy": 1.0,
+      "mean_final_query_key_alignment": 1.0,
+      "mean_final_conflicting_pairs": 0.0,
+      "active_bits": 6,
+      "split_count": 4,
+      "boundary": "proves structural capacity growth only; zero route loss leaves no unrelated LM gradient after success"
+    }
+  },
+  "decision": [
+    "Keep all components research-only and leave RosaSoft unchanged.",
+    "Separate representability, initialization quality, and post-training retention.",
+    "Do not update an under-capacity codebook continuously; split capacity while preserving active hard bits.",
+    "Track hard key conflicts and Q/K self-alignment as independent state variables.",
+    "Test frozen growth next in the shortcut-free contextual LM with an unrelated LM loss still active."
+  ]
+}

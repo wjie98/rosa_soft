@@ -95,7 +95,7 @@ An exact symbol match has `g = 1`; a mismatch has `0 < g < 1`. Normalizing by
 `D` makes `mismatch_scale` describe a mismatch fraction rather than a raw
 bit count.
 
-## 5. Soft Suffix Score
+## 5. Soft Suffix Evidence and Route Score
 
 For route `(t,a)`, define the product for suffix length `l`:
 
@@ -103,36 +103,52 @@ For route `(t,a)`, define the product for suffix length `l`:
 P_l(t,a) = product from r=0 to l-1 of g(t-r, a-1-r).
 ```
 
-The route score is the expected matched-prefix length:
+The raw suffix evidence is the expected matched-prefix length:
 
 ```text
-F(t,a) = sum from l=1 to W of P_l(t,a),
+S(t,a) = sum from l=1 to W of P_l(t,a),
 ```
 
 where `W` is clipped by `max_suffix_length` and sequence boundaries.
+
+The score sent to route softmax is a fixed normalized square-root utility:
+
+```text
+R(t,a) = U(S(t,a))
+U(S) = (sqrt(1 + S) - 1) / (sqrt(2) - 1)
+     = (sqrt(2) + 1) * (sqrt(1 + S) - 1).
+```
+
+`U(0)=0` and `U(1)=1`, so null and one-match calibration do not move. `U` is
+strictly increasing and unbounded, hence longer evidence always scores higher,
+but it is concave: `U'(S)=(sqrt(2)+1)/(2 sqrt(1+S))`. This reduces the ability
+of one already-long route to monopolize softmax while a shorter route repairs
+its earlier mismatches. It is one fixed part of the estimator, not a public
+mode or schedule.
 
 This complete prefix sum is important. Every deeper suffix position receives
 credit before it becomes part of the current hard winner. Frontier-only or
 winner-only gradients remove that discovery path.
 
 As `mismatch_scale` approaches infinity, `g` approaches the exact local
-match indicator and `F` approaches the exact suffix length. At finite
-penalty, a near match may receive more backward credit than a shorter exact
-match. That is intentional exploration in the VJP; it cannot change forward.
+match indicator, `S` approaches the exact suffix length, and `R` approaches
+the monotone transform of that length. At finite penalty, a near match may
+receive more backward credit than a shorter exact match. That is intentional
+exploration in the VJP; neither `S` nor `R` can change hard forward.
 
 ## 6. Dense Route Distribution
 
 The fixed null score is
 
 ```text
-F(t,0) = 0.5.
+R(t,0) = 0.5.
 ```
 
 For `N_t` valid non-null candidates, logits are
 
 ```text
 logit(t,0) = 0.5 * scale
-logit(t,a) = F(t,a) * scale - log(N_t),  a > 0.
+logit(t,a) = R(t,a) * scale - log(N_t),  a > 0.
 ```
 
 The route probabilities are a softmax over null and every valid causal route.
@@ -179,9 +195,10 @@ The production estimator contains only:
 2. normalized Hamming mismatch;
 3. one exponential local gate;
 4. one complete suffix prefix-product sum;
-5. one candidate-normalized dense softmax;
-6. optional standard attention dropout;
-7. one distributed value carrier.
+5. one fixed normalized square-root score transform;
+6. one candidate-normalized dense softmax;
+7. optional standard attention dropout;
+8. one distributed value carrier.
 
 It has no mismatch perturbation, antithetic branch, hard-tier wrapper, bounded
 residual, adaptive schedule, confidence gate, recency prior, top-k candidate

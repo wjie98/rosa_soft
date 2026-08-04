@@ -1,0 +1,2357 @@
+{
+  "schema_version": 1,
+  "operator": "cuda",
+  "device": "cuda:0",
+  "device_name": "NVIDIA GeForce RTX 2080 Ti",
+  "candidate_count": 32,
+  "initial_bits": 2,
+  "max_bits": 8,
+  "runs": [
+    {
+      "seed": 0,
+      "strategy": "fixed",
+      "initial": {
+        "active_bits": 8,
+        "loss": 0.0,
+        "route_accuracy": 1.0,
+        "value_accuracy": 1.0,
+        "query_key_alignment_fraction": 1.0,
+        "conflicts": {
+          "active_bits": 8,
+          "samples": 32,
+          "states": 32,
+          "conflicting_states": 0,
+          "conflicting_samples": 0,
+          "conflicting_pairs": 0,
+          "max_state_size": 1,
+          "conditional_entropy_bits": 0.0
+        }
+      },
+      "final": {
+        "active_bits": 8,
+        "loss": 0.0,
+        "route_accuracy": 1.0,
+        "value_accuracy": 1.0,
+        "query_key_alignment_fraction": 1.0,
+        "conflicts": {
+          "active_bits": 8,
+          "samples": 32,
+          "states": 32,
+          "conflicting_states": 0,
+          "conflicting_samples": 0,
+          "conflicting_pairs": 0,
+          "max_state_size": 1,
+          "conditional_entropy_bits": 0.0
+        }
+      },
+      "first_exact_step": 0,
+      "split_events": [],
+      "external_split_count": 0,
+      "history": [
+        {
+          "step": 0,
+          "active_bits": 8,
+          "loss": 0.0,
+          "route_accuracy": 1.0,
+          "value_accuracy": 1.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 50,
+          "active_bits": 8,
+          "loss": 0.0,
+          "route_accuracy": 1.0,
+          "value_accuracy": 1.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 100,
+          "active_bits": 8,
+          "loss": 0.0,
+          "route_accuracy": 1.0,
+          "value_accuracy": 1.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 150,
+          "active_bits": 8,
+          "loss": 0.0,
+          "route_accuracy": 1.0,
+          "value_accuracy": 1.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 200,
+          "active_bits": 8,
+          "loss": 0.0,
+          "route_accuracy": 1.0,
+          "value_accuracy": 1.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 250,
+          "active_bits": 8,
+          "loss": 0.0,
+          "route_accuracy": 1.0,
+          "value_accuracy": 1.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 300,
+          "active_bits": 8,
+          "loss": 0.0,
+          "route_accuracy": 1.0,
+          "value_accuracy": 1.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        }
+      ],
+      "step_ms": 2.780177473329483
+    },
+    {
+      "seed": 1,
+      "strategy": "fixed",
+      "initial": {
+        "active_bits": 8,
+        "loss": 0.125,
+        "route_accuracy": 0.9375,
+        "value_accuracy": 0.9375,
+        "query_key_alignment_fraction": 1.0,
+        "conflicts": {
+          "active_bits": 8,
+          "samples": 32,
+          "states": 31,
+          "conflicting_states": 1,
+          "conflicting_samples": 2,
+          "conflicting_pairs": 1,
+          "max_state_size": 2,
+          "conditional_entropy_bits": 0.0625
+        }
+      },
+      "final": {
+        "active_bits": 8,
+        "loss": 0.84375,
+        "route_accuracy": 0.40625,
+        "value_accuracy": 0.40625,
+        "query_key_alignment_fraction": 0.59375,
+        "conflicts": {
+          "active_bits": 8,
+          "samples": 32,
+          "states": 27,
+          "conflicting_states": 4,
+          "conflicting_samples": 9,
+          "conflicting_pairs": 6,
+          "max_state_size": 3,
+          "conditional_entropy_bits": 0.33609024435281754
+        }
+      },
+      "first_exact_step": -1,
+      "split_events": [],
+      "external_split_count": 0,
+      "history": [
+        {
+          "step": 0,
+          "active_bits": 8,
+          "loss": 0.125,
+          "route_accuracy": 0.9375,
+          "value_accuracy": 0.9375,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 31,
+            "conflicting_states": 1,
+            "conflicting_samples": 2,
+            "conflicting_pairs": 1,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.0625
+          }
+        },
+        {
+          "step": 50,
+          "active_bits": 8,
+          "loss": 0.21875,
+          "route_accuracy": 0.78125,
+          "value_accuracy": 0.78125,
+          "query_key_alignment_fraction": 0.78125,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 100,
+          "active_bits": 8,
+          "loss": 0.7125000357627869,
+          "route_accuracy": 0.5,
+          "value_accuracy": 0.5,
+          "query_key_alignment_fraction": 0.59375,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          }
+        },
+        {
+          "step": 150,
+          "active_bits": 8,
+          "loss": 0.7437500357627869,
+          "route_accuracy": 0.4375,
+          "value_accuracy": 0.4375,
+          "query_key_alignment_fraction": 0.53125,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 26,
+            "conflicting_states": 3,
+            "conflicting_samples": 9,
+            "conflicting_pairs": 10,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 0.46109024435281754
+          }
+        },
+        {
+          "step": 200,
+          "active_bits": 8,
+          "loss": 0.6500000357627869,
+          "route_accuracy": 0.53125,
+          "value_accuracy": 0.53125,
+          "query_key_alignment_fraction": 0.75,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 25,
+            "conflicting_states": 5,
+            "conflicting_samples": 12,
+            "conflicting_pairs": 9,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.48468048870563507
+          }
+        },
+        {
+          "step": 250,
+          "active_bits": 8,
+          "loss": 0.8125,
+          "route_accuracy": 0.4375,
+          "value_accuracy": 0.4375,
+          "query_key_alignment_fraction": 0.65625,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 27,
+            "conflicting_states": 4,
+            "conflicting_samples": 9,
+            "conflicting_pairs": 6,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.33609024435281754
+          }
+        },
+        {
+          "step": 300,
+          "active_bits": 8,
+          "loss": 0.84375,
+          "route_accuracy": 0.40625,
+          "value_accuracy": 0.40625,
+          "query_key_alignment_fraction": 0.59375,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 27,
+            "conflicting_states": 4,
+            "conflicting_samples": 9,
+            "conflicting_pairs": 6,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.33609024435281754
+          }
+        }
+      ],
+      "step_ms": 2.058403390001331
+    },
+    {
+      "seed": 2,
+      "strategy": "fixed",
+      "initial": {
+        "active_bits": 8,
+        "loss": 0.574999988079071,
+        "route_accuracy": 0.75,
+        "value_accuracy": 0.75,
+        "query_key_alignment_fraction": 1.0,
+        "conflicts": {
+          "active_bits": 8,
+          "samples": 32,
+          "states": 28,
+          "conflicting_states": 4,
+          "conflicting_samples": 8,
+          "conflicting_pairs": 4,
+          "max_state_size": 2,
+          "conditional_entropy_bits": 0.25
+        }
+      },
+      "final": {
+        "active_bits": 8,
+        "loss": 0.956250011920929,
+        "route_accuracy": 0.34375,
+        "value_accuracy": 0.34375,
+        "query_key_alignment_fraction": 0.625,
+        "conflicts": {
+          "active_bits": 8,
+          "samples": 32,
+          "states": 24,
+          "conflicting_states": 6,
+          "conflicting_samples": 14,
+          "conflicting_pairs": 10,
+          "max_state_size": 3,
+          "conditional_entropy_bits": 0.5471804887056351
+        }
+      },
+      "first_exact_step": -1,
+      "split_events": [],
+      "external_split_count": 0,
+      "history": [
+        {
+          "step": 0,
+          "active_bits": 8,
+          "loss": 0.574999988079071,
+          "route_accuracy": 0.75,
+          "value_accuracy": 0.75,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 28,
+            "conflicting_states": 4,
+            "conflicting_samples": 8,
+            "conflicting_pairs": 4,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.25
+          }
+        },
+        {
+          "step": 50,
+          "active_bits": 8,
+          "loss": 0.512499988079071,
+          "route_accuracy": 0.5625,
+          "value_accuracy": 0.5625,
+          "query_key_alignment_fraction": 0.625,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 31,
+            "conflicting_states": 1,
+            "conflicting_samples": 2,
+            "conflicting_pairs": 1,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.0625
+          }
+        },
+        {
+          "step": 100,
+          "active_bits": 8,
+          "loss": 0.5250000357627869,
+          "route_accuracy": 0.5,
+          "value_accuracy": 0.5,
+          "query_key_alignment_fraction": 0.59375,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 29,
+            "conflicting_states": 3,
+            "conflicting_samples": 6,
+            "conflicting_pairs": 3,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.1875
+          }
+        },
+        {
+          "step": 150,
+          "active_bits": 8,
+          "loss": 0.45000001788139343,
+          "route_accuracy": 0.59375,
+          "value_accuracy": 0.59375,
+          "query_key_alignment_fraction": 0.625,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          }
+        },
+        {
+          "step": 200,
+          "active_bits": 8,
+          "loss": 0.46875,
+          "route_accuracy": 0.625,
+          "value_accuracy": 0.625,
+          "query_key_alignment_fraction": 0.6875,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 28,
+            "conflicting_states": 2,
+            "conflicting_samples": 6,
+            "conflicting_pairs": 7,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 0.3125
+          }
+        },
+        {
+          "step": 250,
+          "active_bits": 8,
+          "loss": 1.1687500476837158,
+          "route_accuracy": 0.3125,
+          "value_accuracy": 0.3125,
+          "query_key_alignment_fraction": 0.5,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 23,
+            "conflicting_states": 6,
+            "conflicting_samples": 15,
+            "conflicting_pairs": 12,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.6332707330584526
+          }
+        },
+        {
+          "step": 300,
+          "active_bits": 8,
+          "loss": 0.956250011920929,
+          "route_accuracy": 0.34375,
+          "value_accuracy": 0.34375,
+          "query_key_alignment_fraction": 0.625,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 24,
+            "conflicting_states": 6,
+            "conflicting_samples": 14,
+            "conflicting_pairs": 10,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.5471804887056351
+          }
+        }
+      ],
+      "step_ms": 2.05916388999564
+    },
+    {
+      "seed": 3,
+      "strategy": "fixed",
+      "initial": {
+        "active_bits": 8,
+        "loss": 0.30000001192092896,
+        "route_accuracy": 0.875,
+        "value_accuracy": 0.875,
+        "query_key_alignment_fraction": 1.0,
+        "conflicts": {
+          "active_bits": 8,
+          "samples": 32,
+          "states": 30,
+          "conflicting_states": 2,
+          "conflicting_samples": 4,
+          "conflicting_pairs": 2,
+          "max_state_size": 2,
+          "conditional_entropy_bits": 0.125
+        }
+      },
+      "final": {
+        "active_bits": 8,
+        "loss": 0.5625,
+        "route_accuracy": 0.53125,
+        "value_accuracy": 0.53125,
+        "query_key_alignment_fraction": 0.6875,
+        "conflicts": {
+          "active_bits": 8,
+          "samples": 32,
+          "states": 27,
+          "conflicting_states": 5,
+          "conflicting_samples": 10,
+          "conflicting_pairs": 5,
+          "max_state_size": 2,
+          "conditional_entropy_bits": 0.3125
+        }
+      },
+      "first_exact_step": -1,
+      "split_events": [],
+      "external_split_count": 0,
+      "history": [
+        {
+          "step": 0,
+          "active_bits": 8,
+          "loss": 0.30000001192092896,
+          "route_accuracy": 0.875,
+          "value_accuracy": 0.875,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          }
+        },
+        {
+          "step": 50,
+          "active_bits": 8,
+          "loss": 0.46875,
+          "route_accuracy": 0.53125,
+          "value_accuracy": 0.53125,
+          "query_key_alignment_fraction": 0.53125,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 28,
+            "conflicting_states": 3,
+            "conflicting_samples": 7,
+            "conflicting_pairs": 5,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.27359024435281754
+          }
+        },
+        {
+          "step": 100,
+          "active_bits": 8,
+          "loss": 0.38750001788139343,
+          "route_accuracy": 0.625,
+          "value_accuracy": 0.625,
+          "query_key_alignment_fraction": 0.625,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 31,
+            "conflicting_states": 1,
+            "conflicting_samples": 2,
+            "conflicting_pairs": 1,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.0625
+          }
+        },
+        {
+          "step": 150,
+          "active_bits": 8,
+          "loss": 0.543749988079071,
+          "route_accuracy": 0.5625,
+          "value_accuracy": 0.5625,
+          "query_key_alignment_fraction": 0.65625,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          }
+        },
+        {
+          "step": 200,
+          "active_bits": 8,
+          "loss": 0.53125,
+          "route_accuracy": 0.53125,
+          "value_accuracy": 0.53125,
+          "query_key_alignment_fraction": 0.59375,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 29,
+            "conflicting_states": 3,
+            "conflicting_samples": 6,
+            "conflicting_pairs": 3,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.1875
+          }
+        },
+        {
+          "step": 250,
+          "active_bits": 8,
+          "loss": 0.45625001192092896,
+          "route_accuracy": 0.65625,
+          "value_accuracy": 0.65625,
+          "query_key_alignment_fraction": 0.71875,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          }
+        },
+        {
+          "step": 300,
+          "active_bits": 8,
+          "loss": 0.5625,
+          "route_accuracy": 0.53125,
+          "value_accuracy": 0.53125,
+          "query_key_alignment_fraction": 0.6875,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 27,
+            "conflicting_states": 5,
+            "conflicting_samples": 10,
+            "conflicting_pairs": 5,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.3125
+          }
+        }
+      ],
+      "step_ms": 2.0526313900033224
+    },
+    {
+      "seed": 0,
+      "strategy": "growth",
+      "initial": {
+        "active_bits": 2,
+        "loss": 2.2750000953674316,
+        "route_accuracy": 0.0,
+        "value_accuracy": 0.0,
+        "query_key_alignment_fraction": 1.0,
+        "conflicts": {
+          "active_bits": 2,
+          "samples": 32,
+          "states": 4,
+          "conflicting_states": 4,
+          "conflicting_samples": 32,
+          "conflicting_pairs": 124,
+          "max_state_size": 12,
+          "conditional_entropy_bits": 3.063721776008606
+        }
+      },
+      "final": {
+        "active_bits": 8,
+        "loss": 0.3125,
+        "route_accuracy": 0.71875,
+        "value_accuracy": 0.71875,
+        "query_key_alignment_fraction": 0.71875,
+        "conflicts": {
+          "active_bits": 8,
+          "samples": 32,
+          "states": 32,
+          "conflicting_states": 0,
+          "conflicting_samples": 0,
+          "conflicting_pairs": 0,
+          "max_state_size": 1,
+          "conditional_entropy_bits": 0.0
+        }
+      },
+      "first_exact_step": -1,
+      "split_events": [
+        {
+          "step": 0,
+          "activated_bit": 2,
+          "before": {
+            "active_bits": 2,
+            "samples": 32,
+            "states": 4,
+            "conflicting_states": 4,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 124,
+            "max_state_size": 12,
+            "conditional_entropy_bits": 3.063721776008606
+          },
+          "after": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 54,
+            "max_state_size": 6,
+            "conditional_entropy_bits": 2.0637219548225403
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 50,
+          "activated_bit": 3,
+          "before": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 59,
+            "max_state_size": 7,
+            "conditional_entropy_bits": 2.1223796755075455
+          },
+          "after": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 11,
+            "conflicting_samples": 27,
+            "conflicting_pairs": 22,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 1.1332707330584526
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 100,
+          "activated_bit": 4,
+          "before": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 9,
+            "conflicting_samples": 25,
+            "conflicting_pairs": 29,
+            "max_state_size": 6,
+            "conditional_entropy_bits": 1.2429512217640877
+          },
+          "after": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 25,
+            "conflicting_states": 5,
+            "conflicting_samples": 12,
+            "conflicting_pairs": 9,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.48468048870563507
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 150,
+          "activated_bit": 5,
+          "before": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 25,
+            "conflicting_states": 5,
+            "conflicting_samples": 12,
+            "conflicting_pairs": 9,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.48468048870563507
+          },
+          "after": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 200,
+          "activated_bit": 6,
+          "before": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 29,
+            "conflicting_states": 3,
+            "conflicting_samples": 6,
+            "conflicting_pairs": 3,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.1875
+          },
+          "after": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 250,
+          "activated_bit": 7,
+          "before": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 31,
+            "conflicting_states": 1,
+            "conflicting_samples": 2,
+            "conflicting_pairs": 1,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.0625
+          },
+          "after": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          },
+          "split_fit_accuracy": 1.0
+        }
+      ],
+      "external_split_count": 6,
+      "history": [
+        {
+          "step": 0,
+          "active_bits": 2,
+          "loss": 2.2750000953674316,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 2,
+            "samples": 32,
+            "states": 4,
+            "conflicting_states": 4,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 124,
+            "max_state_size": 12,
+            "conditional_entropy_bits": 3.063721776008606
+          }
+        },
+        {
+          "step": 0,
+          "after_split": true,
+          "active_bits": 3,
+          "loss": 2.2250001430511475,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 54,
+            "max_state_size": 6,
+            "conditional_entropy_bits": 2.0637219548225403
+          }
+        },
+        {
+          "step": 50,
+          "active_bits": 3,
+          "loss": 2.049999952316284,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 0.625,
+          "conflicts": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 59,
+            "max_state_size": 7,
+            "conditional_entropy_bits": 2.1223796755075455
+          }
+        },
+        {
+          "step": 50,
+          "after_split": true,
+          "active_bits": 4,
+          "loss": 1.475000023841858,
+          "route_accuracy": 0.125,
+          "value_accuracy": 0.125,
+          "query_key_alignment_fraction": 0.625,
+          "conflicts": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 11,
+            "conflicting_samples": 27,
+            "conflicting_pairs": 22,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 1.1332707330584526
+          }
+        },
+        {
+          "step": 100,
+          "active_bits": 4,
+          "loss": 1.274999976158142,
+          "route_accuracy": 0.1875,
+          "value_accuracy": 0.1875,
+          "query_key_alignment_fraction": 0.46875,
+          "conflicts": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 9,
+            "conflicting_samples": 25,
+            "conflicting_pairs": 29,
+            "max_state_size": 6,
+            "conditional_entropy_bits": 1.2429512217640877
+          }
+        },
+        {
+          "step": 100,
+          "after_split": true,
+          "active_bits": 5,
+          "loss": 1.0187500715255737,
+          "route_accuracy": 0.28125,
+          "value_accuracy": 0.28125,
+          "query_key_alignment_fraction": 0.46875,
+          "conflicts": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 25,
+            "conflicting_states": 5,
+            "conflicting_samples": 12,
+            "conflicting_pairs": 9,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.48468048870563507
+          }
+        },
+        {
+          "step": 150,
+          "active_bits": 5,
+          "loss": 0.762499988079071,
+          "route_accuracy": 0.34375,
+          "value_accuracy": 0.34375,
+          "query_key_alignment_fraction": 0.5,
+          "conflicts": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 25,
+            "conflicting_states": 5,
+            "conflicting_samples": 12,
+            "conflicting_pairs": 9,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.48468048870563507
+          }
+        },
+        {
+          "step": 150,
+          "after_split": true,
+          "active_bits": 6,
+          "loss": 0.5625,
+          "route_accuracy": 0.4375,
+          "value_accuracy": 0.4375,
+          "query_key_alignment_fraction": 0.5,
+          "conflicts": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          }
+        },
+        {
+          "step": 200,
+          "active_bits": 6,
+          "loss": 0.4312500059604645,
+          "route_accuracy": 0.5625,
+          "value_accuracy": 0.5625,
+          "query_key_alignment_fraction": 0.6875,
+          "conflicts": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 29,
+            "conflicting_states": 3,
+            "conflicting_samples": 6,
+            "conflicting_pairs": 3,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.1875
+          }
+        },
+        {
+          "step": 200,
+          "after_split": true,
+          "active_bits": 7,
+          "loss": 0.3062500059604645,
+          "route_accuracy": 0.6875,
+          "value_accuracy": 0.6875,
+          "query_key_alignment_fraction": 0.6875,
+          "conflicts": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 250,
+          "active_bits": 7,
+          "loss": 0.3499999940395355,
+          "route_accuracy": 0.65625,
+          "value_accuracy": 0.65625,
+          "query_key_alignment_fraction": 0.6875,
+          "conflicts": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 31,
+            "conflicting_states": 1,
+            "conflicting_samples": 2,
+            "conflicting_pairs": 1,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.0625
+          }
+        },
+        {
+          "step": 250,
+          "after_split": true,
+          "active_bits": 8,
+          "loss": 0.3125,
+          "route_accuracy": 0.6875,
+          "value_accuracy": 0.6875,
+          "query_key_alignment_fraction": 0.6875,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 300,
+          "active_bits": 8,
+          "loss": 0.3125,
+          "route_accuracy": 0.71875,
+          "value_accuracy": 0.71875,
+          "query_key_alignment_fraction": 0.71875,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        }
+      ],
+      "step_ms": 2.384726140001779
+    },
+    {
+      "seed": 1,
+      "strategy": "growth",
+      "initial": {
+        "active_bits": 2,
+        "loss": 2.200000047683716,
+        "route_accuracy": 0.0,
+        "value_accuracy": 0.0,
+        "query_key_alignment_fraction": 1.0,
+        "conflicts": {
+          "active_bits": 2,
+          "samples": 32,
+          "states": 4,
+          "conflicting_states": 4,
+          "conflicting_samples": 32,
+          "conflicting_pairs": 117,
+          "max_state_size": 10,
+          "conditional_entropy_bits": 3.0284334123134613
+        }
+      },
+      "final": {
+        "active_bits": 8,
+        "loss": 0.29375001788139343,
+        "route_accuracy": 0.75,
+        "value_accuracy": 0.75,
+        "query_key_alignment_fraction": 0.78125,
+        "conflicts": {
+          "active_bits": 8,
+          "samples": 32,
+          "states": 31,
+          "conflicting_states": 1,
+          "conflicting_samples": 2,
+          "conflicting_pairs": 1,
+          "max_state_size": 2,
+          "conditional_entropy_bits": 0.0625
+        }
+      },
+      "first_exact_step": -1,
+      "split_events": [
+        {
+          "step": 0,
+          "activated_bit": 2,
+          "before": {
+            "active_bits": 2,
+            "samples": 32,
+            "states": 4,
+            "conflicting_states": 4,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 117,
+            "max_state_size": 10,
+            "conditional_entropy_bits": 3.0284334123134613
+          },
+          "after": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 51,
+            "max_state_size": 5,
+            "conditional_entropy_bits": 2.034174494445324
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 50,
+          "activated_bit": 3,
+          "before": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 60,
+            "max_state_size": 7,
+            "conditional_entropy_bits": 2.133771173655987
+          },
+          "after": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 10,
+            "conflicting_samples": 26,
+            "conflicting_pairs": 23,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 1.1568609774112701
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 100,
+          "activated_bit": 4,
+          "before": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 13,
+            "conflicting_states": 9,
+            "conflicting_samples": 28,
+            "conflicting_pairs": 36,
+            "max_state_size": 5,
+            "conditional_entropy_bits": 1.5227829962968826
+          },
+          "after": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 22,
+            "conflicting_states": 8,
+            "conflicting_samples": 18,
+            "conflicting_pairs": 12,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.6721804887056351
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 150,
+          "activated_bit": 5,
+          "before": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 21,
+            "conflicting_states": 9,
+            "conflicting_samples": 20,
+            "conflicting_pairs": 14,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 0.75
+          },
+          "after": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 200,
+          "activated_bit": 6,
+          "before": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          },
+          "after": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 250,
+          "activated_bit": 7,
+          "before": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 31,
+            "conflicting_states": 1,
+            "conflicting_samples": 2,
+            "conflicting_pairs": 1,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.0625
+          },
+          "after": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          },
+          "split_fit_accuracy": 1.0
+        }
+      ],
+      "external_split_count": 6,
+      "history": [
+        {
+          "step": 0,
+          "active_bits": 2,
+          "loss": 2.200000047683716,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 2,
+            "samples": 32,
+            "states": 4,
+            "conflicting_states": 4,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 117,
+            "max_state_size": 10,
+            "conditional_entropy_bits": 3.0284334123134613
+          }
+        },
+        {
+          "step": 0,
+          "after_split": true,
+          "active_bits": 3,
+          "loss": 2.1000001430511475,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 51,
+            "max_state_size": 5,
+            "conditional_entropy_bits": 2.034174494445324
+          }
+        },
+        {
+          "step": 50,
+          "active_bits": 3,
+          "loss": 2.0250000953674316,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 0.5,
+          "conflicts": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 60,
+            "max_state_size": 7,
+            "conditional_entropy_bits": 2.133771173655987
+          }
+        },
+        {
+          "step": 50,
+          "after_split": true,
+          "active_bits": 4,
+          "loss": 1.5750000476837158,
+          "route_accuracy": 0.09375,
+          "value_accuracy": 0.09375,
+          "query_key_alignment_fraction": 0.5,
+          "conflicts": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 10,
+            "conflicting_samples": 26,
+            "conflicting_pairs": 23,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 1.1568609774112701
+          }
+        },
+        {
+          "step": 100,
+          "active_bits": 4,
+          "loss": 1.4250000715255737,
+          "route_accuracy": 0.09375,
+          "value_accuracy": 0.09375,
+          "query_key_alignment_fraction": 0.4375,
+          "conflicts": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 13,
+            "conflicting_states": 9,
+            "conflicting_samples": 28,
+            "conflicting_pairs": 36,
+            "max_state_size": 5,
+            "conditional_entropy_bits": 1.5227829962968826
+          }
+        },
+        {
+          "step": 100,
+          "after_split": true,
+          "active_bits": 5,
+          "loss": 1.068750023841858,
+          "route_accuracy": 0.25,
+          "value_accuracy": 0.25,
+          "query_key_alignment_fraction": 0.4375,
+          "conflicts": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 22,
+            "conflicting_states": 8,
+            "conflicting_samples": 18,
+            "conflicting_pairs": 12,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.6721804887056351
+          }
+        },
+        {
+          "step": 150,
+          "active_bits": 5,
+          "loss": 1.0812500715255737,
+          "route_accuracy": 0.28125,
+          "value_accuracy": 0.28125,
+          "query_key_alignment_fraction": 0.625,
+          "conflicts": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 21,
+            "conflicting_states": 9,
+            "conflicting_samples": 20,
+            "conflicting_pairs": 14,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 0.75
+          }
+        },
+        {
+          "step": 150,
+          "after_split": true,
+          "active_bits": 6,
+          "loss": 0.4437499940395355,
+          "route_accuracy": 0.5625,
+          "value_accuracy": 0.5625,
+          "query_key_alignment_fraction": 0.625,
+          "conflicts": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          }
+        },
+        {
+          "step": 200,
+          "active_bits": 6,
+          "loss": 0.3812499940395355,
+          "route_accuracy": 0.65625,
+          "value_accuracy": 0.65625,
+          "query_key_alignment_fraction": 0.71875,
+          "conflicts": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          }
+        },
+        {
+          "step": 200,
+          "after_split": true,
+          "active_bits": 7,
+          "loss": 0.28125,
+          "route_accuracy": 0.71875,
+          "value_accuracy": 0.71875,
+          "query_key_alignment_fraction": 0.71875,
+          "conflicts": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 250,
+          "active_bits": 7,
+          "loss": 0.21875,
+          "route_accuracy": 0.78125,
+          "value_accuracy": 0.78125,
+          "query_key_alignment_fraction": 0.78125,
+          "conflicts": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 31,
+            "conflicting_states": 1,
+            "conflicting_samples": 2,
+            "conflicting_pairs": 1,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.0625
+          }
+        },
+        {
+          "step": 250,
+          "after_split": true,
+          "active_bits": 8,
+          "loss": 0.21875,
+          "route_accuracy": 0.78125,
+          "value_accuracy": 0.78125,
+          "query_key_alignment_fraction": 0.78125,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 300,
+          "active_bits": 8,
+          "loss": 0.29375001788139343,
+          "route_accuracy": 0.75,
+          "value_accuracy": 0.75,
+          "query_key_alignment_fraction": 0.78125,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 31,
+            "conflicting_states": 1,
+            "conflicting_samples": 2,
+            "conflicting_pairs": 1,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.0625
+          }
+        }
+      ],
+      "step_ms": 2.280533666671545
+    },
+    {
+      "seed": 2,
+      "strategy": "growth",
+      "initial": {
+        "active_bits": 2,
+        "loss": 2.1500000953674316,
+        "route_accuracy": 0.0,
+        "value_accuracy": 0.0,
+        "query_key_alignment_fraction": 1.0,
+        "conflicts": {
+          "active_bits": 2,
+          "samples": 32,
+          "states": 4,
+          "conflicting_states": 4,
+          "conflicting_samples": 32,
+          "conflicting_pairs": 123,
+          "max_state_size": 12,
+          "conditional_entropy_bits": 3.0572591722011566
+        }
+      },
+      "final": {
+        "active_bits": 8,
+        "loss": 0.4375,
+        "route_accuracy": 0.65625,
+        "value_accuracy": 0.65625,
+        "query_key_alignment_fraction": 0.78125,
+        "conflicts": {
+          "active_bits": 8,
+          "samples": 32,
+          "states": 30,
+          "conflicting_states": 2,
+          "conflicting_samples": 4,
+          "conflicting_pairs": 2,
+          "max_state_size": 2,
+          "conditional_entropy_bits": 0.125
+        }
+      },
+      "first_exact_step": -1,
+      "split_events": [
+        {
+          "step": 0,
+          "activated_bit": 2,
+          "before": {
+            "active_bits": 2,
+            "samples": 32,
+            "states": 4,
+            "conflicting_states": 4,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 123,
+            "max_state_size": 12,
+            "conditional_entropy_bits": 3.0572591722011566
+          },
+          "after": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 54,
+            "max_state_size": 6,
+            "conditional_entropy_bits": 2.0637219548225403
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 50,
+          "activated_bit": 3,
+          "before": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 63,
+            "max_state_size": 8,
+            "conditional_entropy_bits": 2.15686097741127
+          },
+          "after": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 10,
+            "conflicting_samples": 26,
+            "conflicting_pairs": 24,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 1.172180488705635
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 100,
+          "activated_bit": 4,
+          "before": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 10,
+            "conflicting_samples": 26,
+            "conflicting_pairs": 24,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 1.172180488705635
+          },
+          "after": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 26,
+            "conflicting_states": 6,
+            "conflicting_samples": 12,
+            "conflicting_pairs": 6,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.375
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 150,
+          "activated_bit": 5,
+          "before": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 24,
+            "conflicting_states": 6,
+            "conflicting_samples": 14,
+            "conflicting_pairs": 10,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.5471804887056351
+          },
+          "after": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 200,
+          "activated_bit": 6,
+          "before": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 31,
+            "conflicting_states": 1,
+            "conflicting_samples": 2,
+            "conflicting_pairs": 1,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.0625
+          },
+          "after": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 250,
+          "activated_bit": 7,
+          "before": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          },
+          "after": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          },
+          "split_fit_accuracy": 1.0
+        }
+      ],
+      "external_split_count": 6,
+      "history": [
+        {
+          "step": 0,
+          "active_bits": 2,
+          "loss": 2.1500000953674316,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 2,
+            "samples": 32,
+            "states": 4,
+            "conflicting_states": 4,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 123,
+            "max_state_size": 12,
+            "conditional_entropy_bits": 3.0572591722011566
+          }
+        },
+        {
+          "step": 0,
+          "after_split": true,
+          "active_bits": 3,
+          "loss": 2.174999952316284,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 54,
+            "max_state_size": 6,
+            "conditional_entropy_bits": 2.0637219548225403
+          }
+        },
+        {
+          "step": 50,
+          "active_bits": 3,
+          "loss": 1.875,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 0.46875,
+          "conflicts": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 63,
+            "max_state_size": 8,
+            "conditional_entropy_bits": 2.15686097741127
+          }
+        },
+        {
+          "step": 50,
+          "after_split": true,
+          "active_bits": 4,
+          "loss": 1.350000023841858,
+          "route_accuracy": 0.125,
+          "value_accuracy": 0.125,
+          "query_key_alignment_fraction": 0.46875,
+          "conflicts": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 10,
+            "conflicting_samples": 26,
+            "conflicting_pairs": 24,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 1.172180488705635
+          }
+        },
+        {
+          "step": 100,
+          "active_bits": 4,
+          "loss": 1.2000000476837158,
+          "route_accuracy": 0.1875,
+          "value_accuracy": 0.1875,
+          "query_key_alignment_fraction": 0.625,
+          "conflicts": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 10,
+            "conflicting_samples": 26,
+            "conflicting_pairs": 24,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 1.172180488705635
+          }
+        },
+        {
+          "step": 100,
+          "after_split": true,
+          "active_bits": 5,
+          "loss": 0.768750011920929,
+          "route_accuracy": 0.46875,
+          "value_accuracy": 0.46875,
+          "query_key_alignment_fraction": 0.625,
+          "conflicts": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 26,
+            "conflicting_states": 6,
+            "conflicting_samples": 12,
+            "conflicting_pairs": 6,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.375
+          }
+        },
+        {
+          "step": 150,
+          "active_bits": 5,
+          "loss": 0.5375000238418579,
+          "route_accuracy": 0.53125,
+          "value_accuracy": 0.53125,
+          "query_key_alignment_fraction": 0.71875,
+          "conflicts": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 24,
+            "conflicting_states": 6,
+            "conflicting_samples": 14,
+            "conflicting_pairs": 10,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 0.5471804887056351
+          }
+        },
+        {
+          "step": 150,
+          "after_split": true,
+          "active_bits": 6,
+          "loss": 0.3375000059604645,
+          "route_accuracy": 0.65625,
+          "value_accuracy": 0.65625,
+          "query_key_alignment_fraction": 0.71875,
+          "conflicts": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          }
+        },
+        {
+          "step": 200,
+          "active_bits": 6,
+          "loss": 0.26875001192092896,
+          "route_accuracy": 0.75,
+          "value_accuracy": 0.75,
+          "query_key_alignment_fraction": 0.78125,
+          "conflicts": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 31,
+            "conflicting_states": 1,
+            "conflicting_samples": 2,
+            "conflicting_pairs": 1,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.0625
+          }
+        },
+        {
+          "step": 200,
+          "after_split": true,
+          "active_bits": 7,
+          "loss": 0.22500000894069672,
+          "route_accuracy": 0.78125,
+          "value_accuracy": 0.78125,
+          "query_key_alignment_fraction": 0.78125,
+          "conflicts": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 250,
+          "active_bits": 7,
+          "loss": 0.29375001788139343,
+          "route_accuracy": 0.71875,
+          "value_accuracy": 0.71875,
+          "query_key_alignment_fraction": 0.71875,
+          "conflicts": {
+            "active_bits": 7,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          }
+        },
+        {
+          "step": 250,
+          "after_split": true,
+          "active_bits": 8,
+          "loss": 0.29375001788139343,
+          "route_accuracy": 0.71875,
+          "value_accuracy": 0.71875,
+          "query_key_alignment_fraction": 0.71875,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 300,
+          "active_bits": 8,
+          "loss": 0.4375,
+          "route_accuracy": 0.65625,
+          "value_accuracy": 0.65625,
+          "query_key_alignment_fraction": 0.78125,
+          "conflicts": {
+            "active_bits": 8,
+            "samples": 32,
+            "states": 30,
+            "conflicting_states": 2,
+            "conflicting_samples": 4,
+            "conflicting_pairs": 2,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.125
+          }
+        }
+      ],
+      "step_ms": 2.2779719433310675
+    },
+    {
+      "seed": 3,
+      "strategy": "growth",
+      "initial": {
+        "active_bits": 2,
+        "loss": 2.2250001430511475,
+        "route_accuracy": 0.0,
+        "value_accuracy": 0.0,
+        "query_key_alignment_fraction": 1.0,
+        "conflicts": {
+          "active_bits": 2,
+          "samples": 32,
+          "states": 4,
+          "conflicting_states": 4,
+          "conflicting_samples": 32,
+          "conflicting_pairs": 113,
+          "max_state_size": 9,
+          "conditional_entropy_bits": 3.0056503415107727
+        }
+      },
+      "final": {
+        "active_bits": 6,
+        "loss": 0.25,
+        "route_accuracy": 0.78125,
+        "value_accuracy": 0.78125,
+        "query_key_alignment_fraction": 0.8125,
+        "conflicts": {
+          "active_bits": 6,
+          "samples": 32,
+          "states": 31,
+          "conflicting_states": 1,
+          "conflicting_samples": 2,
+          "conflicting_pairs": 1,
+          "max_state_size": 2,
+          "conditional_entropy_bits": 0.0625
+        }
+      },
+      "first_exact_step": -1,
+      "split_events": [
+        {
+          "step": 0,
+          "activated_bit": 2,
+          "before": {
+            "active_bits": 2,
+            "samples": 32,
+            "states": 4,
+            "conflicting_states": 4,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 113,
+            "max_state_size": 9,
+            "conditional_entropy_bits": 3.0056503415107727
+          },
+          "after": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 49,
+            "max_state_size": 5,
+            "conditional_entropy_bits": 2.0113914981484413
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 50,
+          "activated_bit": 3,
+          "before": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 63,
+            "max_state_size": 8,
+            "conditional_entropy_bits": 2.15686097741127
+          },
+          "after": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 10,
+            "conflicting_samples": 26,
+            "conflicting_pairs": 24,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 1.172180488705635
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 100,
+          "activated_bit": 4,
+          "before": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 11,
+            "conflicting_samples": 27,
+            "conflicting_pairs": 21,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 1.1179512217640877
+          },
+          "after": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 27,
+            "conflicting_states": 5,
+            "conflicting_samples": 10,
+            "conflicting_pairs": 5,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.3125
+          },
+          "split_fit_accuracy": 1.0
+        },
+        {
+          "step": 150,
+          "activated_bit": 5,
+          "before": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 23,
+            "conflicting_states": 9,
+            "conflicting_samples": 18,
+            "conflicting_pairs": 9,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.5625
+          },
+          "after": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          },
+          "split_fit_accuracy": 1.0
+        }
+      ],
+      "external_split_count": 4,
+      "history": [
+        {
+          "step": 0,
+          "active_bits": 2,
+          "loss": 2.2250001430511475,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 2,
+            "samples": 32,
+            "states": 4,
+            "conflicting_states": 4,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 113,
+            "max_state_size": 9,
+            "conditional_entropy_bits": 3.0056503415107727
+          }
+        },
+        {
+          "step": 0,
+          "after_split": true,
+          "active_bits": 3,
+          "loss": 2.25,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 1.0,
+          "conflicts": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 49,
+            "max_state_size": 5,
+            "conditional_entropy_bits": 2.0113914981484413
+          }
+        },
+        {
+          "step": 50,
+          "active_bits": 3,
+          "loss": 2.1000001430511475,
+          "route_accuracy": 0.0,
+          "value_accuracy": 0.0,
+          "query_key_alignment_fraction": 0.59375,
+          "conflicts": {
+            "active_bits": 3,
+            "samples": 32,
+            "states": 8,
+            "conflicting_states": 8,
+            "conflicting_samples": 32,
+            "conflicting_pairs": 63,
+            "max_state_size": 8,
+            "conditional_entropy_bits": 2.15686097741127
+          }
+        },
+        {
+          "step": 50,
+          "after_split": true,
+          "active_bits": 4,
+          "loss": 1.399999976158142,
+          "route_accuracy": 0.1875,
+          "value_accuracy": 0.1875,
+          "query_key_alignment_fraction": 0.59375,
+          "conflicts": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 10,
+            "conflicting_samples": 26,
+            "conflicting_pairs": 24,
+            "max_state_size": 4,
+            "conditional_entropy_bits": 1.172180488705635
+          }
+        },
+        {
+          "step": 100,
+          "active_bits": 4,
+          "loss": 1.5,
+          "route_accuracy": 0.125,
+          "value_accuracy": 0.125,
+          "query_key_alignment_fraction": 0.65625,
+          "conflicts": {
+            "active_bits": 4,
+            "samples": 32,
+            "states": 16,
+            "conflicting_states": 11,
+            "conflicting_samples": 27,
+            "conflicting_pairs": 21,
+            "max_state_size": 3,
+            "conditional_entropy_bits": 1.1179512217640877
+          }
+        },
+        {
+          "step": 100,
+          "after_split": true,
+          "active_bits": 5,
+          "loss": 0.918749988079071,
+          "route_accuracy": 0.375,
+          "value_accuracy": 0.375,
+          "query_key_alignment_fraction": 0.65625,
+          "conflicts": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 27,
+            "conflicting_states": 5,
+            "conflicting_samples": 10,
+            "conflicting_pairs": 5,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.3125
+          }
+        },
+        {
+          "step": 150,
+          "active_bits": 5,
+          "loss": 0.925000011920929,
+          "route_accuracy": 0.3125,
+          "value_accuracy": 0.3125,
+          "query_key_alignment_fraction": 0.65625,
+          "conflicts": {
+            "active_bits": 5,
+            "samples": 32,
+            "states": 23,
+            "conflicting_states": 9,
+            "conflicting_samples": 18,
+            "conflicting_pairs": 9,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.5625
+          }
+        },
+        {
+          "step": 150,
+          "after_split": true,
+          "active_bits": 6,
+          "loss": 0.4312500059604645,
+          "route_accuracy": 0.65625,
+          "value_accuracy": 0.65625,
+          "query_key_alignment_fraction": 0.65625,
+          "conflicts": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 200,
+          "active_bits": 6,
+          "loss": 0.1875,
+          "route_accuracy": 0.875,
+          "value_accuracy": 0.875,
+          "query_key_alignment_fraction": 0.875,
+          "conflicts": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 250,
+          "active_bits": 6,
+          "loss": 0.21250000596046448,
+          "route_accuracy": 0.875,
+          "value_accuracy": 0.875,
+          "query_key_alignment_fraction": 0.875,
+          "conflicts": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 32,
+            "conflicting_states": 0,
+            "conflicting_samples": 0,
+            "conflicting_pairs": 0,
+            "max_state_size": 1,
+            "conditional_entropy_bits": 0.0
+          }
+        },
+        {
+          "step": 300,
+          "active_bits": 6,
+          "loss": 0.25,
+          "route_accuracy": 0.78125,
+          "value_accuracy": 0.78125,
+          "query_key_alignment_fraction": 0.8125,
+          "conflicts": {
+            "active_bits": 6,
+            "samples": 32,
+            "states": 31,
+            "conflicting_states": 1,
+            "conflicting_samples": 2,
+            "conflicting_pairs": 1,
+            "max_state_size": 2,
+            "conditional_entropy_bits": 0.0625
+          }
+        }
+      ],
+      "step_ms": 2.2061281666659247
+    }
+  ],
+  "summary": {
+    "fixed": {
+      "runs": 4,
+      "mean_final_route_accuracy": 0.5703125,
+      "mean_final_conflicting_pairs": 5.25,
+      "mean_external_split_count": 0
+    },
+    "growth": {
+      "runs": 4,
+      "mean_final_route_accuracy": 0.7265625,
+      "mean_final_conflicting_pairs": 1.0,
+      "mean_external_split_count": 5.5
+    }
+  }
+}

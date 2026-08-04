@@ -1,13 +1,14 @@
 """Minimal hard-forward/soft-backward PyTorch oracle for RosaSoft.
 
 Forward executes exact discrete ROSA. Backward uses one dense surrogate:
-softsign-STE symbols, exponential Hamming match gates, expected prefix length,
+softsign-STE symbols, exponential Hamming match gates, concave suffix evidence,
 candidate-normalized soft routing, and optional attention dropout. It is
 deterministic when ``dropout_p=0``.
 """
 
 from __future__ import annotations
 
+import math
 from typing import Tuple
 
 import torch
@@ -41,6 +42,7 @@ _REFERENCE_DTYPES = (
     torch.float32,
     torch.float64,
 )
+_NORMALIZED_SQRT_SUFFIX_SCALE = math.sqrt(2.0) + 1.0
 
 
 def _reference_compute_dtype(dtype: torch.dtype) -> torch.dtype:
@@ -184,6 +186,14 @@ def _suffix_prefix_product_scores(
     return score
 
 
+def _suffix_score_utility(raw_suffix_scores: Tensor) -> Tensor:
+    """Compress long evidence while preserving zero and one-match calibration."""
+
+    return _NORMALIZED_SQRT_SUFFIX_SCALE * (
+        torch.sqrt(1.0 + raw_suffix_scores) - 1.0
+    )
+
+
 def _select_latest_longest_routes(
     exact_suffix_lengths: Tensor,
     causal_route_mask: Tensor,
@@ -222,11 +232,11 @@ def _select_latest_longest_routes(
 
 
 def _masked_route_scores(
-    soft_suffix_scores: Tensor,
+    route_scores: Tensor,
     causal_route_mask: Tensor,
 ) -> Tensor:
-    seq_len = soft_suffix_scores.size(-1)
-    scores = soft_suffix_scores.clone()
+    seq_len = route_scores.size(-1)
+    scores = route_scores.clone()
     scores[..., 0] = ROSA_SOFT_NULL_ROUTE_SCORE
     return scores.masked_fill(
         ~causal_route_mask.view(1, 1, seq_len, seq_len),
@@ -501,7 +511,7 @@ class _HardForwardSoftVjpReference(torch.autograd.Function):
                 ctx.max_suffix_length,
             )
             route_scores = _masked_route_scores(
-                soft_suffix_scores,
+                _suffix_score_utility(soft_suffix_scores),
                 causal_route_mask,
             )
             attention_weights = _route_probabilities(

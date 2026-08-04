@@ -50,6 +50,7 @@ from rosa_soft.soft_reference import (
     _pairwise_soft_match_gates,
     _reference_compute_dtype,
     _route_probabilities,
+    _suffix_score_utility,
     _suffix_prefix_product_scores,
     _validate_reference_call,
     rosa_soft_reference,
@@ -188,7 +189,7 @@ class _HardForwardResearchSurrogate(torch.autograd.Function):
             )
             probabilities = _route_probabilities(
                 _masked_route_scores(
-                    soft_suffix_scores,
+                    _suffix_score_utility(soft_suffix_scores),
                     causal_route_mask,
                 ),
                 causal_route_mask,
@@ -433,7 +434,7 @@ class _HardForwardSuffixDropout(torch.autograd.Function):
             )
             full_probabilities = _route_probabilities(
                 _masked_route_scores(
-                    full_suffix_scores,
+                    _suffix_score_utility(full_suffix_scores),
                     causal_route_mask,
                 ),
                 causal_route_mask,
@@ -454,7 +455,7 @@ class _HardForwardSuffixDropout(torch.autograd.Function):
             ).permute(0, 2, 1).unsqueeze(-1)
             local_probabilities = _route_probabilities(
                 _masked_route_scores(
-                    local_match_gates,
+                    _suffix_score_utility(local_match_gates),
                     causal_route_mask,
                 ),
                 causal_route_mask,

@@ -2,6 +2,20 @@
 
 These constraints apply to the entire repository.
 
+## Frozen Dense Reference
+
+The `rosa-soft-dense-reference-v1` tag is the frozen baseline for exact hard
+forward with dense surrogate backward. Treat its public `rosa_soft` and
+`rosa_soft_varlen` semantics as immutable. Correctness and reproducibility
+fixes may be backported without changing equations, defaults, candidate
+support, RNG semantics, or tie/null behavior.
+
+New estimators, sparse training methods, diagonal execution prototypes, and
+alternative hard indexes must use a new module or operator name. Do not add
+research-only schemas, kernels, switches, or hidden dispatch back to the
+frozen extension. Historical experiments belong in `benchmarks/` and
+`docs/research/`, outside the package and build graph.
+
 ## RosaSoft Training Contract
 
 RosaSoft exists to train a sparse hard ROSA route with dense credit
@@ -41,8 +55,9 @@ floating-point issue; structurally masking or omitting a route is not
 allowed.
 
 Dense compute does not require quadratic persistent state. The production
-CUDA path computes each route's normalized Hamming mismatch and suffix score
-on demand; it must not store an `O(B H T^2 D)` bit-comparison tensor. A new
+CUDA path computes each route's normalized Hamming mismatch, raw suffix
+evidence, and transformed route score on demand; it must not store an
+`O(B H T^2 D)` bit-comparison tensor. A new
 `O(B H T^2)` score or adjoint workspace also requires an explicit memory
 analysis and a checkpointing justification. The PyTorch reference may
 materialize these tensors because it is the correctness oracle, not the
@@ -75,6 +90,23 @@ finite-window correction, reverse adjoints, and workspace bounds. Do not add
 a warp-per-route path to the current kernel or restrict the public suffix
 window to multiples of 32 based on scan convenience.
 
+The finite-window affine reverse formula is exact algebraically but loses
+FP32 precision on long exact matches because it subtracts full-diagonal
+correction terms. The cancellation-resistant research oracle sums only the
+at-most-`W` real local contributions with compensated accumulation. Any
+future diagonal production kernel must match that local oracle on the
+`N=4096,W=4096` exact-match gate; do not restore the subtractive reverse as
+the sole parity target.
+
+The tested multi-stage diagonal VJP is a research control, not a production
+plan. It passed parity but was slower on both sm_75 and sm_86 and materializes
+an `O(B H T^2)` FP32 local-gate tensor. A block-local/ring replacement must
+remove that workspace and pass the cross-GPU promotion gate before selection.
+Likewise, the exact hard diagonal index is valuable on collapsed all-match
+codes but regresses high-entropy codes. Do not select it from `T`, `D`, or
+`W` alone; automatic use requires an asynchronous, validated code-density
+signal that does not affect backward support.
+
 The retained private fast paths are narrowly gated:
 
 - dense Q-only utility caching requires `Dv >= 32` and a shared-memory fit;
@@ -84,6 +116,9 @@ The retained private fast paths are narrowly gated:
 - dense and packed value-only route/value tiling requires `Dv >= 32` and a
   shared-memory fit, independent of whether dense scores are cached or
   recomputed;
+- dense K aggregation requires an enabled K gradient and `D <= 8`; K/KV may
+  select it at `T >= 512`, while a simultaneous Q gradient raises the gate to
+  `T >= 1024`; the complete shared layout must fit;
 - packed K aggregation requires an enabled K gradient, `D <= 8`, average and
   local segment length at least 256, and a shared-memory fit;
 - packed Q-only score caching requires average segment length at least 256 and
@@ -93,6 +128,12 @@ The retained private fast paths are narrowly gated:
 These thresholds are measured execution choices, not public semantics.
 Broadening them requires all-gradient-mask A/B measurements and reference VJP
 parity.
+
+New execution plans are calibrated offline. Promotion requires bit-exact hard
+parity (or the documented VJP tolerance), no tested latency ratio above 1.05,
+at least 5% mean speedup, and no more than 64 MiB extra scratch in the stated
+matrix. Do not add first-call timing, device-name allowlists, or hidden
+environment overrides to the training operator.
 
 Dense score-plan selection is conservative. Recompute is considered only for
 `T >= 4096`; value-only backward additionally requires `T >= 64 W`, because
@@ -145,6 +186,63 @@ the main CUDA training path. Before it can be considered, it must measure
 gradient bias against the dense VJP, route discovery recall, multi-seed
 collapse rate, and hard-forward fitting quality.
 
+Global-bit stochastic research must sample each semantic Q/K bit once and
+reuse that assignment everywhere the bit participates. Per-pair or per-suffix
+resampling is a different model and cannot be reported as an ARM/DisARM
+estimate of globally shared hard ROSA. Keep the production dense VJP, a
+stochastic expected-hard VJP, deterministic bitflip fields, and structured
+margin-edit targets labeled as different optimization objects.
+
+Do not kernelize ARM/DisARM, mean-field winner marginals, sampled bitflip
+residuals, or margin-edit targets from tiny-oracle results alone. A candidate
+must first improve shared-parameter and shortcut-free contextual training at
+matched hard-evaluation cost. In particular, lower variance relative to the
+full bitflip field is not sufficient: on coordinated suffix edits that field
+can be identically zero, and sampling fewer residual coordinates can succeed
+only by preserving zero-mean exploration noise from the dense baseline.
+
+The shared-projection and shortcut-free contextual gates have now been run.
+At `tau=0.5`, the two-parameter projection fit succeeded in `16/16` runs for
+production, mean-field, exact expectation, ARM, DisARM, and margin edit, but
+production needed a median 64 steps versus 6 for mean-field/exact expectation.
+On four 1000-step contextual seeds, production, production with dropout,
+mean-field, ARM, and DisARM all passed; their median first-exact steps were
+`92.5, 85, 103, 132, 163.5`. ARM/DisARM used four antithetic pairs per step,
+and mean-field was slower than production in the instrumented prototype.
+Reducing ARM/DisARM to one pair retained `4/4` final success but worsened
+median first-exact steps to `296` and `441`, respectively.
+These results keep all alternative estimators research-only: none improved
+the contextual gate at matched cost. Reopening kernel work requires a new
+shared-parameter regime where an alternative improves robustness or sample
+efficiency, not another activation-space cosine result.
+
+## Internal-Language Experiments
+
+Stateful symbol generators, fixed phase/outline symbols, multi-hop feedback,
+and dormant-bit growth are research model components. They are not RosaSoft
+operator semantics and must not add public controls or alter the production
+VJP.
+
+Keep three claims separate in every result: an explicit hard codebook is
+representable, a learned initialization routes correctly, and correctness is
+retained after surrogate-gradient training. The strict grammar gate shows
+these are not interchangeable: full 2/4/8-position oracle codes all route at
+100%, while four-position learned codes pass only 2/4 seeds and eight-position
+codes pass 0/4 under the current primary matrix.
+
+An internal-language recall gate must exclude trainable value/readout and
+residual shortcuts or retain explicit zero/current/shuffled interventions.
+For multi-hop claims, the first hard routed value must be the only
+assignment-dependent input to the next query; report each hop's route and
+value accuracy, not final output alone.
+
+Conflict-driven bit activation is an external structural edit when it reads
+continuation labels. Report it as such, and report hard key conflicts
+separately from query/key self-alignment. A conflict-free key codebook does
+not imply correct routing when read and write heads have drifted apart. Do not
+turn conflict entropy, alignment, reconstruction, or split margins into a
+weighted loss bundle without a separate design decision.
+
 ## Operator Simplicity
 
 The public RosaSoft controls remain:
@@ -181,11 +279,26 @@ optimum. `9.0` remains an explicit experiment value and must not silently
 replace the default based on results from the removed tiered/random estimator.
 The internal null score is fixed at `0.5`.
 
-The backward route score is the raw expected matched-prefix length obtained
-from deterministic exponential mismatch gates. Do not wrap it in exact hard
-suffix tiers, bounded residuals, sampled perturbations, antithetic branches,
-or separate numerical/Jacobian gates. Those mechanisms weakened long-suffix
-credit or added variance and implementation state without a validated gain.
+Null calibration must retain the non-null `-log(candidate_count)` correction:
+without it, random-background recall converges to one as context grows. Under
+uniform independent hard bits, `D=4`, `mismatch_scale=3`, and `scale=1`, the
+fixed `0.5` null score already gives approximately `0.5` random-background
+recall. Power/log suffix utilities and a collision-likelihood-ratio route were
+tested as exact-hard-forward research controls. Stronger concavity repaired
+some long-route competition but reduced large-candidate capacity; collision LR
+improved broad fitting but lost directed long-route competition and sometimes
+assigned the newest bit credit in the wrong direction. Keep both research-only
+unless one replacement passes fitting, directed competition, contextual
+recall, and large-candidate calibration together.
+
+The backward first computes raw expected matched-prefix evidence `S` from
+deterministic exponential mismatch gates, then uses the fixed route score
+`U(S)=(sqrt(2)+1)(sqrt(1+S)-1)`. This transform is monotone, unbounded, and
+calibrated by `U(0)=0,U(1)=1`; its derivative must be included coherently in
+the Q/K VJP. Do not make it configurable or replace it with exact hard suffix
+tiers, bounded residuals, sampled perturbations, antithetic branches, or
+separate numerical/Jacobian gates. The fixed concavity is retained because it
+improved long-versus-short route discovery without weakening hard forward.
 The null route is one hypothesis against all non-null routes, so non-null
 logits include the fixed candidate-count prior correction.
 

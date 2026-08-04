@@ -1,6 +1,6 @@
 # Next-Generation Surrogate Gradients for RosaSoft
 
-Status: research proposal, 2026-07-31
+Status: implemented tiny-oracle study, updated 2026-08-01
 
 The validated production baseline is frozen at commit `86194a5`. This document
 does not change the operator contract or recommend replacing the production
@@ -70,10 +70,13 @@ The current estimator is:
 1. exact hard Q/K/V signs in forward;
 2. softsign VJP for each sign;
 3. `exp(-mismatch_scale * mismatch_rate)` for a local symbol pair;
-4. a sum of suffix prefix products, interpreted as expected suffix length;
-5. a candidate-normalized softmax over that scalar length;
-6. an optional post-softmax attention dropout;
-7. a dense value carrier used only by backward.
+4. a sum of suffix prefix products, interpreted as raw expected suffix
+   evidence `S`;
+5. the fixed normalized square-root route score
+   `U(S)=(sqrt(2)+1)(sqrt(1+S)-1)`;
+6. a candidate-normalized softmax over `U(S)`;
+7. an optional post-softmax attention dropout;
+8. a dense value carrier used only by backward.
 
 This has five distinct approximation boundaries:
 
@@ -1042,3 +1045,408 @@ The Candidate A hypothesis is precise:
 
 This is falsifiable. The parameter-removal benefit is real only if the
 resulting context-length prior and zero-gradient regions remain trainable.
+
+## 14. Implemented Global-Bit Oracle Results
+
+The first gated implementation now lives in:
+
+- `benchmarks/global_bit_oracle.py` for exact enumeration and estimator
+  comparison;
+- `benchmarks/global_bit_fit.py` for the tiny multi-seed hard-route fitting
+  gate;
+- `tests/test_global_bit_oracle.py` and `tests/test_global_bit_fit.py` for the
+  estimator contracts and the coordinated-edit construction.
+
+These are research-only CPU-scale tools. No production reference, dispatcher,
+public argument, or CUDA kernel changed.
+
+### 14.1 Exact objective and independent checks
+
+For `B=H=1`, the oracle assigns one Bernoulli variable to every semantically
+relevant query bit at positions `1..T-1` and key bit at positions `0..T-2`.
+One sampled assignment is reused by every pair and every suffix offset in
+which that bit participates. For `T=4,D=2`, this is 12 bits and 4096 complete
+hard ROSA states.
+
+This is global sharing at the activation-bit level, not a model of the joint
+distribution induced by shared Q/K projection weights. Distinct activation
+bits remain factorial Bernoulli variables. Shared-parameter aggregation is a
+later and strictly stronger gate.
+
+The differentiated object is explicitly the fixed-upstream VJP
+
+```text
+d/dx E_b[ <g, hard_rosa(sign(b), V)> ],
+b_i ~ Bernoulli(sigmoid(x_i / tau)).
+```
+
+It is not the derivative of deterministic hard ROSA and is not the full
+gradient of an expected nonlinear downstream loss. Exhaustive autograd,
+per-bit local expectation, and central finite differences agree. Across the
+16-case `T=4,D=2` matrix, the maximum local-expectation discrepancy at
+`tau=1` was `3.33e-16` in float64.
+
+For every nonzero logit, `tau -> 0` concentrates on the production hard sign.
+At an exact zero, the stochastic model remains `Bernoulli(0.5)` while
+production maps zero to `-1`; the hard-limit claim explicitly excludes this
+decision boundary.
+
+The tests also fix:
+
+- exact latest-tie and null behavior;
+- route probabilities summing to one;
+- globally shared repeated-key correlations;
+- exact ARM/DisARM expectation in a one-bit problem;
+- unbiased without-replacement bitflip residual correction;
+- a two-bit margin edit that cannot be represented by either single edit;
+- base-state preference when zero logits create tied margin objectives.
+
+The simplest correlation counterexample has one stochastic query bit and two
+identical fixed keys. Exact global enumeration gives route mass
+`[null, old, latest] = [0.5, 0, 0.5]`; mean-field gives
+`[0.25, 0.25, 0.5]` and assigns mass to an impossible old route.
+
+### 14.2 Equal-budget estimator matrix
+
+The primary matrix used seeds `0..7`, random and repeated-key cases,
+`T=4,D=2,Dv=3,W=3,tau=1`, 4096 Monte Carlo samples, and two extra hard
+gradient evaluations per ARM, DisARM, or bitflip-residual sample. The common
+base hard forward is not counted as an extra evaluation.
+
+| Estimator | Target | Mean cosine | Relative error | Single-sample normalized variance |
+| --- | --- | ---: | ---: | ---: |
+| production VJP | stochastic global-bit oracle | 0.561 | 0.982 | deterministic |
+| mean-field winner | stochastic global-bit oracle | 0.948 | 0.296 | deterministic |
+| ARM | stochastic global-bit oracle | 0.995 | 0.101 | 46.03 |
+| DisARM | stochastic global-bit oracle | 0.996 | 0.087 | 34.67 |
+| complete bitflip | stochastic global-bit oracle | 0.441 | 14.39 | deterministic |
+| 2-sample residual | complete bitflip | 0.9996 | 0.032 | 4.67 |
+
+The ARM/DisARM cosine and relative error in the table are for the mean of
+4096 samples. A single sample is much less useful: median sample cosine was
+`0.151` for ARM and `0.179` for DisARM, while the negative-cosine fractions
+were `28.5%` and `26.0%`. DisARM is the better estimator of this declared
+stochastic objective, but neither has low single-step variance.
+
+Mean-field error is structured rather than random. Its mean route total
+variation was `0.0061` on random cases and `0.0698` on repeated-key cases;
+the maxima were `0.0287` and `0.1784`. Its gradient cosine fell from `0.981`
+on random cases to `0.916` on repeated-key cases. This is enough to retain it
+as a semantic ablation, not enough to treat candidate independence as exact.
+
+Complete bitflip and the stochastic oracle are different targets. The
+sampled residual accurately estimates complete bitflip, but that does not
+make it an accurate estimate of the stochastic objective. With
+without-replacement sampling, complete-bitflip normalized residual variance
+was `10.27, 4.67, 1.87, 0.47, 0` for `k=1,2,4,8,12` sampled bits. At `k=12`,
+the estimator becomes the exact complete-bitflip field.
+
+### 14.3 Temperature and margin scales
+
+The temperature sweep did not reverse the estimator ranking:
+
+| `tau` | ARM variance | DisARM variance | mean-field cosine | max route TV |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.25 | 37.70 | 16.48 | 0.909 | 0.328 |
+| 0.5 | 30.58 | 18.39 | 0.938 | 0.267 |
+| 1 | 46.03 | 34.67 | 0.948 | 0.178 |
+| 2 | 104.34 | 85.12 | 0.950 | 0.078 |
+| 4 | 260.70 | 212.40 | 0.941 | 0.023 |
+
+This `tau` belongs to the declared Bernoulli-bit oracle, not to production
+route attention. Larger values make the exact gradient norm smaller relative
+to Monte Carlo noise. Lower values sharpen bits but increase mean-field
+correlation error in these cases. The tiny fitting task happened to reach
+`32/32` for ARM and DisARM at each of `tau=0.25,0.5,1,2`; that small result
+does not erase the larger-state variance trend.
+
+The exact margin-edit solver maximizes
+
+```text
+<x, s> - eta * <g, Y(s) - Y(base)>
+```
+
+over globally feasible assignments and sends `(s_base-s_target)/eta`
+backward. It therefore edits a complete realizable bit state rather than an
+independent route score. Its control is nevertheless scale-sensitive. In the
+16-seed coordinated fitting gate, success was `0/16`, `6/16`, and `16/16`
+for `eta=0.05`, `0.1`, and `0.25`; all tested values through `2.0` stayed at
+`16/16` once that threshold was crossed. `eta` jointly depends on upstream
+loss scale and current logit margins.
+
+### 14.4 Multi-seed hard-route fitting
+
+The fitting gate fixes query and value tensors and trains only three key
+logits. The target route is 2 and the initial latest route is 3. The
+`joint_suffix` case has no improving one-bit edit: changing either required
+key alone leaves route 3 selected, while changing both creates a length-2
+suffix for route 2 that beats route 3's length-1 match. All one-bit output
+deltas, and therefore the complete bitflip field, are exactly zero at the
+initial state.
+
+With 16 matched model/noise seeds, 100 Adam steps, `tau=0.5`, `eta=1`, and two
+extra hard evaluations for sampled estimators:
+
+| Estimator | Single-edit success | Joint-suffix success | Median joint success step |
+| --- | ---: | ---: | ---: |
+| production VJP | 16/16 | 16/16 | 6 |
+| mean-field | 16/16 | 16/16 | 6 |
+| exact stochastic expectation | 16/16 | 16/16 | 6 |
+| ARM, one pair | 16/16 | 16/16 | 11.5 |
+| DisARM, one pair | 16/16 | 16/16 | 12 |
+| complete bitflip | 16/16 | 0/16 | never |
+| 2-sample bitflip residual | 16/16 | 11/16 | 31 among successes |
+| exact margin edit | 16/16 | 16/16 | 6 |
+
+Crossing four model initializations with eight independent estimator seeds
+gave `32/32` for ARM, `32/32` for DisARM, and `23/32` for the 2-sample
+bitflip residual. ARM and DisARM had median success steps `13.5` and `13`.
+
+The bitflip residual has a decisive non-monotonic result on this task:
+
+| sampled bits per step | Joint-suffix success | Median success step |
+| ---: | ---: | ---: |
+| 1 | 32/32 | 23.5 |
+| 2 | 23/32 | 37 |
+| 3, all bits | 0/32 | never |
+
+The exact bitflip target is zero, so increasing `k` removes the dense
+production baseline in expectation and destroys the only escape mechanism.
+The `k=1` success is caused by zero-mean estimator noise, not by a correct
+counterfactual descent direction. This is useful evidence about exploration,
+but it rejects complete-bitflip accuracy as the objective for coordinated
+suffix discovery.
+
+### 14.5 Decision after the gate
+
+No new estimator currently dominates the frozen production VJP:
+
+1. Production already solves both tiny tasks in `16/16` and retains dense
+   deterministic discovery without extra hard forwards.
+2. DisARM is the best tested unbiased Monte Carlo estimator of the declared
+   global-bit objective, but its single-sample variance and extra hard passes
+   require a shared-parameter and contextual-recall win before kernel work.
+3. Mean-field is cheap and trains this tiny task, but repeated-key
+   correlations create impossible routes and material gradient error.
+4. Margin edit is the strongest structured diagnostic for coordinated
+   changes, but exhaustive search is exponential and `eta` is tied to loss
+   scale and sign margins.
+5. Bitflip residual correction is rejected as a primary target. Its apparent
+   exploration benefit becomes worse as the estimate becomes more exact.
+
+Accordingly, the CUDA gate remains closed. The next justified experiment is
+shared-projection response fitting with V frozen, followed by the
+shortcut-free contextual recall gate. Kernel design begins only if one of
+these candidates improves those tests at matched hard-evaluation cost.
+
+## 15. Shared-Projection and Contextual Gates
+
+Both follow-up gates are now implemented and complete. Full machine-readable
+results are stored in:
+
+- `validation/shared_projection_fit.json`;
+- `validation/contextual_estimator_recall_t05_p4.json`;
+- `validation/contextual_estimator_recall_t05_p1.json`.
+
+The batched research operator in `benchmarks/stochastic_hard_vjp.py` keeps the
+production hard forward and production dense V VJP. It replaces only the Q/K
+VJP with ARM, DisARM, or a `W=1` mean-field latest-match approximation. ARM
+and DisARM use one shared sampled activation-bit assignment everywhere that
+activation participates. Rewards are reduced independently for each
+`(batch, head)` so unrelated examples and heads do not add variance. The
+mean-field path remains explicitly approximate because candidates sharing a
+query are not independent.
+
+Tests establish exact hard-forward equality, unchanged production V
+gradients, deterministic RNG replay, zero gradients at semantically unused
+Q/K positions, no reward leakage across batch/head groups, exact one-bit
+ARM/DisARM integration, and agreement between the batched `W=1` mean-field
+VJP and the enumerated oracle.
+
+### 15.1 Coupled shared projection
+
+The first gate no longer optimizes independent activation logits. Two
+parameters produce three key logits through
+
+```text
+k = [theta_0, theta_1, theta_0 + theta_1].
+```
+
+The initial signs are `[+1,-1,+1]` and select route 3. The target signs are
+`[-1,+1,+1]` and create the length-2 suffix needed for route 2. Query and
+value tensors are fixed. Every estimator gradient is multiplied by the same
+projection Jacobian before the optimizer step.
+
+For 16 matched model/noise seeds, 100 Adam steps, `W=2`, and `tau=0.5`:
+
+| Estimator | Success | Median first success | Initial cosine to exact expectation |
+| --- | ---: | ---: | ---: |
+| production VJP | 16/16 | 64 | 0.859 |
+| mean-field | 16/16 | 6 | 0.991 |
+| exact stochastic expectation | 16/16 | 6 | 1.000 |
+| ARM, one pair | 16/16 | 18 | 0.463 |
+| DisARM, one pair | 16/16 | 16.5 | 0.394 |
+| complete bitflip | 0/16 | never | 0.000 |
+| 2-sample bitflip residual | 14/16 | 36 | -0.236 |
+| exact margin edit | 16/16 | 8 | 0.975 |
+
+This is the first case where production is materially slower than the exact
+stochastic and mean-field objectives. It confirms that independent-logit
+success was not sufficient evidence and that shared projection geometry can
+amplify estimator differences. It does not establish a replacement: the task
+has only two parameters, fixed V, and an enumerably small state space.
+
+The complete bitflip failure survives projection aggregation. The sampled
+residual again succeeds only inconsistently, and its initial parameter-space
+direction is negatively aligned with the exact stochastic objective.
+
+### 15.2 Shortcut-free contextual recall
+
+The second gate trains the Q/K projections inside a reset-GRU language model.
+Each episode writes four cue/payload associations, resets recurrent state,
+then queries the same cues. Paired examples have complementary payloads but
+identical post-reset tokens and exactly identical query residuals. Therefore
+only a hard route into pre-reset history can distinguish the targets. Zero
+route, current-value, and residual-only evaluations are retained as explicit
+counterfactuals.
+
+The primary RTX 2080 Ti matrix used four model seeds, 64 paired training
+episodes, 32 paired validation episodes, `T=13,H=2,D=8,H_v=2,D_v=4,W=1`,
+1000 AdamW steps, `tau=0.5`, and four antithetic pairs for ARM/DisARM.
+Production dropout used standard `dropout_p=0.1`; every other candidate used
+zero dropout.
+
+| Q/K estimator | Passed | Median first train-exact step | Mean validation exact | Mean instrumented step ms |
+| --- | ---: | ---: | ---: | ---: |
+| production | 4/4 | 92.5 | 0.9990 | 14.40 |
+| production + dropout | 4/4 | 85 | 1.0000 | 14.44 |
+| mean-field | 4/4 | 103 | 1.0000 | 25.98 |
+| ARM, four pairs | 4/4 | 132 | 1.0000 | 16.15 |
+| DisARM, four pairs | 4/4 | 163.5 | 0.9990 | 16.60 |
+
+Every candidate had zero Q/K zero-gradient steps. All had perfect mean
+historical-route and paired-routed-value-difference scores. Residual-only
+validation exact accuracy ranged from `0.0547` to `0.0664`, bit accuracy was
+`0.5`, and the analytical paired-example exact ceiling remained `0.5`.
+Thus the successful models did use historical ROSA values rather than a
+residual or current-token shortcut.
+
+The absolute timing includes per-step diagnostic synchronization and is not
+a standalone kernel benchmark. The algorithmic budget remains decisive:
+ARM/DisARM evaluate two hard states per antithetic pair, while production
+needs no sampled hard counterfactual. Mean-field materializes a differentiable
+`B*H*T*T` route distribution in the PyTorch prototype.
+
+The one-pair budget ablation also reached final `4/4` success for ARM and
+DisARM, with mean validation exact accuracy `0.9990` for both. Its median
+first train-exact steps degraded to `296` and `441`, compared with `132` and
+`163.5` at four pairs. Q/K zero-gradient fraction remained zero. More Monte
+Carlo pairs therefore improved effective optimization rather than repairing
+a missing-gradient bug; at this tiny shape it did not materially change the
+instrumented step time because Python and synchronization overhead dominate.
+
+### 15.3 Updated decision
+
+The production estimator remains the default:
+
+1. It is slower on the deliberately coupled two-parameter fit, proving a real
+   weakness, but still reaches `16/16` without stochastic hard evaluations.
+2. It passes all contextual seeds and reaches train-exact earlier than
+   mean-field, ARM, and DisARM at the primary configuration.
+3. Standard route dropout is the only tested addition that slightly improves
+   median contextual convergence without inventing a new optimization target;
+   it is already part of the public operator.
+4. Mean-field remains the most credible deterministic research alternative,
+   but it has a known impossible-route correlation error, no contextual gain,
+   and higher prototype cost.
+5. ARM and DisARM now have a correct batched implementation and demonstrably
+   train shared projections, but their variance and extra hard evaluations do
+   not buy contextual robustness or sample efficiency.
+
+No alternative clears the kernel gate. Further work should search for a task
+where production repeatedly fails after shared projection while mean-field or
+a lower-variance structured estimator succeeds. Optimizing the current
+research implementations before such a task exists would optimize an
+estimator without evidence that ROSA needs it.
+
+## 16. Stateful Internal-Language Gates
+
+The next research layer is documented separately in
+`docs/research/INTERNAL_LANGUAGE_GATES.md`. It keeps the production estimator
+fixed and tests a deterministic slow-state symbolizer, strict 2/4/8-position
+grammars, a hard-Value two-hop chain, and conflict-driven dormant-bit growth.
+
+The main result is a length-dependent retention failure, not a new estimator
+win. Stateful grammar fitting reaches final exact routing in 4/4, 2/4, and
+0/4 runs for lengths 2, 4, and 8. The explicit hard codebooks route at 100%
+for all three lengths, so representation is not the blocker. The two-hop gate
+starts at 85.9% mean answer accuracy under aligned Q/K initialization but
+finishes at 28.6% and passes only 1/4 seeds after 500 production-VJP steps.
+
+Offline state splitting can remove all hard key conflicts: with gradients
+frozen, four deterministic dormant-bit activations take a 32-concept codebook
+from two to six active bits and reach 4/4 exact routing. Simultaneous VJP
+training breaks Q/K self-alignment and reaches 0/4 exact. This separates two
+state variables that prior estimator probes conflated: key alphabet capacity
+and read/write code alignment.
+
+These results do not reopen alternative-estimator CUDA work. The next gate is
+structural: preserve existing hard bits while activating capacity inside the
+shortcut-free contextual LM, then test whether the code remains stable while
+an unrelated LM loss is still active.
+
+## 17. Local Geometry Recalibration
+
+The production estimator was subsequently reopened only at two local,
+GPU-friendly geometry choices. The matched harness
+`benchmarks/suffix_proxy_ablation.py` crosses:
+
+| Axis | Baseline | Alternative |
+| --- | --- | --- |
+| Hamming denominator | `D` | `sqrt(D)` |
+| suffix route score | raw `S=sum_l P_l` | `U(S)=(sqrt(2)+1)(sqrt(1+S)-1)` |
+
+All four cells share exact hard forward, every causal candidate, softsign
+symbols, exponential gates, candidate normalization, value credit, and model
+width. There is no soft-forward path and no new public parameter.
+
+The 8,640-row gradient shell covered `D=1..32`, `T=16/32/64`,
+`W=1..32`, five mismatch scales, and four seeds. `h/sqrt(D)` is rejected:
+random symbols have `h=O(D)`, so its exponent is `-O(sqrt(D))`, not a
+width-stabilized distance. At `mismatch_scale=3,D=32`, its Q/K RMS was only
+about `2.8%` of the `h/D` baseline and cross-width variation became much
+worse. The production mismatch remains `h/D`.
+
+The normalized square-root suffix score is retained. In 72 directed
+long-versus-short competition cells, raw `S` succeeded in `12/18` aggregated
+shape/scale cases while `U(S)` succeeded in `18/18`; every raw-score failure
+was at distractor length 16. In those longest cases, the new score increased
+initial target probability by roughly `323x..2000x` and the oldest required
+bit gradient by `462x..2316x`. It remains strictly increasing and unbounded,
+so longer evidence is never tied or capped; only marginal score growth is
+reduced.
+
+Broader fitting did not show a quality regression. A 48-cell, 300-step screen
+gave `30/48` raw versus `32/48` normalized-square-root successes. Re-running
+all ten discordant cells to 1,000 steps produced six shared successes, four
+new-only successes, and zero raw-only successes. In the historical
+`T16,D4,W8` shape, both reached near-zero loss in `7/8` seeds. Exact small
+bitflip alignment over 720 configurations was effectively neutral: mean
+cosine was `0.54537` raw and `0.54883` transformed, with identical missed
+useful-bit fraction to reported precision.
+
+The rebuilt production CUDA operator was then fit for 1,000 steps on seeds
+`0..7` at `T16,D4,W8,mismatch_scale=3,dropout_p=0`. Six runs reached loss
+at most `0.001`; these were all six collision-free runs. The other two ended
+at `0.61642` and `0.13930`, within `0.0007` of hard-feature conditional
+entropy floors `0.61613` and `0.13863`, and remained structural in three
+independent restarts each. Thus the kernel still drives every realizable case
+near zero; this particular any-candidate gate cannot demand zero after its
+learned hard features alias incompatible targets. The shortcut-free
+associative-recall gate separately passed `8/8` current-CUDA seeds.
+
+The resulting production rule is intentionally fixed: compute dense raw
+evidence `S`, use `U(S)` for route softmax, and multiply the suffix adjoint by
+`U'(S)`. CUDA caches `S`, reconstructs the transform with one `sqrtf` per
+visited score pass, and introduces no estimator branch, workspace, RNG, or
+ABI field. Full evidence is in `validation/suffix_proxy_ablation.json`.

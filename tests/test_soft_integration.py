@@ -201,7 +201,7 @@ def _all_match_final_row_value_gradient(dtype, loss_scale=1.0):
     return value.grad.detach().float().flatten() / loss_scale
 
 
-def test_cuda_precision_controls_dense_tail_gradient_support():
+def test_cuda_loss_scaling_improves_dense_tail_gradient_accuracy():
     fp16_unscaled = _all_match_final_row_value_gradient(torch.float16)
     fp16_scaled = _all_match_final_row_value_gradient(
         torch.float16,
@@ -211,6 +211,7 @@ def test_cuda_precision_controls_dense_tail_gradient_support():
 
     # Position zero is the null value and never receives a route gradient.
     assert torch.count_nonzero(fp32[1:]) == fp32.numel() - 1
-    assert torch.count_nonzero(fp16_scaled[1:]) > torch.count_nonzero(
-        fp16_unscaled[1:]
+    assert torch.count_nonzero(fp16_scaled[1:]) == fp16_scaled.numel() - 1
+    assert torch.linalg.vector_norm(fp16_scaled - fp32) < (
+        torch.linalg.vector_norm(fp16_unscaled - fp32)
     )

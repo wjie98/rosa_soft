@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-02T21:13:43+08:00",
+  "source": {
+    "base_commit": "d19c4b88695fdcb49e342acd961a5527b004a518",
+    "working_tree": true,
+    "harness": "benchmarks/suffix_proxy_ablation.py",
+    "tests": "tests/test_suffix_proxy_ablation.py"
+  },
+  "objective": "Recalibrate only the local Hamming and suffix-score geometry while preserving exact hard forward, dense causal support, fixed model width, and the public API.",
+  "proxy_matrix": {
+    "baseline": {
+      "mismatch": "h / D",
+      "suffix_route_score": "S"
+    },
+    "sqrt_dim": {
+      "mismatch": "h / sqrt(D)",
+      "suffix_route_score": "S"
+    },
+    "sqrt_suffix": {
+      "mismatch": "h / D",
+      "suffix_route_score": "(sqrt(2) + 1) * (sqrt(1 + S) - 1)"
+    },
+    "sqrt_dim_suffix": {
+      "mismatch": "h / sqrt(D)",
+      "suffix_route_score": "(sqrt(2) + 1) * (sqrt(1 + S) - 1)"
+    }
+  },
+  "shared_contract": {
+    "hard_forward": "exact latest-longest ROSA; latest route wins ties",
+    "raw_suffix_evidence": "S = sum_l product_{r < l} exp(-mismatch_scale * mismatch_r)",
+    "candidate_support": "every valid causal route",
+    "soft_forward_leak": false,
+    "new_public_parameters": 0
+  },
+  "gradient_shell": {
+    "rows": 8640,
+    "axes": {
+      "qk_bits": [1, 2, 4, 8, 16, 32],
+      "sequence_lengths": [16, 32, 64],
+      "windows": [1, 2, 4, 8, 16, 32],
+      "mismatch_scales": [0.5, 1.0, 1.5, 2.0, 3.0],
+      "seeds": [0, 1, 2, 3]
+    },
+    "d32_lambda3_qk_rms_ratio_to_baseline": {
+      "sqrt_dim_mean": 0.0312949324,
+      "sqrt_dim_median": 0.0271351976,
+      "sqrt_suffix_mean": 1.0642329621,
+      "sqrt_suffix_median": 1.0621430617,
+      "sqrt_dim_suffix_mean": 0.0376193752,
+      "sqrt_dim_suffix_median": 0.0326611505
+    },
+    "decision": "Reject h/sqrt(D). For random symbols h is O(D), so this denominator makes the gate exponent O(sqrt(D)) and suppresses wide-symbol gradients. Retain h/D."
+  },
+  "directed_long_short_competition": {
+    "cells": 72,
+    "axes": {
+      "qk_bits": [2, 4, 8],
+      "distractor_lengths": [4, 8, 16],
+      "mismatch_scales": [1.5, 3.0],
+      "proxies": [
+        "baseline",
+        "sqrt_dim",
+        "sqrt_suffix",
+        "sqrt_dim_suffix"
+      ]
+    },
+    "successes": {
+      "baseline": "12/18",
+      "sqrt_dim": "12/18",
+      "sqrt_suffix": "18/18",
+      "sqrt_dim_suffix": "18/18"
+    },
+    "median_crossing_step_among_successes": {
+      "baseline": 10.0,
+      "sqrt_dim": 31.5,
+      "sqrt_suffix": 13.0,
+      "sqrt_dim_suffix": 24.5
+    },
+    "distractor_length_16_sqrt_suffix_over_baseline": {
+      "initial_target_probability_range": [323.3859518421, 2000.1526412252],
+      "oldest_required_bit_gradient_range": [462.0804348027, 2316.1036924551]
+    },
+    "decision": "Retain the normalized square-root suffix utility. It restores discovery against long incumbent routes without capping or reordering suffix evidence."
+  },
+  "ordinary_fit": {
+    "screen": {
+      "configuration": "D=1/2/4/8, W=2/8/32, lambda=3, seeds=0..3, 300 steps, strict-longest-latest, fixed hidden width",
+      "baseline_successes": "30/48",
+      "sqrt_suffix_successes": "32/48",
+      "median_first_success_step": {
+        "baseline": 53.5,
+        "sqrt_suffix": 53.5
+      },
+      "paired_outcomes": {
+        "both_success": 26,
+        "both_fail": 12,
+        "sqrt_suffix_only": 6,
+        "baseline_only": 4
+      }
+    },
+    "discordant_1000_step_recheck": {
+      "cells": 10,
+      "both_success": 6,
+      "sqrt_suffix_only": 4,
+      "baseline_only": 0,
+      "both_fail": 0
+    },
+    "historical_shape": {
+      "configuration": "T=16, D=4, W=8, hidden=8, lambda=3, seeds=0..7, 1000 steps, any-candidate",
+      "baseline_successes": "7/8",
+      "sqrt_suffix_successes": "7/8",
+      "paired_outcomes": {
+        "both_success": 6,
+        "sqrt_suffix_only": 1,
+        "baseline_only": 1
+      },
+      "median_first_success_step": {
+        "baseline": 406,
+        "sqrt_suffix": 447
+      }
+    }
+  },
+  "exact_small_bitflip_alignment": {
+    "configurations_per_proxy": 720,
+    "axes": "seeds=0..9, T=4/6, D=1/2/4/8, W=1/3/6, scale=0.5/1/2, lambda=3",
+    "baseline": {
+      "mean_cosine": 0.5453680754,
+      "mean_sign_agreement": 0.7947265951,
+      "mean_top8_useful_fraction": 0.3516582236,
+      "mean_missed_useful_fraction": 0.0017515052
+    },
+    "sqrt_suffix": {
+      "mean_cosine": 0.5488342559,
+      "mean_sign_agreement": 0.7941249382,
+      "mean_top8_useful_fraction": 0.3508240459,
+      "mean_missed_useful_fraction": 0.0017515052
+    },
+    "decision": "Directional alignment is effectively neutral; the competition gain does not come from sacrificing useful-bit coverage."
+  },
+  "production_change": {
+    "selected_mismatch": "h / D",
+    "selected_route_score": "U(S) = (sqrt(2) + 1) * (sqrt(1 + S) - 1)",
+    "route_score_vjp": "U'(S) = (sqrt(2) + 1) / (2 * sqrt(1 + S))",
+    "calibration": {
+      "U(0)": 0.0,
+      "U(1)": 1.0,
+      "monotone": true,
+      "concave": true,
+      "unbounded": true
+    },
+    "hard_forward_changed": false,
+    "public_api_changed": false,
+    "extra_workspace": false,
+    "extra_rng": false,
+    "cuda_implementation": "Cache raw S, transform before softmax, and apply U'(S) before the existing suffix adjoint."
+  },
+  "verification": {
+    "full_test_command": "CUDA_VISIBLE_DEVICES=1 python -m pytest -q",
+    "passed": 470,
+    "skipped": 2,
+    "elapsed_seconds": 13.96,
+    "cuda_reference_parity": "passed for dense, packed-varlen, all gradient masks, dropout, and supported dtypes",
+    "production_cuda_fit": {
+      "configuration": "seeds=0..7, T=16, D=4, W=8, lambda=3, dropout_p=0, 1000 steps, any-candidate",
+      "final_loss_le_0_001": "6/8",
+      "collision_free_final_loss_le_0_001": "6/6",
+      "median_final_loss": 0.0003010697,
+      "median_step_ms": 3.6858780215,
+      "structural_floors": {
+        "seed1": {
+          "final_loss": 0.6164201498,
+          "hard_feature_conditional_entropy": 0.6161308272,
+          "loss_above_floor": 0.0002893226,
+          "three_retries_near_zero": 0
+        },
+        "seed7": {
+          "final_loss": 0.1392973959,
+          "hard_feature_conditional_entropy": 0.1386294361,
+          "loss_above_floor": 0.0006679598,
+          "three_retries_near_zero": 0
+        }
+      },
+      "interpretation": "Every collision-free run fits near zero. The two failures optimize to their hard-feature entropy floor and are discrete representation collisions, not residual soft-loss optimization failures."
+    },
+    "shortcut_free_associative_recall": {
+      "configuration": "production CUDA, seeds=0..7, D=8, W=1, dropout_p=0.1, lambda=3",
+      "passed": "8/8",
+      "success_steps": [31, 38, 25, 32, 37, 47, 38, 25]
+    },
+    "build": {
+      "architectures": ["sm_75", "sm_86"],
+      "sm75_max_registers": 125,
+      "sm86_max_registers": 127,
+      "local_memory_spills": 0,
+      "fat_binary_bytes": 6757592,
+      "fat_binary_sha256": "ea3e500e6602a68df25f707d957ad51f368cb972bb1bde156d3f599c24c44c70"
+    }
+  },
+  "performance": {
+    "device": "NVIDIA GeForce RTX 2080 Ti",
+    "compute_capability": "7.5",
+    "isolation": "CUDA_VISIBLE_DEVICES=1",
+    "method": "median of three process runs after 10 warmups and 50 measured repeats; absolute post-change timing, not a matched old/new A/B",
+    "shape": "B1 H4 D8 Hv2 Dv8 W32 FP32 random",
+    "dense_qkv_train_ms": {
+      "T64": 0.3888569641,
+      "T128": 0.3895577621,
+      "T256": 0.7330246735,
+      "T512": 2.194165802,
+      "T1024": 6.4933081055
+    },
+    "dense_gradient_mask_train_ms": {
+      "q": {"T256": 0.4011328125, "T512": 1.3108428955, "T1024": 3.1281945801},
+      "k": {"T256": 0.4901683044, "T512": 2.5416947937, "T1024": 7.5209527588},
+      "v": {"T256": 0.3943590546, "T512": 0.3779961777, "T1024": 1.0679122925}
+    },
+    "dense_qkv_dropout_p0_1_train_ms": {
+      "T256": 0.7542771149,
+      "T512": 1.9170541382,
+      "T1024": 6.2639813232
+    },
+    "packed_qkv_segment256_train_ms": {
+      "T256_S1": 1.0062758636,
+      "T512_S2": 1.6649830627,
+      "T1024_S4": 2.4527615356
+    },
+    "dense_hard_forward_ms": {
+      "T256": 0.0480815983,
+      "T512": 0.0454604816,
+      "T1024": 0.0461414385
+    },
+    "packed_hard_forward_ms": {
+      "T256_S1": 0.0519158411,
+      "T512_S2": 0.0502579212,
+      "T1024_S4": 0.051776638
+    },
+    "peak_operator_memory": "linear in input length; no route-score matrix or new persistent state"
+  }
+}

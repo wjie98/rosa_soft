@@ -316,6 +316,59 @@ def test_cuda_dense_query_utility_cache_matches_reference():
 
 
 @pytest.mark.parametrize("dropout_p", [0.0, 0.2])
+@pytest.mark.parametrize(
+    ("seq_len", "gradient_inputs"),
+    [(512, "k"), (1024, "qk")],
+)
+def test_cuda_dense_key_aggregation_matches_reference(
+    seq_len,
+    gradient_inputs,
+    dropout_p,
+):
+    query = _nonzero_randn((1, seq_len, 1, 8), seed=224)
+    key = _nonzero_randn((1, seq_len, 1, 8), seed=225)
+    value = _nonzero_randn((1, seq_len, 1, 8), seed=226)
+    grad_output = _nonzero_randn(
+        (1, seq_len, 1, 8),
+        seed=227,
+    )
+    controls = {
+        "max_suffix_length": 32,
+        "scale": 1.2,
+        "dropout_p": dropout_p,
+        "mismatch_scale": 3.0,
+    }
+
+    def run(operator):
+        inputs = [
+            query.detach().clone().requires_grad_(
+                "q" in gradient_inputs
+            ),
+            key.detach().clone().requires_grad_(
+                "k" in gradient_inputs
+            ),
+            value,
+        ]
+        torch.cuda.manual_seed(228)
+        output = operator(*inputs, **controls)
+        leaves = [tensor for tensor in inputs if tensor.requires_grad]
+        gradients = torch.autograd.grad(output, leaves, grad_output)
+        return output, gradients
+
+    reference_output, reference_gradients = run(rosa_soft_reference)
+    cuda_output, cuda_gradients = run(rosa_soft.rosa_soft)
+
+    assert torch.equal(cuda_output, reference_output)
+    for observed, reference in zip(cuda_gradients, reference_gradients):
+        torch.testing.assert_close(
+            observed,
+            reference,
+            rtol=4e-4,
+            atol=4e-5,
+        )
+
+
+@pytest.mark.parametrize("dropout_p", [0.0, 0.2])
 def test_cuda_recompute_tiled_value_only_matches_reference(dropout_p):
     seq_len = 67
     query = _nonzero_randn((1, seq_len, 2, 8), seed=23)

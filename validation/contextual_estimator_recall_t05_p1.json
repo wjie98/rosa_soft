@@ -1,0 +1,483 @@
+{
+  "schema_version": 1,
+  "operator": "cuda",
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 2080 Ti",
+  "estimators": [
+    "arm",
+    "disarm"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "train_pairs": 64,
+  "validation_pairs": 32,
+  "associations": 4,
+  "hidden_size": 32,
+  "heads": 2,
+  "qk_bits": 8,
+  "value_heads": 2,
+  "value_bits": 4,
+  "steps": 1000,
+  "bit_temperature": 0.5,
+  "antithetic_pairs": 1,
+  "dropout_p": 0.1,
+  "runs": [
+    {
+      "seed": 0,
+      "candidates": {
+        "arm": {
+          "training": {
+            "training_loss": 0.0031124937813729048,
+            "first_train_exact_step": 416,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.32678333174576984,
+            "mean_value_gradient_norm": 0.005330600873239746,
+            "step_ms": 16.907619246048853
+          },
+          "train": {
+            "loss": 0.0004481723590288311,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.875,
+            "nonnull_route_fraction": 0.875,
+            "paired_route_difference_fraction": 0.0,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.072265625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.05859375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.0007628630846738815,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.875,
+            "nonnull_route_fraction": 0.875,
+            "paired_route_difference_fraction": 0.0,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.046875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.046875,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true
+        },
+        "disarm": {
+          "training": {
+            "training_loss": 0.00014174985699355602,
+            "first_train_exact_step": 373,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.09376340002490906,
+            "mean_value_gradient_norm": 0.002703017656225711,
+            "step_ms": 16.890343662991654
+          },
+          "train": {
+            "loss": 0.00014156682300381362,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 0.986328125,
+            "payload_route_head_fraction": 0.86328125,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.8720703125,
+            "nonnull_route_fraction": 0.8720703125,
+            "paired_route_difference_fraction": 0.05078125,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.076171875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.056640625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.0001274826645385474,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 0.96484375,
+            "payload_route_head_fraction": 0.8515625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.87109375,
+            "nonnull_route_fraction": 0.87109375,
+            "paired_route_difference_fraction": 0.09375,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.07421875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.05859375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true
+        }
+      },
+      "residual_only_baseline": {
+        "training_loss": null,
+        "step_ms": 0.0,
+        "validation_loss": 0.7323505878448486,
+        "validation_exact_accuracy": 0.046875,
+        "validation_bit_accuracy": 0.5,
+        "theoretical_bit_loss_floor": 0.6931471805599453,
+        "exact_accuracy_ceiling": 0.5
+      },
+      "paired_targets_are_complements": true,
+      "payload_routes_are_strictly_historical": true
+    },
+    {
+      "seed": 1,
+      "candidates": {
+        "arm": {
+          "training": {
+            "training_loss": 0.00015338331286329776,
+            "first_train_exact_step": 188,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.08365115309611429,
+            "mean_value_gradient_norm": 0.0014755292557601934,
+            "step_ms": 16.468674055999145
+          },
+          "train": {
+            "loss": 0.0001531474117655307,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.98828125,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.046875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.06640625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.068359375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.00526421470567584,
+            "exact_accuracy": 0.99609375,
+            "bit_accuracy": 0.9990234375,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.990234375,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.0390625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.05078125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.06640625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true
+        },
+        "disarm": {
+          "training": {
+            "training_loss": 0.00011909739987459034,
+            "first_train_exact_step": 192,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.03655666571803158,
+            "mean_value_gradient_norm": 0.001087114542033305,
+            "step_ms": 16.93373402499128
+          },
+          "train": {
+            "loss": 0.00011887703294632956,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 1.0,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.0,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.05859375,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.04296875,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.00011430018639657646,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 1.0,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.0,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.09765625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true
+        }
+      },
+      "residual_only_baseline": {
+        "training_loss": null,
+        "step_ms": 0.0,
+        "validation_loss": 0.7272630333900452,
+        "validation_exact_accuracy": 0.0625,
+        "validation_bit_accuracy": 0.5,
+        "theoretical_bit_loss_floor": 0.6931471805599453,
+        "exact_accuracy_ceiling": 0.5
+      },
+      "paired_targets_are_complements": true,
+      "payload_routes_are_strictly_historical": true
+    },
+    {
+      "seed": 2,
+      "candidates": {
+        "arm": {
+          "training": {
+            "training_loss": 0.00011186234769411385,
+            "first_train_exact_step": 203,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.049022430366603656,
+            "mean_value_gradient_norm": 0.0011323045596109296,
+            "step_ms": 16.446452011994552
+          },
+          "train": {
+            "loss": 0.00011167012416990474,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.90234375,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.90234375,
+            "nonnull_route_fraction": 0.90234375,
+            "paired_route_difference_fraction": 0.2734375,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.05078125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0703125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.00011125719174742699,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.900390625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.900390625,
+            "nonnull_route_fraction": 0.900390625,
+            "paired_route_difference_fraction": 0.2890625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0546875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.05859375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true
+        },
+        "disarm": {
+          "training": {
+            "training_loss": 0.0004401371697895229,
+            "first_train_exact_step": 627,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.17227350884466433,
+            "mean_value_gradient_norm": 0.004961432354561111,
+            "step_ms": 16.90981424500933
+          },
+          "train": {
+            "loss": 0.0004384455387480557,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 0.9765625,
+            "payload_route_head_fraction": 0.48828125,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.55078125,
+            "nonnull_route_fraction": 0.55078125,
+            "paired_route_difference_fraction": 0.1875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.072265625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.012679125182330608,
+            "exact_accuracy": 0.99609375,
+            "bit_accuracy": 0.9990234375,
+            "payload_route_any_head_accuracy": 0.984375,
+            "payload_route_head_fraction": 0.4921875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.560546875,
+            "nonnull_route_fraction": 0.560546875,
+            "paired_route_difference_fraction": 0.203125,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0390625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true
+        }
+      },
+      "residual_only_baseline": {
+        "training_loss": null,
+        "step_ms": 0.0,
+        "validation_loss": 0.7324824929237366,
+        "validation_exact_accuracy": 0.0546875,
+        "validation_bit_accuracy": 0.5,
+        "theoretical_bit_loss_floor": 0.6931471805599453,
+        "exact_accuracy_ceiling": 0.5
+      },
+      "paired_targets_are_complements": true,
+      "payload_routes_are_strictly_historical": true
+    },
+    {
+      "seed": 3,
+      "candidates": {
+        "arm": {
+          "training": {
+            "training_loss": 0.00021330500021576881,
+            "first_train_exact_step": 389,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.2288983668955043,
+            "mean_value_gradient_norm": 0.0027310640282485112,
+            "step_ms": 16.719716858002357
+          },
+          "train": {
+            "loss": 0.00021307781571522355,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 0.994140625,
+            "payload_route_head_fraction": 0.8720703125,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.9169921875,
+            "nonnull_route_fraction": 0.9169921875,
+            "paired_route_difference_fraction": 0.15625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.048828125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.07421875,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.0002135544054908678,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 0.98828125,
+            "payload_route_head_fraction": 0.869140625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.8984375,
+            "nonnull_route_fraction": 0.8984375,
+            "paired_route_difference_fraction": 0.109375,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.11328125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.06640625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true
+        },
+        "disarm": {
+          "training": {
+            "training_loss": 0.00010465276864124462,
+            "first_train_exact_step": 509,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.08587697010085685,
+            "mean_value_gradient_norm": 0.0025386702691303073,
+            "step_ms": 17.230636258027516
+          },
+          "train": {
+            "loss": 0.00010446360829519108,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.75,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.7509765625,
+            "nonnull_route_fraction": 0.7509765625,
+            "paired_route_difference_fraction": 0.00390625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.05078125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.080078125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.00011880808597197756,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.75,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.755859375,
+            "nonnull_route_fraction": 0.755859375,
+            "paired_route_difference_fraction": 0.0234375,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.05078125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.07421875,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true
+        }
+      },
+      "residual_only_baseline": {
+        "training_loss": null,
+        "step_ms": 0.0,
+        "validation_loss": 0.7252047657966614,
+        "validation_exact_accuracy": 0.0546875,
+        "validation_bit_accuracy": 0.5,
+        "theoretical_bit_loss_floor": 0.6931471805599453,
+        "exact_accuracy_ceiling": 0.5
+      },
+      "paired_targets_are_complements": true,
+      "payload_routes_are_strictly_historical": true
+    }
+  ],
+  "summary": {
+    "arm": {
+      "passed_runs": 4,
+      "run_count": 4,
+      "mean_validation_exact_accuracy": 0.9990234375,
+      "minimum_validation_exact_accuracy": 0.99609375,
+      "mean_validation_bit_accuracy": 0.999755859375,
+      "mean_payload_route_any_head_accuracy": 0.9970703125,
+      "mean_historical_route_any_head_accuracy": 1.0,
+      "mean_paired_routed_value_difference_fraction": 1.0,
+      "median_first_train_exact_step": 296.0,
+      "mean_qk_zero_gradient_fraction": 0.0,
+      "mean_training_step_ms": 16.635615543011227
+    },
+    "disarm": {
+      "passed_runs": 4,
+      "run_count": 4,
+      "mean_validation_exact_accuracy": 0.9990234375,
+      "minimum_validation_exact_accuracy": 0.99609375,
+      "mean_validation_bit_accuracy": 0.999755859375,
+      "mean_payload_route_any_head_accuracy": 0.9873046875,
+      "mean_historical_route_any_head_accuracy": 1.0,
+      "mean_paired_routed_value_difference_fraction": 1.0,
+      "median_first_train_exact_step": 441.0,
+      "mean_qk_zero_gradient_fraction": 0.0,
+      "mean_training_step_ms": 16.991132047754945
+    }
+  },
+  "shortcut_checks_passed": true
+}

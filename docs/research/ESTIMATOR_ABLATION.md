@@ -4,8 +4,9 @@
 > shipped with the package, and its original scripts target deleted prototype
 > APIs. Sections 1 through 7 document estimators that existed before the
 > deterministic-minimal reduction; they do not describe current production
-> code. Section 8 records the retained estimator shape, and section 9 records
-> the current static-default correction after dropout entered the operator.
+> code. Section 8 records that historical reduction, section 9 records the
+> static-default correction after dropout entered the operator, and section 12
+> records the current suffix-score geometry.
 >
 > Sections 1 through 6.12 predate mismatch-fraction normalization, hard-tier
 > proxy scores, and candidate-normalized null allocation. Their absolute
@@ -1227,3 +1228,26 @@ benchmarks/trained_fit_alignment.py
 Any future estimator experiment must be a separately named research path and
 compare against the deterministic `rosa_soft_reference` without changing the
 default operator.
+
+## 12. Current Suffix-Score Geometry
+
+The raw complete prefix sum retained in section 8 is now an intermediate
+evidence value, not the final route score. Production computes
+
+```text
+S = sum_l product_{r < l} exp(-mismatch_scale * mismatch_rate_r)
+U(S) = (sqrt(2) + 1) * (sqrt(1 + S) - 1)
+```
+
+and sends `U(S)` to candidate-normalized softmax. The Q/K VJP includes
+`U'(S)=(sqrt(2)+1)/(2 sqrt(1+S))`. Hard forward remains exact
+latest-longest ROSA and never reads this score.
+
+This choice came from a separately named 2x2 ablation, not from the obsolete
+stochastic prototypes above. `h/sqrt(D)` was rejected because it caused
+width-dependent exponential saturation; normalized Hamming `h/D` remains.
+The square-root suffix utility passed all 18 directed long-versus-short
+competition cells versus 12/18 for raw evidence, remained neutral on the
+small exact-bitflip alignment matrix, and had no persistent multi-seed fitting
+regression. See `docs/research/SURROGATE_GRADIENT_DIRECTIONS.md` section 17
+and `validation/suffix_proxy_ablation.json` for the current evidence.

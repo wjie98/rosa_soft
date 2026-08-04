@@ -41,6 +41,7 @@ variant.
 | `_pairwise_exact_symbol_match` | Exact all-bit Q/K equality for hard forward. |
 | `_pairwise_soft_match_gates` | Normalized Hamming mismatch and exponential gate. |
 | `_suffix_prefix_product_scores` | Complete expected matched-prefix length. |
+| `_suffix_score_utility` | Fixed normalized square-root transform from raw suffix evidence to route score. |
 | `_select_latest_longest_routes` | Exact hard winner with latest tie break. |
 | `_route_probabilities` | Null-aware candidate-normalized dense softmax. |
 | `_apply_attention_dropout` | Counter-based post-softmax inverted dropout. |
@@ -94,8 +95,11 @@ Backward rebuilds:
 local_match_gates
   = exp(-mismatch_scale * normalized_hamming)
 
-soft_suffix_scores
+raw_suffix_scores
   = sum of diagonal prefix products up to max_suffix_length
+
+route_scores
+  = (sqrt(2) + 1) * (sqrt(1 + raw_suffix_scores) - 1)
 
 route_scores[..., 0]
   = 0.5
@@ -136,8 +140,10 @@ soft_suffix_scores
 route_probabilities
 ```
 
-The reported probabilities are pre-dropout. Inspection is deterministic and
-does not sample a training mask.
+The reported probabilities are pre-dropout. `soft_suffix_scores` deliberately
+reports raw prefix-product evidence `S`; `route_scores` is the masked `U(S)`
+used by softmax. Inspection is deterministic and does not sample a training
+mask.
 
 `rosa_soft.diagnostics.summarize_rosa_soft` reduces that state into scalar
 health metrics. Neither module participates in the production hot path.
@@ -166,8 +172,8 @@ Tests should assert:
 1. Changing surrogate controls cannot change hard output.
 2. At `dropout_p=0`, repeated calls do not consume RNG state and return equal
    VJPs.
-3. `mismatch_scale -> infinity` moves soft scores toward exact suffix
-   lengths.
+3. `mismatch_scale -> infinity` moves raw suffix evidence toward exact suffix
+   lengths and route scores toward their normalized square-root utility.
 4. At `dropout_p=0`, every causal value candidate is structurally eligible
    for FP32 credit; finite precision may still underflow a tiny probability.
 5. No route or gradient crosses a packed segment boundary.
