@@ -16,6 +16,20 @@ The package has three supported implementation families:
   hard forward and dense surrogate VJP.
 - `RosaRuntime`: stateful packed CPU runtime for exact hard inference.
 
+## Documentation
+
+| Start here | Contents |
+| --- | --- |
+| [`docs/PRODUCTION_GUIDE.md`](docs/PRODUCTION_GUIDE.md) | Public API, build matrix, data flow, source ownership, Runtime lifecycle, validation, and release checklist. |
+| [`docs/CONCEPT.md`](docs/CONCEPT.md) | Exact hard-forward and dense surrogate-backward equations. |
+| [`docs/ROSA_SOFT_DESIGN.md`](docs/ROSA_SOFT_DESIGN.md) | Python, C++, CUDA, autograd, and execution-plan design. |
+| [`docs/ROSA_SOFT_REFERENCE.md`](docs/ROSA_SOFT_REFERENCE.md) | PyTorch oracle and inspection conventions. |
+| [`docs/DENSE_REFERENCE_FREEZE.md`](docs/DENSE_REFERENCE_FREEZE.md) | Frozen tag, reproduction snapshot, and change policy. |
+
+The complete index is [`docs/README.md`](docs/README.md). Research documents
+record evidence and rejected alternatives; they do not extend the production
+API.
+
 ## Semantic Contract
 
 RosaSoft trains a discrete suffix route without exposing a soft value path:
@@ -329,11 +343,11 @@ docs/                     current design and historical estimator evidence
 contrib/rwkv7_legacy/     unbuilt, unsupported source-history archive
 ```
 
-Current semantics are specified in
-[ROSA_SOFT_DESIGN.md](docs/ROSA_SOFT_DESIGN.md) and
-[ROSA_SOFT_REFERENCE.md](docs/ROSA_SOFT_REFERENCE.md). The design ladder and
-research decisions are in [CONCEPT.md](docs/CONCEPT.md) and
-[`docs/research/`](docs/research/).
+Start with the [production guide](docs/PRODUCTION_GUIDE.md) and the
+[documentation index](docs/README.md). Current semantics are specified in
+[CONCEPT.md](docs/CONCEPT.md), [ROSA_SOFT_DESIGN.md](docs/ROSA_SOFT_DESIGN.md),
+and [ROSA_SOFT_REFERENCE.md](docs/ROSA_SOFT_REFERENCE.md). Historical design
+decisions and estimator evidence remain under [`docs/research/`](docs/research/).
 
 ## Validation
 
