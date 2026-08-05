@@ -1,0 +1,3327 @@
+{
+  "cases": [
+    {
+      "bit_width": 1,
+      "clarity": 0.0,
+      "hard_routes": {
+        "diagonal_ms": 0.623814994469285,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7052180008031428,
+        "direct_symbol_comparisons": 3982
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.010697985999286175,
+          "discover_ms": 7.13581801392138,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.146515999920666
+        },
+        "dyadic": {
+          "build_ms": 0.16586101264692843,
+          "discover_ms": 10.819514020113274,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.985375032760203
+        },
+        "rolling_hash": {
+          "build_ms": 0.10880801710300148,
+          "discover_ms": 23.122308019082993,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.231116036185995
+        },
+        "suffix_array": {
+          "build_ms": 0.49432399100624025,
+          "discover_ms": 16.128001996548846,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.622325987555087
+        }
+      },
+      "max_winner_length": 12,
+      "mean_winner_length": 5.0476190476190474,
+      "normalized_symbol_entropy": 0.9934472383802027,
+      "occurrence_build_ms": 0.053486990509554744,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.6031746031746031,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 506,
+          "admitted_rows": 899,
+          "elapsed_ms": 32.81186401727609,
+          "exact_recompute_rows": 899,
+          "final_changed_rows": 683,
+          "final_route_change_ranges": 409,
+          "raw_events": 4032,
+          "winner_node_visits": 5700
+        },
+        "segment": {
+          "admitted_event_ranges": 506,
+          "admitted_rows": 899,
+          "elapsed_ms": 36.54252798878588,
+          "exact_recompute_rows": 899,
+          "final_changed_rows": 683,
+          "final_route_change_ranges": 409,
+          "raw_events": 4032,
+          "winner_node_visits": 19166
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 0.25,
+      "hard_routes": {
+        "diagonal_ms": 0.61006098985672,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.704300997313112,
+        "direct_symbol_comparisons": 4103
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008558010449633002,
+          "discover_ms": 7.20316098886542,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.211718999315053
+        },
+        "dyadic": {
+          "build_ms": 0.14966301387175918,
+          "discover_ms": 10.664756991900504,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.814420005772263
+        },
+        "rolling_hash": {
+          "build_ms": 0.08262498886324465,
+          "discover_ms": 22.871274006320164,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 22.95389899518341
+        },
+        "suffix_array": {
+          "build_ms": 0.46314901555888355,
+          "discover_ms": 16.33543099160306,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.798580007161945
+        }
+      },
+      "max_winner_length": 12,
+      "mean_winner_length": 4.920634920634921,
+      "normalized_symbol_entropy": 0.9883368304150855,
+      "occurrence_build_ms": 0.046864995965734124,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.5714285714285714,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 524,
+          "admitted_rows": 899,
+          "elapsed_ms": 32.945836981525645,
+          "exact_recompute_rows": 899,
+          "final_changed_rows": 693,
+          "final_route_change_ranges": 417,
+          "raw_events": 4032,
+          "winner_node_visits": 5232
+        },
+        "segment": {
+          "admitted_event_ranges": 524,
+          "admitted_rows": 899,
+          "elapsed_ms": 36.16740301367827,
+          "exact_recompute_rows": 899,
+          "final_changed_rows": 693,
+          "final_route_change_ranges": 417,
+          "raw_events": 4032,
+          "winner_node_visits": 16252
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 0.5,
+      "hard_routes": {
+        "diagonal_ms": 0.6061900057829916,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7152009929995984,
+        "direct_symbol_comparisons": 3973
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008659990271553397,
+          "discover_ms": 7.162408001022413,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.171067991293967
+        },
+        "dyadic": {
+          "build_ms": 0.14008599100634456,
+          "discover_ms": 10.700721992179751,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.840807983186096
+        },
+        "rolling_hash": {
+          "build_ms": 0.08496901136822999,
+          "discover_ms": 23.203099000966176,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.288068012334406
+        },
+        "suffix_array": {
+          "build_ms": 0.4559159860946238,
+          "discover_ms": 16.304663004120812,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.760578990215436
+        }
+      },
+      "max_winner_length": 9,
+      "mean_winner_length": 4.333333333333333,
+      "normalized_symbol_entropy": 0.9970901165711912,
+      "occurrence_build_ms": 0.04635498044081032,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.6031746031746031,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 564,
+          "admitted_rows": 901,
+          "elapsed_ms": 36.26816300675273,
+          "exact_recompute_rows": 901,
+          "final_changed_rows": 688,
+          "final_route_change_ranges": 399,
+          "raw_events": 4032,
+          "winner_node_visits": 5726
+        },
+        "segment": {
+          "admitted_event_ranges": 564,
+          "admitted_rows": 901,
+          "elapsed_ms": 40.198410977609456,
+          "exact_recompute_rows": 901,
+          "final_changed_rows": 688,
+          "final_route_change_ranges": 399,
+          "raw_events": 4032,
+          "winner_node_visits": 19074
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 0.75,
+      "hard_routes": {
+        "diagonal_ms": 0.6081259925849736,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7127560093067586,
+        "direct_symbol_comparisons": 3937
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.00916901626624167,
+          "discover_ms": 7.281098980456591,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.290267996722832
+        },
+        "dyadic": {
+          "build_ms": 0.1554689952172339,
+          "discover_ms": 10.893785016378388,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 11.049254011595622
+        },
+        "rolling_hash": {
+          "build_ms": 0.09067298378795385,
+          "discover_ms": 23.132394009735435,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.22306699352339
+        },
+        "suffix_array": {
+          "build_ms": 0.4635560035239905,
+          "discover_ms": 16.031724982894957,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.495280986418948
+        }
+      },
+      "max_winner_length": 10,
+      "mean_winner_length": 4.619047619047619,
+      "normalized_symbol_entropy": 0.9954515828457715,
+      "occurrence_build_ms": 0.059193000197410583,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.6825396825396826,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 564,
+          "admitted_rows": 873,
+          "elapsed_ms": 35.78158200252801,
+          "exact_recompute_rows": 873,
+          "final_changed_rows": 655,
+          "final_route_change_ranges": 387,
+          "raw_events": 4032,
+          "winner_node_visits": 5848
+        },
+        "segment": {
+          "admitted_event_ranges": 564,
+          "admitted_rows": 873,
+          "elapsed_ms": 39.364722004393116,
+          "exact_recompute_rows": 873,
+          "final_changed_rows": 655,
+          "final_route_change_ranges": 387,
+          "raw_events": 4032,
+          "winner_node_visits": 17754
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 1.0,
+      "hard_routes": {
+        "diagonal_ms": 0.5813300085719675,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.8337909821420908,
+        "direct_symbol_comparisons": 5745
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008659990271553397,
+          "discover_ms": 7.777766993967816,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.78642698423937
+        },
+        "dyadic": {
+          "build_ms": 0.14304101932793856,
+          "discover_ms": 10.83347201347351,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.97651303280145
+        },
+        "rolling_hash": {
+          "build_ms": 0.08395002805627882,
+          "discover_ms": 23.261986003490165,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.345936031546444
+        },
+        "suffix_array": {
+          "build_ms": 0.5935560038778931,
+          "discover_ms": 15.956843009917066,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.55039901379496
+        }
+      },
+      "max_winner_length": 63,
+      "mean_winner_length": 32.0,
+      "normalized_symbol_entropy": 0.999818246960343,
+      "occurrence_build_ms": 0.053588999435305595,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 1.0,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 126,
+          "admitted_rows": 4032,
+          "elapsed_ms": 74.74927499424666,
+          "exact_recompute_rows": 4032,
+          "final_changed_rows": 574,
+          "final_route_change_ranges": 293,
+          "raw_events": 4032,
+          "winner_node_visits": 4032
+        },
+        "segment": {
+          "admitted_event_ranges": 126,
+          "admitted_rows": 4032,
+          "elapsed_ms": 75.20091100013815,
+          "exact_recompute_rows": 4032,
+          "final_changed_rows": 574,
+          "final_route_change_ranges": 293,
+          "raw_events": 4032,
+          "winner_node_visits": 4932
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 0.0,
+      "hard_routes": {
+        "diagonal_ms": 0.6093470146879554,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7057269976940006,
+        "direct_symbol_comparisons": 3982
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.00876100966706872,
+          "discover_ms": 7.164344016928226,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.1731050265952945
+        },
+        "dyadic": {
+          "build_ms": 0.15414500376209617,
+          "discover_ms": 10.691756004234776,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.845901007996872
+        },
+        "rolling_hash": {
+          "build_ms": 0.08445899584330618,
+          "discover_ms": 22.942997980862856,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.027456976706162
+        },
+        "suffix_array": {
+          "build_ms": 0.462844007415697,
+          "discover_ms": 16.087861004052684,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.55070501146838
+        }
+      },
+      "max_winner_length": 12,
+      "mean_winner_length": 5.0476190476190474,
+      "normalized_symbol_entropy": 0.9934472383802027,
+      "occurrence_build_ms": 0.04615201032720506,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.6031746031746031,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 506,
+          "admitted_rows": 899,
+          "elapsed_ms": 32.73127699503675,
+          "exact_recompute_rows": 899,
+          "final_changed_rows": 683,
+          "final_route_change_ranges": 409,
+          "raw_events": 4032,
+          "winner_node_visits": 5700
+        },
+        "segment": {
+          "admitted_event_ranges": 506,
+          "admitted_rows": 899,
+          "elapsed_ms": 36.25420600292273,
+          "exact_recompute_rows": 899,
+          "final_changed_rows": 683,
+          "final_route_change_ranges": 409,
+          "raw_events": 4032,
+          "winner_node_visits": 19166
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 0.25,
+      "hard_routes": {
+        "diagonal_ms": 0.5984469898976386,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7185629801824689,
+        "direct_symbol_comparisons": 4008
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.0088640081230551,
+          "discover_ms": 7.218647020636126,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.2275110287591815
+        },
+        "dyadic": {
+          "build_ms": 0.14028899022378027,
+          "discover_ms": 10.74177899863571,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.88206798885949
+        },
+        "rolling_hash": {
+          "build_ms": 0.0858859857544303,
+          "discover_ms": 23.798896989319474,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.884782975073904
+        },
+        "suffix_array": {
+          "build_ms": 0.4715039976872504,
+          "discover_ms": 16.03518897900358,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.50669297669083
+        }
+      },
+      "max_winner_length": 10,
+      "mean_winner_length": 5.253968253968254,
+      "normalized_symbol_entropy": 0.999818246960343,
+      "occurrence_build_ms": 0.046558998292312026,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.5873015873015873,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 572,
+          "admitted_rows": 910,
+          "elapsed_ms": 32.56337801576592,
+          "exact_recompute_rows": 910,
+          "final_changed_rows": 685,
+          "final_route_change_ranges": 446,
+          "raw_events": 4032,
+          "winner_node_visits": 6126
+        },
+        "segment": {
+          "admitted_event_ranges": 572,
+          "admitted_rows": 910,
+          "elapsed_ms": 36.18176901363768,
+          "exact_recompute_rows": 910,
+          "final_changed_rows": 685,
+          "final_route_change_ranges": 446,
+          "raw_events": 4032,
+          "winner_node_visits": 17840
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 0.5,
+      "hard_routes": {
+        "diagonal_ms": 0.6008910131640732,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7293630042113364,
+        "direct_symbol_comparisons": 3994
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.00916901626624167,
+          "discover_ms": 7.183600013377145,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.192769029643387
+        },
+        "dyadic": {
+          "build_ms": 0.1446699898224324,
+          "discover_ms": 10.727007000241429,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.871676990063861
+        },
+        "rolling_hash": {
+          "build_ms": 0.08425500709563494,
+          "discover_ms": 22.96164201106876,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.045897018164396
+        },
+        "suffix_array": {
+          "build_ms": 0.4831179976463318,
+          "discover_ms": 16.20634799473919,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.68946599238552
+        }
+      },
+      "max_winner_length": 11,
+      "mean_winner_length": 5.238095238095238,
+      "normalized_symbol_entropy": 0.9883368304150855,
+      "occurrence_build_ms": 0.048290996346622705,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.6031746031746031,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 582,
+          "admitted_rows": 912,
+          "elapsed_ms": 36.78082601982169,
+          "exact_recompute_rows": 912,
+          "final_changed_rows": 700,
+          "final_route_change_ranges": 421,
+          "raw_events": 4032,
+          "winner_node_visits": 5962
+        },
+        "segment": {
+          "admitted_event_ranges": 582,
+          "admitted_rows": 912,
+          "elapsed_ms": 40.578120009740815,
+          "exact_recompute_rows": 912,
+          "final_changed_rows": 700,
+          "final_route_change_ranges": 421,
+          "raw_events": 4032,
+          "winner_node_visits": 19768
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 0.75,
+      "hard_routes": {
+        "diagonal_ms": 0.6046610069461167,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7142850081436336,
+        "direct_symbol_comparisons": 4253
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008557981345802546,
+          "discover_ms": 7.352824002737179,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.361381984082982
+        },
+        "dyadic": {
+          "build_ms": 0.2759950002655387,
+          "discover_ms": 12.771240988513455,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 13.047235988778993
+        },
+        "rolling_hash": {
+          "build_ms": 0.08425497799180448,
+          "discover_ms": 30.296330980490893,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 30.380585958482698
+        },
+        "suffix_array": {
+          "build_ms": 0.5199990118853748,
+          "discover_ms": 16.220407997025177,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.74040700891055
+        }
+      },
+      "max_winner_length": 11,
+      "mean_winner_length": 5.190476190476191,
+      "normalized_symbol_entropy": 0.9587118829771318,
+      "occurrence_build_ms": 0.04696697578765452,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.7777777777777778,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 506,
+          "admitted_rows": 980,
+          "elapsed_ms": 37.31783901457675,
+          "exact_recompute_rows": 980,
+          "final_changed_rows": 784,
+          "final_route_change_ranges": 381,
+          "raw_events": 4032,
+          "winner_node_visits": 5486
+        },
+        "segment": {
+          "admitted_event_ranges": 506,
+          "admitted_rows": 980,
+          "elapsed_ms": 41.673438012367114,
+          "exact_recompute_rows": 980,
+          "final_changed_rows": 784,
+          "final_route_change_ranges": 381,
+          "raw_events": 4032,
+          "winner_node_visits": 20376
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 1.0,
+      "hard_routes": {
+        "diagonal_ms": 0.6058840081095695,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.9891579975374043,
+        "direct_symbol_comparisons": 9297
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.00845600152388215,
+          "discover_ms": 9.387379017425701,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 9.395835018949583
+        },
+        "dyadic": {
+          "build_ms": 0.13590898015536368,
+          "discover_ms": 10.701638006139547,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.83754698629491
+        },
+        "rolling_hash": {
+          "build_ms": 0.08669999078847468,
+          "discover_ms": 23.478991992305964,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.56569198309444
+        },
+        "suffix_array": {
+          "build_ms": 0.592537980992347,
+          "discover_ms": 16.027955018216744,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.62049299920909
+        }
+      },
+      "max_winner_length": 63,
+      "mean_winner_length": 32.0,
+      "normalized_symbol_entropy": 0.9587118829771318,
+      "occurrence_build_ms": 0.054710020776838064,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 1.0,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 126,
+          "admitted_rows": 4032,
+          "elapsed_ms": 87.44430801016279,
+          "exact_recompute_rows": 4032,
+          "final_changed_rows": 1081,
+          "final_route_change_ranges": 229,
+          "raw_events": 4032,
+          "winner_node_visits": 4032
+        },
+        "segment": {
+          "admitted_event_ranges": 126,
+          "admitted_rows": 4032,
+          "elapsed_ms": 88.00108599825762,
+          "exact_recompute_rows": 4032,
+          "final_changed_rows": 1081,
+          "final_route_change_ranges": 229,
+          "raw_events": 4032,
+          "winner_node_visits": 4932
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 0.0,
+      "hard_routes": {
+        "diagonal_ms": 0.598446000367403,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7033839938230813,
+        "direct_symbol_comparisons": 3982
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008659990271553397,
+          "discover_ms": 7.20061399624683,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.209273986518383
+        },
+        "dyadic": {
+          "build_ms": 0.15248797717504203,
+          "discover_ms": 10.713032010244206,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.865519987419248
+        },
+        "rolling_hash": {
+          "build_ms": 0.08507000165991485,
+          "discover_ms": 23.046813992550597,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.13188399421051
+        },
+        "suffix_array": {
+          "build_ms": 0.4579619853757322,
+          "discover_ms": 18.15008799894713,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 18.60804998432286
+        }
+      },
+      "max_winner_length": 12,
+      "mean_winner_length": 5.0476190476190474,
+      "normalized_symbol_entropy": 0.9934472383802027,
+      "occurrence_build_ms": 0.04757801070809364,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.6031746031746031,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 506,
+          "admitted_rows": 899,
+          "elapsed_ms": 31.901759997708723,
+          "exact_recompute_rows": 899,
+          "final_changed_rows": 683,
+          "final_route_change_ranges": 409,
+          "raw_events": 4032,
+          "winner_node_visits": 5700
+        },
+        "segment": {
+          "admitted_event_ranges": 506,
+          "admitted_rows": 899,
+          "elapsed_ms": 35.78368099988438,
+          "exact_recompute_rows": 899,
+          "final_changed_rows": 683,
+          "final_route_change_ranges": 409,
+          "raw_events": 4032,
+          "winner_node_visits": 19166
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 0.25,
+      "hard_routes": {
+        "diagonal_ms": 0.7660389819648117,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6883940077386796,
+        "direct_symbol_comparisons": 3980
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.00860498403199017,
+          "discover_ms": 7.285270025022328,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.293875009054318
+        },
+        "dyadic": {
+          "build_ms": 0.14098099200055003,
+          "discover_ms": 10.640190012054518,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.781171004055068
+        },
+        "rolling_hash": {
+          "build_ms": 0.08304798393510282,
+          "discover_ms": 23.05019399500452,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.133241978939623
+        },
+        "suffix_array": {
+          "build_ms": 0.4615649813786149,
+          "discover_ms": 15.939924021949992,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.401489003328606
+        }
+      },
+      "max_winner_length": 12,
+      "mean_winner_length": 5.2063492063492065,
+      "normalized_symbol_entropy": 0.9587118829771318,
+      "occurrence_build_ms": 0.047626992454752326,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.5555555555555556,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 600,
+          "admitted_rows": 975,
+          "elapsed_ms": 32.948159001534805,
+          "exact_recompute_rows": 975,
+          "final_changed_rows": 720,
+          "final_route_change_ranges": 429,
+          "raw_events": 4032,
+          "winner_node_visits": 6064
+        },
+        "segment": {
+          "admitted_event_ranges": 600,
+          "admitted_rows": 975,
+          "elapsed_ms": 37.240214995108545,
+          "exact_recompute_rows": 975,
+          "final_changed_rows": 720,
+          "final_route_change_ranges": 429,
+          "raw_events": 4032,
+          "winner_node_visits": 20896
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 0.5,
+      "hard_routes": {
+        "diagonal_ms": 0.5908379971515387,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7902529905550182,
+        "direct_symbol_comparisons": 5495
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008704984793439507,
+          "discover_ms": 7.514099997933954,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.5228049827273935
+        },
+        "dyadic": {
+          "build_ms": 0.1421819906681776,
+          "discover_ms": 10.575053020147607,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.717235010815784
+        },
+        "rolling_hash": {
+          "build_ms": 0.08264699135906994,
+          "discover_ms": 23.198877985123545,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.281524976482615
+        },
+        "suffix_array": {
+          "build_ms": 0.5208980001043528,
+          "discover_ms": 15.686978993471712,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.207876993576065
+        }
+      },
+      "max_winner_length": 15,
+      "mean_winner_length": 7.619047619047619,
+      "normalized_symbol_entropy": 0.7918583525674836,
+      "occurrence_build_ms": 0.047026987886056304,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.7142857142857143,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 518,
+          "admitted_rows": 1146,
+          "elapsed_ms": 40.23833101382479,
+          "exact_recompute_rows": 1146,
+          "final_changed_rows": 822,
+          "final_route_change_ranges": 387,
+          "raw_events": 4032,
+          "winner_node_visits": 6946
+        },
+        "segment": {
+          "admitted_event_ranges": 518,
+          "admitted_rows": 1146,
+          "elapsed_ms": 44.36239198548719,
+          "exact_recompute_rows": 1146,
+          "final_changed_rows": 822,
+          "final_route_change_ranges": 387,
+          "raw_events": 4032,
+          "winner_node_visits": 17720
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 0.75,
+      "hard_routes": {
+        "diagonal_ms": 0.5769300041720271,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.9921680029947311,
+        "direct_symbol_comparisons": 9657
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009004987077787519,
+          "discover_ms": 8.793732995400205,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 8.802737982477993
+        },
+        "dyadic": {
+          "build_ms": 0.13818001025356352,
+          "discover_ms": 10.630384989781305,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.768565000034869
+        },
+        "rolling_hash": {
+          "build_ms": 0.08895099745132029,
+          "discover_ms": 23.414100985974073,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 23.503051983425394
+        },
+        "suffix_array": {
+          "build_ms": 0.5754299927502871,
+          "discover_ms": 15.600728977005929,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.176158969756216
+        }
+      },
+      "max_winner_length": 23,
+      "mean_winner_length": 9.793650793650794,
+      "normalized_symbol_entropy": 0.5032583347756457,
+      "occurrence_build_ms": 0.05523199797607958,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.8095238095238095,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 468,
+          "admitted_rows": 1589,
+          "elapsed_ms": 49.51303999405354,
+          "exact_recompute_rows": 1589,
+          "final_changed_rows": 1136,
+          "final_route_change_ranges": 354,
+          "raw_events": 4032,
+          "winner_node_visits": 4580
+        },
+        "segment": {
+          "admitted_event_ranges": 468,
+          "admitted_rows": 1589,
+          "elapsed_ms": 53.3798529941123,
+          "exact_recompute_rows": 1589,
+          "final_changed_rows": 1136,
+          "final_route_change_ranges": 354,
+          "raw_events": 4032,
+          "winner_node_visits": 20206
+        }
+      }
+    },
+    {
+      "bit_width": 1,
+      "clarity": 1.0,
+      "hard_routes": {
+        "diagonal_ms": 0.5973420047666878,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 2.7708859997801483,
+        "direct_symbol_comparisons": 43680
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.00860498403199017,
+          "discover_ms": 18.97596099297516,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 18.98456597700715
+        },
+        "dyadic": {
+          "build_ms": 0.12877298286184669,
+          "discover_ms": 9.80821397388354,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 9.936986956745386
+        },
+        "rolling_hash": {
+          "build_ms": 0.15198698383755982,
+          "discover_ms": 24.94157600449398,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 25.09356298833154
+        },
+        "suffix_array": {
+          "build_ms": 0.6036449922248721,
+          "discover_ms": 15.38970900583081,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 15.993353998055682
+        }
+      },
+      "max_winner_length": 63,
+      "mean_winner_length": 32.0,
+      "normalized_symbol_entropy": -0.0,
+      "occurrence_build_ms": 0.045926019083708525,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 4032,
+      "raw_local_pair_events": 4032,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 1.0,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 126,
+          "admitted_rows": 4032,
+          "elapsed_ms": 171.74240099848248,
+          "exact_recompute_rows": 4032,
+          "final_changed_rows": 1056,
+          "final_route_change_ranges": 1056,
+          "raw_events": 4032,
+          "winner_node_visits": 4032
+        },
+        "segment": {
+          "admitted_event_ranges": 126,
+          "admitted_rows": 4032,
+          "elapsed_ms": 171.13695401349105,
+          "exact_recompute_rows": 4032,
+          "final_changed_rows": 1056,
+          "final_route_change_ranges": 1056,
+          "raw_events": 4032,
+          "winner_node_visits": 4932
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.0,
+      "hard_routes": {
+        "diagonal_ms": 0.5774300079792738,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.586636015214026,
+        "direct_symbol_comparisons": 2137
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009105016943067312,
+          "discover_ms": 7.99607700901106,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 8.005182025954127
+        },
+        "dyadic": {
+          "build_ms": 0.14138102415017784,
+          "discover_ms": 10.256770008709282,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.39815103285946
+        },
+        "rolling_hash": {
+          "build_ms": 0.10025699157267809,
+          "discover_ms": 16.00245898589492,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 16.102715977467597
+        },
+        "suffix_array": {
+          "build_ms": 0.3047749924007803,
+          "discover_ms": 19.42992099793628,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 19.73469599033706
+        }
+      },
+      "max_winner_length": 2,
+      "mean_winner_length": 0.8253968253968254,
+      "normalized_symbol_entropy": 0.9824875900052767,
+      "occurrence_build_ms": 0.058833014918491244,
+      "occurrence_pair_fraction": 0.12375992063492064,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 1996,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.07936507936507936,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 856,
+          "admitted_rows": 711,
+          "elapsed_ms": 47.0993580238428,
+          "exact_recompute_rows": 711,
+          "final_changed_rows": 663,
+          "final_route_change_ranges": 657,
+          "raw_events": 1996,
+          "winner_node_visits": 2076
+        },
+        "segment": {
+          "admitted_event_ranges": 856,
+          "admitted_rows": 711,
+          "elapsed_ms": 49.64001299231313,
+          "exact_recompute_rows": 711,
+          "final_changed_rows": 663,
+          "final_route_change_ranges": 657,
+          "raw_events": 1996,
+          "winner_node_visits": 12468
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.25,
+      "hard_routes": {
+        "diagonal_ms": 0.5721269990317523,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.5990429781377316,
+        "direct_symbol_comparisons": 2162
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.00850501237437129,
+          "discover_ms": 7.900322001660243,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 7.908827014034614
+        },
+        "dyadic": {
+          "build_ms": 0.14648400247097015,
+          "discover_ms": 10.317305015632883,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.463789018103853
+        },
+        "rolling_hash": {
+          "build_ms": 0.08194698602892458,
+          "discover_ms": 16.81842698599212,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 16.900373972021043
+        },
+        "suffix_array": {
+          "build_ms": 0.369211018551141,
+          "discover_ms": 13.876943005016074,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 14.246154023567215
+        }
+      },
+      "max_winner_length": 4,
+      "mean_winner_length": 1.0634920634920635,
+      "normalized_symbol_entropy": 0.977748229372567,
+      "occurrence_build_ms": 0.04942898522131145,
+      "occurrence_pair_fraction": 0.1293402777777778,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 2086,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.12698412698412698,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 794,
+          "admitted_rows": 757,
+          "elapsed_ms": 47.22683198633604,
+          "exact_recompute_rows": 757,
+          "final_changed_rows": 680,
+          "final_route_change_ranges": 671,
+          "raw_events": 2086,
+          "winner_node_visits": 2154
+        },
+        "segment": {
+          "admitted_event_ranges": 794,
+          "admitted_rows": 757,
+          "elapsed_ms": 50.308395992033184,
+          "exact_recompute_rows": 757,
+          "final_changed_rows": 680,
+          "final_route_change_ranges": 671,
+          "raw_events": 2086,
+          "winner_node_visits": 13006
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.5,
+      "hard_routes": {
+        "diagonal_ms": 0.56862598285079,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.5951410275883973,
+        "direct_symbol_comparisons": 2173
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008705013897269964,
+          "discover_ms": 8.006782998563722,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 8.015488012460992
+        },
+        "dyadic": {
+          "build_ms": 0.1419809996150434,
+          "discover_ms": 10.522022988880053,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.664003988495097
+        },
+        "rolling_hash": {
+          "build_ms": 0.08264699135906994,
+          "discover_ms": 16.669040982378647,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 16.751687973737717
+        },
+        "suffix_array": {
+          "build_ms": 0.3613070002757013,
+          "discover_ms": 13.256987993372604,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 13.618294993648306
+        }
+      },
+      "max_winner_length": 5,
+      "mean_winner_length": 1.1746031746031746,
+      "normalized_symbol_entropy": 0.9882156513414948,
+      "occurrence_build_ms": 0.06293598562479019,
+      "occurrence_pair_fraction": 0.1297123015873016,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 2092,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.2698412698412698,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 730,
+          "admitted_rows": 776,
+          "elapsed_ms": 50.056049978593364,
+          "exact_recompute_rows": 776,
+          "final_changed_rows": 600,
+          "final_route_change_ranges": 593,
+          "raw_events": 2092,
+          "winner_node_visits": 2208
+        },
+        "segment": {
+          "admitted_event_ranges": 730,
+          "admitted_rows": 776,
+          "elapsed_ms": 53.08608501218259,
+          "exact_recompute_rows": 776,
+          "final_changed_rows": 600,
+          "final_route_change_ranges": 593,
+          "raw_events": 2092,
+          "winner_node_visits": 12986
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.75,
+      "hard_routes": {
+        "diagonal_ms": 0.5757289764005691,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.5885360005777329,
+        "direct_symbol_comparisons": 2209
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008804985554888844,
+          "discover_ms": 8.147563989041373,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 8.156368974596262
+        },
+        "dyadic": {
+          "build_ms": 0.14128099428489804,
+          "discover_ms": 13.922168989665806,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 14.063449983950704
+        },
+        "rolling_hash": {
+          "build_ms": 0.08244701894000173,
+          "discover_ms": 17.558749997988343,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 17.641197016928345
+        },
+        "suffix_array": {
+          "build_ms": 0.3645090037025511,
+          "discover_ms": 13.54525299393572,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 13.90976199763827
+        }
+      },
+      "max_winner_length": 6,
+      "mean_winner_length": 1.5555555555555556,
+      "normalized_symbol_entropy": 0.9758743476582479,
+      "occurrence_build_ms": 0.05883298581466079,
+      "occurrence_pair_fraction": 0.13777281746031747,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 2222,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.5079365079365079,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 704,
+          "admitted_rows": 931,
+          "elapsed_ms": 52.19607599428855,
+          "exact_recompute_rows": 931,
+          "final_changed_rows": 626,
+          "final_route_change_ranges": 611,
+          "raw_events": 2222,
+          "winner_node_visits": 2328
+        },
+        "segment": {
+          "admitted_event_ranges": 704,
+          "admitted_rows": 931,
+          "elapsed_ms": 58.84638198767789,
+          "exact_recompute_rows": 931,
+          "final_changed_rows": 626,
+          "final_route_change_ranges": 611,
+          "raw_events": 2222,
+          "winner_node_visits": 13452
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 1.0,
+      "hard_routes": {
+        "diagonal_ms": 0.6093489937484264,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6847920012660325,
+        "direct_symbol_comparisons": 4079
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008904986316338181,
+          "discover_ms": 10.815689980518073,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 10.824594966834411
+        },
+        "dyadic": {
+          "build_ms": 0.1481850049458444,
+          "discover_ms": 11.01230300264433,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 11.160488007590175
+        },
+        "rolling_hash": {
+          "build_ms": 0.08304699440486729,
+          "discover_ms": 18.93333700718358,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 19.01638400158845
+        },
+        "suffix_array": {
+          "build_ms": 0.5625220073852688,
+          "discover_ms": 13.889150024624541,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 14.45167203200981
+        }
+      },
+      "max_winner_length": 63,
+      "mean_winner_length": 32.0,
+      "normalized_symbol_entropy": 0.9750024354757005,
+      "occurrence_build_ms": 0.056432996643707156,
+      "occurrence_pair_fraction": 0.14694940476190477,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 2370,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 1.0,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 504,
+          "admitted_rows": 16128,
+          "elapsed_ms": 208.538161998149,
+          "exact_recompute_rows": 16128,
+          "final_changed_rows": 545,
+          "final_route_change_ranges": 526,
+          "raw_events": 2370,
+          "winner_node_visits": 2370
+        },
+        "segment": {
+          "admitted_event_ranges": 504,
+          "admitted_rows": 16128,
+          "elapsed_ms": 224.37549897585995,
+          "exact_recompute_rows": 16128,
+          "final_changed_rows": 545,
+          "final_route_change_ranges": 526,
+          "raw_events": 2370,
+          "winner_node_visits": 5970
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.0,
+      "hard_routes": {
+        "diagonal_ms": 0.5909910250920802,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6145200168248266,
+        "direct_symbol_comparisons": 2137
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009104987839236856,
+          "discover_ms": 7.994390005478635,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 8.003494993317872
+        },
+        "dyadic": {
+          "build_ms": 0.15201899805106223,
+          "discover_ms": 12.230661988724023,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 12.382680986775085
+        },
+        "rolling_hash": {
+          "build_ms": 0.0847049814183265,
+          "discover_ms": 16.619156987871975,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 16.7038619692903
+        },
+        "suffix_array": {
+          "build_ms": 0.31610901351086795,
+          "discover_ms": 13.285485008964315,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 13.601594022475183
+        }
+      },
+      "max_winner_length": 2,
+      "mean_winner_length": 0.8253968253968254,
+      "normalized_symbol_entropy": 0.9824875900052767,
+      "occurrence_build_ms": 0.04900197382085025,
+      "occurrence_pair_fraction": 0.12375992063492064,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 1996,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.07936507936507936,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 856,
+          "admitted_rows": 711,
+          "elapsed_ms": 47.84623900195584,
+          "exact_recompute_rows": 711,
+          "final_changed_rows": 663,
+          "final_route_change_ranges": 657,
+          "raw_events": 1996,
+          "winner_node_visits": 2076
+        },
+        "segment": {
+          "admitted_event_ranges": 856,
+          "admitted_rows": 711,
+          "elapsed_ms": 51.22390200267546,
+          "exact_recompute_rows": 711,
+          "final_changed_rows": 663,
+          "final_route_change_ranges": 657,
+          "raw_events": 1996,
+          "winner_node_visits": 12468
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.25,
+      "hard_routes": {
+        "diagonal_ms": 0.5822950042784214,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.5995840183459222,
+        "direct_symbol_comparisons": 2179
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009310024324804544,
+          "discover_ms": 8.186510007362813,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 8.195820031687617
+        },
+        "dyadic": {
+          "build_ms": 0.16245400183834136,
+          "discover_ms": 12.40498200058937,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 12.567436002427712
+        },
+        "rolling_hash": {
+          "build_ms": 0.08327298564836383,
+          "discover_ms": 17.339762998744845,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 17.42303598439321
+        },
+        "suffix_array": {
+          "build_ms": 0.309049995848909,
+          "discover_ms": 13.709316001040861,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 14.01836599688977
+        }
+      },
+      "max_winner_length": 3,
+      "mean_winner_length": 1.0158730158730158,
+      "normalized_symbol_entropy": 0.9525120095748146,
+      "occurrence_build_ms": 0.05769799463450909,
+      "occurrence_pair_fraction": 0.1297123015873016,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 2092,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.15873015873015872,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 820,
+          "admitted_rows": 755,
+          "elapsed_ms": 48.594875988783315,
+          "exact_recompute_rows": 755,
+          "final_changed_rows": 670,
+          "final_route_change_ranges": 645,
+          "raw_events": 2092,
+          "winner_node_visits": 2224
+        },
+        "segment": {
+          "admitted_event_ranges": 820,
+          "admitted_rows": 755,
+          "elapsed_ms": 53.49057799321599,
+          "exact_recompute_rows": 755,
+          "final_changed_rows": 670,
+          "final_route_change_ranges": 645,
+          "raw_events": 2092,
+          "winner_node_visits": 13316
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.5,
+      "hard_routes": {
+        "diagonal_ms": 0.6113490089774132,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.5944689910393208,
+        "direct_symbol_comparisons": 2262
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008695991709828377,
+          "discover_ms": 8.542210009181872,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 8.5509060008917
+        },
+        "dyadic": {
+          "build_ms": 0.15682700905017555,
+          "discover_ms": 11.5248890069779,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 11.681716016028076
+        },
+        "rolling_hash": {
+          "build_ms": 0.0856249826028943,
+          "discover_ms": 18.88532200246118,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 18.970946985064074
+        },
+        "suffix_array": {
+          "build_ms": 0.3955970169045031,
+          "discover_ms": 14.89835701067932,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 15.293954027583823
+        }
+      },
+      "max_winner_length": 4,
+      "mean_winner_length": 1.3015873015873016,
+      "normalized_symbol_entropy": 0.8840613221396632,
+      "occurrence_build_ms": 0.04951300797984004,
+      "occurrence_pair_fraction": 0.14955357142857142,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 2412,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.3333333333333333,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 868,
+          "admitted_rows": 962,
+          "elapsed_ms": 54.556653019972146,
+          "exact_recompute_rows": 962,
+          "final_changed_rows": 774,
+          "final_route_change_ranges": 721,
+          "raw_events": 2412,
+          "winner_node_visits": 2516
+        },
+        "segment": {
+          "admitted_event_ranges": 868,
+          "admitted_rows": 962,
+          "elapsed_ms": 58.401215996127576,
+          "exact_recompute_rows": 962,
+          "final_changed_rows": 774,
+          "final_route_change_ranges": 721,
+          "raw_events": 2412,
+          "winner_node_visits": 15090
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.75,
+      "hard_routes": {
+        "diagonal_ms": 0.6360039988067001,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6113490089774132,
+        "direct_symbol_comparisons": 2443
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.014015007764101028,
+          "discover_ms": 9.627620980609208,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 9.64163598837331
+        },
+        "dyadic": {
+          "build_ms": 0.14536900562234223,
+          "discover_ms": 12.557820009533316,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 12.703189015155658
+        },
+        "rolling_hash": {
+          "build_ms": 0.08562600123696029,
+          "discover_ms": 21.814498002640903,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 21.900124003877863
+        },
+        "suffix_array": {
+          "build_ms": 0.4700720019172877,
+          "discover_ms": 16.40954299364239,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.879614995559677
+        }
+      },
+      "max_winner_length": 6,
+      "mean_winner_length": 1.873015873015873,
+      "normalized_symbol_entropy": 0.812690419907765,
+      "occurrence_build_ms": 0.0941170146688819,
+      "occurrence_pair_fraction": 0.18266369047619047,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 2946,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.6190476190476191,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 736,
+          "admitted_rows": 1216,
+          "elapsed_ms": 59.26408400409855,
+          "exact_recompute_rows": 1216,
+          "final_changed_rows": 941,
+          "final_route_change_ranges": 660,
+          "raw_events": 2946,
+          "winner_node_visits": 3022
+        },
+        "segment": {
+          "admitted_event_ranges": 736,
+          "admitted_rows": 1216,
+          "elapsed_ms": 65.44782500714064,
+          "exact_recompute_rows": 1216,
+          "final_changed_rows": 941,
+          "final_route_change_ranges": 660,
+          "raw_events": 2946,
+          "winner_node_visits": 18504
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 1.0,
+      "hard_routes": {
+        "diagonal_ms": 0.603859982220456,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.9123649797402322,
+        "direct_symbol_comparisons": 8184
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008834991604089737,
+          "discover_ms": 17.65494397841394,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 17.66377897001803
+        },
+        "dyadic": {
+          "build_ms": 0.1423870271537453,
+          "discover_ms": 13.681365002412349,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 13.823752029566094
+        },
+        "rolling_hash": {
+          "build_ms": 0.08537099347449839,
+          "discover_ms": 26.635590009391308,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 26.720961002865806
+        },
+        "suffix_array": {
+          "build_ms": 0.57766298414208,
+          "discover_ms": 17.06094600376673,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 17.63860898790881
+        }
+      },
+      "max_winner_length": 63,
+      "mean_winner_length": 32.0,
+      "normalized_symbol_entropy": 0.6861791695479822,
+      "occurrence_build_ms": 0.06277000647969544,
+      "occurrence_pair_fraction": 0.2152777777777778,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 3472,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 1.0,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 504,
+          "admitted_rows": 16128,
+          "elapsed_ms": 272.30573899578303,
+          "exact_recompute_rows": 16128,
+          "final_changed_rows": 3804,
+          "final_route_change_ranges": 780,
+          "raw_events": 3472,
+          "winner_node_visits": 3472
+        },
+        "segment": {
+          "admitted_event_ranges": 504,
+          "admitted_rows": 16128,
+          "elapsed_ms": 267.9981779947411,
+          "exact_recompute_rows": 16128,
+          "final_changed_rows": 3804,
+          "final_route_change_ranges": 780,
+          "raw_events": 3472,
+          "winner_node_visits": 7072
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.0,
+      "hard_routes": {
+        "diagonal_ms": 0.590300012845546,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.5934840010013431,
+        "direct_symbol_comparisons": 2137
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008834991604089737,
+          "discover_ms": 8.070951997069642,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 8.079786988673732
+        },
+        "dyadic": {
+          "build_ms": 0.17238501459360123,
+          "discover_ms": 10.438005003379658,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 10.610390017973259
+        },
+        "rolling_hash": {
+          "build_ms": 0.08485701982863247,
+          "discover_ms": 16.413528006523848,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 16.49838502635248
+        },
+        "suffix_array": {
+          "build_ms": 0.32586700399406254,
+          "discover_ms": 13.486584008205682,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 13.812451012199745
+        }
+      },
+      "max_winner_length": 2,
+      "mean_winner_length": 0.8253968253968254,
+      "normalized_symbol_entropy": 0.9824875900052767,
+      "occurrence_build_ms": 0.05732499994337559,
+      "occurrence_pair_fraction": 0.12375992063492064,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 1996,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.07936507936507936,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 856,
+          "admitted_rows": 711,
+          "elapsed_ms": 48.36294299457222,
+          "exact_recompute_rows": 711,
+          "final_changed_rows": 663,
+          "final_route_change_ranges": 657,
+          "raw_events": 1996,
+          "winner_node_visits": 2076
+        },
+        "segment": {
+          "admitted_event_ranges": 856,
+          "admitted_rows": 711,
+          "elapsed_ms": 51.59448701306246,
+          "exact_recompute_rows": 711,
+          "final_changed_rows": 663,
+          "final_route_change_ranges": 657,
+          "raw_events": 1996,
+          "winner_node_visits": 12468
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.25,
+      "hard_routes": {
+        "diagonal_ms": 0.598929007537663,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6197839975357056,
+        "direct_symbol_comparisons": 2228
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.00924599589779973,
+          "discover_ms": 8.736246003536507,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 8.745491999434307
+        },
+        "dyadic": {
+          "build_ms": 0.16467898967675865,
+          "discover_ms": 11.657333991024643,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 11.822012980701402
+        },
+        "rolling_hash": {
+          "build_ms": 0.08660400635562837,
+          "discover_ms": 19.736299000214785,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 19.822903006570414
+        },
+        "suffix_array": {
+          "build_ms": 0.37846597842872143,
+          "discover_ms": 15.641289995983243,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 16.019755974411964
+        }
+      },
+      "max_winner_length": 3,
+      "mean_winner_length": 1.0158730158730158,
+      "normalized_symbol_entropy": 0.8907504025966382,
+      "occurrence_build_ms": 0.04961999366059899,
+      "occurrence_pair_fraction": 0.15997023809523808,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 2580,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.15873015873015872,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 886,
+          "admitted_rows": 796,
+          "elapsed_ms": 51.02740600705147,
+          "exact_recompute_rows": 796,
+          "final_changed_rows": 738,
+          "final_route_change_ranges": 705,
+          "raw_events": 2580,
+          "winner_node_visits": 2746
+        },
+        "segment": {
+          "admitted_event_ranges": 886,
+          "admitted_rows": 796,
+          "elapsed_ms": 55.20870999316685,
+          "exact_recompute_rows": 796,
+          "final_changed_rows": 738,
+          "final_route_change_ranges": 705,
+          "raw_events": 2580,
+          "winner_node_visits": 16068
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.5,
+      "hard_routes": {
+        "diagonal_ms": 0.5900940159335732,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6357070233207196,
+        "direct_symbol_comparisons": 2796
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008835020707920194,
+          "discover_ms": 12.26078299805522,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 12.26961801876314
+        },
+        "dyadic": {
+          "build_ms": 0.14598199049942195,
+          "discover_ms": 17.745553981512785,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 17.891535972012207
+        },
+        "rolling_hash": {
+          "build_ms": 0.09379500988870859,
+          "discover_ms": 34.949195018270984,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 35.04299002815969
+        },
+        "suffix_array": {
+          "build_ms": 0.3841159923467785,
+          "discover_ms": 24.87270499113947,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 25.25682098348625
+        }
+      },
+      "max_winner_length": 6,
+      "mean_winner_length": 1.8253968253968254,
+      "normalized_symbol_entropy": 0.6587476533086546,
+      "occurrence_build_ms": 0.05444799899123609,
+      "occurrence_pair_fraction": 0.32180059523809523,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 5190,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.38095238095238093,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 910,
+          "admitted_rows": 1217,
+          "elapsed_ms": 69.51304199174047,
+          "exact_recompute_rows": 1217,
+          "final_changed_rows": 970,
+          "final_route_change_ranges": 793,
+          "raw_events": 5190,
+          "winner_node_visits": 5940
+        },
+        "segment": {
+          "admitted_event_ranges": 910,
+          "admitted_rows": 1217,
+          "elapsed_ms": 75.94346298719756,
+          "exact_recompute_rows": 1217,
+          "final_changed_rows": 970,
+          "final_route_change_ranges": 793,
+          "raw_events": 5190,
+          "winner_node_visits": 28990
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 0.75,
+      "hard_routes": {
+        "diagonal_ms": 0.606737012276426,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7107009878382087,
+        "direct_symbol_comparisons": 4050
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008834991604089737,
+          "discover_ms": 20.414844999322668,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 20.423679990926757
+        },
+        "dyadic": {
+          "build_ms": 0.15122100012376904,
+          "discover_ms": 26.594291994115338,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 26.745512994239107
+        },
+        "rolling_hash": {
+          "build_ms": 0.09636301547288895,
+          "discover_ms": 54.931127990130335,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 55.027491005603224
+        },
+        "suffix_array": {
+          "build_ms": 0.4478089977055788,
+          "discover_ms": 38.507736986503005,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 38.955545984208584
+        }
+      },
+      "max_winner_length": 6,
+      "mean_winner_length": 2.492063492063492,
+      "normalized_symbol_entropy": 0.42452642913314403,
+      "occurrence_build_ms": 0.04910599091090262,
+      "occurrence_pair_fraction": 0.5534474206349206,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 8926,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.5873015873015873,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 1254,
+          "admitted_rows": 1702,
+          "elapsed_ms": 90.28077300172299,
+          "exact_recompute_rows": 1702,
+          "final_changed_rows": 1430,
+          "final_route_change_ranges": 915,
+          "raw_events": 8926,
+          "winner_node_visits": 13114
+        },
+        "segment": {
+          "admitted_event_ranges": 1254,
+          "admitted_rows": 1702,
+          "elapsed_ms": 103.28143401420675,
+          "exact_recompute_rows": 1702,
+          "final_changed_rows": 1430,
+          "final_route_change_ranges": 915,
+          "raw_events": 8926,
+          "winner_node_visits": 56090
+        }
+      }
+    },
+    {
+      "bit_width": 4,
+      "clarity": 1.0,
+      "hard_routes": {
+        "diagonal_ms": 0.6021140143275261,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 2.7982199972029775,
+        "direct_symbol_comparisons": 43680
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008731993148103356,
+          "discover_ms": 77.3943510139361,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 77.4030830070842
+        },
+        "dyadic": {
+          "build_ms": 0.13252499047666788,
+          "discover_ms": 40.1498090068344,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 40.28233399731107
+        },
+        "rolling_hash": {
+          "build_ms": 0.08382898522540927,
+          "discover_ms": 101.7285329871811,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 101.8123619724065
+        },
+        "suffix_array": {
+          "build_ms": 0.5934840010013431,
+          "discover_ms": 63.823526026681066,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 64.41701002768241
+        }
+      },
+      "max_winner_length": 63,
+      "mean_winner_length": 32.0,
+      "normalized_symbol_entropy": -0.0,
+      "occurrence_build_ms": 0.04889999399892986,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 16128,
+      "raw_local_pair_events": 16128,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 1.0,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 504,
+          "admitted_rows": 16128,
+          "elapsed_ms": 723.2267640065402,
+          "exact_recompute_rows": 16128,
+          "final_changed_rows": 4224,
+          "final_route_change_ranges": 4224,
+          "raw_events": 16128,
+          "winner_node_visits": 16128
+        },
+        "segment": {
+          "admitted_event_ranges": 504,
+          "admitted_rows": 16128,
+          "elapsed_ms": 725.0150180188939,
+          "exact_recompute_rows": 16128,
+          "final_changed_rows": 4224,
+          "final_route_change_ranges": 4224,
+          "raw_events": 16128,
+          "winner_node_visits": 19728
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.0,
+      "hard_routes": {
+        "diagonal_ms": 0.6065110210329294,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.625529995886609,
+        "direct_symbol_comparisons": 2027
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.00935301068238914,
+          "discover_ms": 10.47499300329946,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 10.484346013981849
+        },
+        "dyadic": {
+          "build_ms": 0.1500690123066306,
+          "discover_ms": 10.954714991385117,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 11.104784003691748
+        },
+        "rolling_hash": {
+          "build_ms": 0.08438801160082221,
+          "discover_ms": 12.050611985614523,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 12.134999997215346
+        },
+        "suffix_array": {
+          "build_ms": 0.2395490009803325,
+          "discover_ms": 11.700175004079938,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 11.93972400506027
+        }
+      },
+      "max_winner_length": 1,
+      "mean_winner_length": 0.1746031746031746,
+      "normalized_symbol_entropy": 0.8183259998556538,
+      "occurrence_build_ms": 0.053625990403816104,
+      "occurrence_pair_fraction": 0.009548611111111112,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 308,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.015873015873015872,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 282,
+          "admitted_rows": 272,
+          "elapsed_ms": 63.27511899871752,
+          "exact_recompute_rows": 272,
+          "final_changed_rows": 272,
+          "final_route_change_ranges": 272,
+          "raw_events": 308,
+          "winner_node_visits": 308
+        },
+        "segment": {
+          "admitted_event_ranges": 282,
+          "admitted_rows": 272,
+          "elapsed_ms": 64.53147798310965,
+          "exact_recompute_rows": 272,
+          "final_changed_rows": 272,
+          "final_route_change_ranges": 272,
+          "raw_events": 308,
+          "winner_node_visits": 2154
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.25,
+      "hard_routes": {
+        "diagonal_ms": 0.6181510107126087,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6454829999711365,
+        "direct_symbol_comparisons": 2027
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009457988198846579,
+          "discover_ms": 10.541816998738796,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 10.551274986937642
+        },
+        "dyadic": {
+          "build_ms": 0.14612000086344779,
+          "discover_ms": 12.640286993701011,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 12.786406994564459
+        },
+        "rolling_hash": {
+          "build_ms": 0.08605001494288445,
+          "discover_ms": 12.390033021802083,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 12.476083036744967
+        },
+        "suffix_array": {
+          "build_ms": 0.2520199923310429,
+          "discover_ms": 11.685728997690603,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 11.937748990021646
+        }
+      },
+      "max_winner_length": 1,
+      "mean_winner_length": 0.1746031746031746,
+      "normalized_symbol_entropy": 0.8195612305082695,
+      "occurrence_build_ms": 0.06484999903477728,
+      "occurrence_pair_fraction": 0.010540674603174604,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 340,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.031746031746031744,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 312,
+          "admitted_rows": 299,
+          "elapsed_ms": 65.9334369993303,
+          "exact_recompute_rows": 299,
+          "final_changed_rows": 299,
+          "final_route_change_ranges": 299,
+          "raw_events": 340,
+          "winner_node_visits": 340
+        },
+        "segment": {
+          "admitted_event_ranges": 312,
+          "admitted_rows": 299,
+          "elapsed_ms": 64.2901620012708,
+          "exact_recompute_rows": 299,
+          "final_changed_rows": 299,
+          "final_route_change_ranges": 299,
+          "raw_events": 340,
+          "winner_node_visits": 2378
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.5,
+      "hard_routes": {
+        "diagonal_ms": 0.6230350118130445,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6190860003698617,
+        "direct_symbol_comparisons": 2042
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009041017619892955,
+          "discover_ms": 11.203721020137891,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 11.212762037757784
+        },
+        "dyadic": {
+          "build_ms": 0.16732001677155495,
+          "discover_ms": 12.037310021696612,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 12.204630038468167
+        },
+        "rolling_hash": {
+          "build_ms": 0.09114199201576412,
+          "discover_ms": 13.87825101846829,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 13.969393010484055
+        },
+        "suffix_array": {
+          "build_ms": 0.31177702476270497,
+          "discover_ms": 12.561926996568218,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 12.873704021330923
+        }
+      },
+      "max_winner_length": 2,
+      "mean_winner_length": 0.3492063492063492,
+      "normalized_symbol_entropy": 0.8029393183037421,
+      "occurrence_build_ms": 0.07638498209416866,
+      "occurrence_pair_fraction": 0.01525297619047619,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 492,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.2222222222222222,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 396,
+          "admitted_rows": 437,
+          "elapsed_ms": 67.93712600483559,
+          "exact_recompute_rows": 437,
+          "final_changed_rows": 389,
+          "final_route_change_ranges": 389,
+          "raw_events": 492,
+          "winner_node_visits": 492
+        },
+        "segment": {
+          "admitted_event_ranges": 396,
+          "admitted_rows": 437,
+          "elapsed_ms": 69.60201699985191,
+          "exact_recompute_rows": 437,
+          "final_changed_rows": 389,
+          "final_route_change_ranges": 389,
+          "raw_events": 492,
+          "winner_node_visits": 3482
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.75,
+      "hard_routes": {
+        "diagonal_ms": 0.6053679971955717,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6110839894972742,
+        "direct_symbol_comparisons": 2091
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009665003744885325,
+          "discover_ms": 11.624620005022734,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 11.63428500876762
+        },
+        "dyadic": {
+          "build_ms": 0.1525630068499595,
+          "discover_ms": 12.681026011705399,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 12.833589018555358
+        },
+        "rolling_hash": {
+          "build_ms": 0.08771297871135175,
+          "discover_ms": 15.795266022905707,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 15.882979001617059
+        },
+        "suffix_array": {
+          "build_ms": 0.39263098733499646,
+          "discover_ms": 13.552339980378747,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 13.944970967713743
+        }
+      },
+      "max_winner_length": 6,
+      "mean_winner_length": 1.1111111111111112,
+      "normalized_symbol_entropy": 0.770181828215792,
+      "occurrence_build_ms": 0.05435399361886084,
+      "occurrence_pair_fraction": 0.023313492063492064,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 752,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.49206349206349204,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 630,
+          "admitted_rows": 1184,
+          "elapsed_ms": 78.93247599713504,
+          "exact_recompute_rows": 1184,
+          "final_changed_rows": 624,
+          "final_route_change_ranges": 624,
+          "raw_events": 752,
+          "winner_node_visits": 752
+        },
+        "segment": {
+          "admitted_event_ranges": 630,
+          "admitted_rows": 1184,
+          "elapsed_ms": 86.84892000746913,
+          "exact_recompute_rows": 1184,
+          "final_changed_rows": 624,
+          "final_route_change_ranges": 624,
+          "raw_events": 752,
+          "winner_node_visits": 5872
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 1.0,
+      "hard_routes": {
+        "diagonal_ms": 0.6078619917389005,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7363139884546399,
+        "direct_symbol_comparisons": 3976
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009040988516062498,
+          "discover_ms": 17.829406016971916,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 17.83844700548798
+        },
+        "dyadic": {
+          "build_ms": 0.14362597721628845,
+          "discover_ms": 14.404220011783764,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 14.547845989000052
+        },
+        "rolling_hash": {
+          "build_ms": 0.08490699110552669,
+          "discover_ms": 21.130712993908674,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 21.2156199850142
+        },
+        "suffix_array": {
+          "build_ms": 0.5841670208610594,
+          "discover_ms": 15.164540003752336,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 15.748707024613395
+        }
+      },
+      "max_winner_length": 63,
+      "mean_winner_length": 32.0,
+      "normalized_symbol_entropy": 0.721852673964943,
+      "occurrence_build_ms": 0.06599200423806906,
+      "occurrence_pair_fraction": 0.038876488095238096,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 1254,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 1.0,
+      "trajectory": "shift_random",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 1008,
+          "admitted_rows": 32256,
+          "elapsed_ms": 417.79470298206434,
+          "exact_recompute_rows": 32256,
+          "final_changed_rows": 1008,
+          "final_route_change_ranges": 1008,
+          "raw_events": 1254,
+          "winner_node_visits": 1254
+        },
+        "segment": {
+          "admitted_event_ranges": 1008,
+          "admitted_rows": 32256,
+          "elapsed_ms": 423.06738000479527,
+          "exact_recompute_rows": 32256,
+          "final_changed_rows": 1008,
+          "final_route_change_ranges": 1008,
+          "raw_events": 1254,
+          "winner_node_visits": 8454
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.0,
+      "hard_routes": {
+        "diagonal_ms": 0.6030630029272288,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.5941629933658987,
+        "direct_symbol_comparisons": 2027
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009208015399053693,
+          "discover_ms": 10.413596988655627,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 10.42280500405468
+        },
+        "dyadic": {
+          "build_ms": 0.2784619864542037,
+          "discover_ms": 11.873529991135001,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 12.151991977589205
+        },
+        "rolling_hash": {
+          "build_ms": 0.08409097790718079,
+          "discover_ms": 12.015932996291667,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 12.100023974198848
+        },
+        "suffix_array": {
+          "build_ms": 0.2468510065227747,
+          "discover_ms": 11.32806297391653,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 11.574913980439305
+        }
+      },
+      "max_winner_length": 1,
+      "mean_winner_length": 0.1746031746031746,
+      "normalized_symbol_entropy": 0.8183259998556538,
+      "occurrence_build_ms": 0.05780000356025994,
+      "occurrence_pair_fraction": 0.009548611111111112,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 308,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.015873015873015872,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 282,
+          "admitted_rows": 272,
+          "elapsed_ms": 61.64711501332931,
+          "exact_recompute_rows": 272,
+          "final_changed_rows": 272,
+          "final_route_change_ranges": 272,
+          "raw_events": 308,
+          "winner_node_visits": 308
+        },
+        "segment": {
+          "admitted_event_ranges": 282,
+          "admitted_rows": 272,
+          "elapsed_ms": 63.79993099835701,
+          "exact_recompute_rows": 272,
+          "final_changed_rows": 272,
+          "final_route_change_ranges": 272,
+          "raw_events": 308,
+          "winner_node_visits": 2154
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.25,
+      "hard_routes": {
+        "diagonal_ms": 0.591196003369987,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6413229857571423,
+        "direct_symbol_comparisons": 2045
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009103998309001327,
+          "discover_ms": 10.918757994659245,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 10.927861992968246
+        },
+        "dyadic": {
+          "build_ms": 0.14577899128198624,
+          "discover_ms": 11.490208999020979,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 11.635987990302965
+        },
+        "rolling_hash": {
+          "build_ms": 0.08583097951486707,
+          "discover_ms": 13.447528006508946,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 13.533358986023813
+        },
+        "suffix_array": {
+          "build_ms": 0.32275900593958795,
+          "discover_ms": 12.279151997063309,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 12.601911003002897
+        }
+      },
+      "max_winner_length": 2,
+      "mean_winner_length": 0.30158730158730157,
+      "normalized_symbol_entropy": 0.761298278173745,
+      "occurrence_build_ms": 0.05309400148689747,
+      "occurrence_pair_fraction": 0.016307043650793652,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 526,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.09523809523809523,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 366,
+          "admitted_rows": 385,
+          "elapsed_ms": 65.03050602623262,
+          "exact_recompute_rows": 385,
+          "final_changed_rows": 359,
+          "final_route_change_ranges": 351,
+          "raw_events": 526,
+          "winner_node_visits": 528
+        },
+        "segment": {
+          "admitted_event_ranges": 366,
+          "admitted_rows": 385,
+          "elapsed_ms": 66.69573701219633,
+          "exact_recompute_rows": 385,
+          "final_changed_rows": 359,
+          "final_route_change_ranges": 351,
+          "raw_events": 526,
+          "winner_node_visits": 3570
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.5,
+      "hard_routes": {
+        "diagonal_ms": 0.5953149811830372,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6628019909840077,
+        "direct_symbol_comparisons": 2121
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009610987035557628,
+          "discover_ms": 11.94710299023427,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 11.956713977269828
+        },
+        "dyadic": {
+          "build_ms": 0.1467329857405275,
+          "discover_ms": 13.446229015244171,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 13.592962000984699
+        },
+        "rolling_hash": {
+          "build_ms": 0.08497200906276703,
+          "discover_ms": 18.33666898892261,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 18.421640997985378
+        },
+        "suffix_array": {
+          "build_ms": 0.3848790074698627,
+          "discover_ms": 15.307638008380309,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 15.692517015850171
+        }
+      },
+      "max_winner_length": 4,
+      "mean_winner_length": 0.7619047619047619,
+      "normalized_symbol_entropy": 0.6358431785286862,
+      "occurrence_build_ms": 0.05562498699873686,
+      "occurrence_pair_fraction": 0.039558531746031744,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 1276,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.30158730158730157,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 528,
+          "admitted_rows": 824,
+          "elapsed_ms": 78.02218201686628,
+          "exact_recompute_rows": 824,
+          "final_changed_rows": 598,
+          "final_route_change_ranges": 546,
+          "raw_events": 1276,
+          "winner_node_visits": 1296
+        },
+        "segment": {
+          "admitted_event_ranges": 528,
+          "admitted_rows": 824,
+          "elapsed_ms": 79.34850198216736,
+          "exact_recompute_rows": 824,
+          "final_changed_rows": 598,
+          "final_route_change_ranges": 546,
+          "raw_events": 1276,
+          "winner_node_visits": 8430
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.75,
+      "hard_routes": {
+        "diagonal_ms": 0.5919410032220185,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.621390005107969,
+        "direct_symbol_comparisons": 2301
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009201990906149149,
+          "discover_ms": 13.950232998467982,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 13.959434989374131
+        },
+        "dyadic": {
+          "build_ms": 0.14683499466627836,
+          "discover_ms": 16.79152899305336,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 16.93836398771964
+        },
+        "rolling_hash": {
+          "build_ms": 0.09192599100060761,
+          "discover_ms": 26.863522012718022,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 26.95544800371863
+        },
+        "suffix_array": {
+          "build_ms": 0.4666820168495178,
+          "discover_ms": 20.333459979156032,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 20.80014199600555
+        }
+      },
+      "max_winner_length": 6,
+      "mean_winner_length": 1.6507936507936507,
+      "normalized_symbol_entropy": 0.5260327180290766,
+      "occurrence_build_ms": 0.05092201172374189,
+      "occurrence_pair_fraction": 0.07837301587301587,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 2528,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.5714285714285714,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 752,
+          "admitted_rows": 1703,
+          "elapsed_ms": 93.65252999123186,
+          "exact_recompute_rows": 1703,
+          "final_changed_rows": 1232,
+          "final_route_change_ranges": 802,
+          "raw_events": 2528,
+          "winner_node_visits": 2566
+        },
+        "segment": {
+          "admitted_event_ranges": 752,
+          "admitted_rows": 1703,
+          "elapsed_ms": 108.32497398951091,
+          "exact_recompute_rows": 1703,
+          "final_changed_rows": 1232,
+          "final_route_change_ranges": 802,
+          "raw_events": 2528,
+          "winner_node_visits": 17974
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 1.0,
+      "hard_routes": {
+        "diagonal_ms": 0.5812039889860898,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.913320982363075,
+        "direct_symbol_comparisons": 8120
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.016156001947820187,
+          "discover_ms": 31.301902985433117,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 31.318058987380937
+        },
+        "dyadic": {
+          "build_ms": 0.22229697788134217,
+          "discover_ms": 20.80300499801524,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 21.025301975896582
+        },
+        "rolling_hash": {
+          "build_ms": 0.08650601375848055,
+          "discover_ms": 39.31513999123126,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 39.40164600498974
+        },
+        "suffix_array": {
+          "build_ms": 0.5757850012741983,
+          "discover_ms": 24.3857350142207,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 24.961520015494898
+        }
+      },
+      "max_winner_length": 63,
+      "mean_winner_length": 32.0,
+      "normalized_symbol_entropy": 0.37483561652002284,
+      "occurrence_build_ms": 0.04836599691770971,
+      "occurrence_pair_fraction": 0.1388888888888889,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 4480,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 1.0,
+      "trajectory": "shift_motif",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 1008,
+          "admitted_rows": 32256,
+          "elapsed_ms": 523.4913760214113,
+          "exact_recompute_rows": 32256,
+          "final_changed_rows": 7608,
+          "final_route_change_ranges": 1560,
+          "raw_events": 4480,
+          "winner_node_visits": 4480
+        },
+        "segment": {
+          "admitted_event_ranges": 1008,
+          "admitted_rows": 32256,
+          "elapsed_ms": 541.3280299981125,
+          "exact_recompute_rows": 32256,
+          "final_changed_rows": 7608,
+          "final_route_change_ranges": 1560,
+          "raw_events": 4480,
+          "winner_node_visits": 11680
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.0,
+      "hard_routes": {
+        "diagonal_ms": 0.6013480015099049,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6018590065650642,
+        "direct_symbol_comparisons": 2027
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.00930498936213553,
+          "discover_ms": 10.604218987282366,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 10.613523976644501
+        },
+        "dyadic": {
+          "build_ms": 0.14417601050809026,
+          "discover_ms": 10.946560010779649,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 11.09073602128774
+        },
+        "rolling_hash": {
+          "build_ms": 0.08517701644450426,
+          "discover_ms": 11.980948009295389,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 12.066125025739893
+        },
+        "suffix_array": {
+          "build_ms": 0.24407700402662158,
+          "discover_ms": 11.422034993302077,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 11.666111997328699
+        }
+      },
+      "max_winner_length": 1,
+      "mean_winner_length": 0.1746031746031746,
+      "normalized_symbol_entropy": 0.8183259998556538,
+      "occurrence_build_ms": 0.06176100578159094,
+      "occurrence_pair_fraction": 0.009548611111111112,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 308,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.015873015873015872,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 282,
+          "admitted_rows": 272,
+          "elapsed_ms": 61.86278001405299,
+          "exact_recompute_rows": 272,
+          "final_changed_rows": 272,
+          "final_route_change_ranges": 272,
+          "raw_events": 308,
+          "winner_node_visits": 308
+        },
+        "segment": {
+          "admitted_event_ranges": 282,
+          "admitted_rows": 272,
+          "elapsed_ms": 63.11660201754421,
+          "exact_recompute_rows": 272,
+          "final_changed_rows": 272,
+          "final_route_change_ranges": 272,
+          "raw_events": 308,
+          "winner_node_visits": 2154
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.25,
+      "hard_routes": {
+        "diagonal_ms": 0.685092993080616,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.6011439836584032,
+        "direct_symbol_comparisons": 2137
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009099981980398297,
+          "discover_ms": 12.77044101152569,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 12.779540993506089
+        },
+        "dyadic": {
+          "build_ms": 0.15971797984093428,
+          "discover_ms": 14.845046971458942,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 15.004764951299876
+        },
+        "rolling_hash": {
+          "build_ms": 0.08527899626642466,
+          "discover_ms": 21.69403398875147,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 21.779312985017896
+        },
+        "suffix_array": {
+          "build_ms": 0.3056330024264753,
+          "discover_ms": 17.696670023724437,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 18.002303026150912
+        }
+      },
+      "max_winner_length": 2,
+      "mean_winner_length": 0.4603174603174603,
+      "normalized_symbol_entropy": 0.6550248837370067,
+      "occurrence_build_ms": 0.05398900248110294,
+      "occurrence_pair_fraction": 0.06008184523809524,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 1938,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.1111111111111111,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 502,
+          "admitted_rows": 535,
+          "elapsed_ms": 73.12877700314857,
+          "exact_recompute_rows": 535,
+          "final_changed_rows": 503,
+          "final_route_change_ranges": 501,
+          "raw_events": 1938,
+          "winner_node_visits": 1988
+        },
+        "segment": {
+          "admitted_event_ranges": 502,
+          "admitted_rows": 535,
+          "elapsed_ms": 76.35699800448492,
+          "exact_recompute_rows": 535,
+          "final_changed_rows": 503,
+          "final_route_change_ranges": 501,
+          "raw_events": 1938,
+          "winner_node_visits": 11978
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.5,
+      "hard_routes": {
+        "diagonal_ms": 0.6021659937687218,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 1.0102569940499961,
+        "direct_symbol_comparisons": 2695
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009202020009979606,
+          "discover_ms": 20.375282008899376,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 20.384484028909355
+        },
+        "dyadic": {
+          "build_ms": 0.15511701349169016,
+          "discover_ms": 28.643127996474504,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 28.798245009966195
+        },
+        "rolling_hash": {
+          "build_ms": 0.09223198867402971,
+          "discover_ms": 53.27927999314852,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 53.37151198182255
+        },
+        "suffix_array": {
+          "build_ms": 0.38610599585808814,
+          "discover_ms": 38.86021699872799,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 39.24632299458608
+        }
+      },
+      "max_winner_length": 6,
+      "mean_winner_length": 1.1587301587301588,
+      "normalized_symbol_entropy": 0.43461057457821606,
+      "occurrence_build_ms": 0.059510988648980856,
+      "occurrence_pair_fraction": 0.2386532738095238,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 7698,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.3492063492063492,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 854,
+          "admitted_rows": 1249,
+          "elapsed_ms": 108.020260988269,
+          "exact_recompute_rows": 1249,
+          "final_changed_rows": 895,
+          "final_route_change_ranges": 870,
+          "raw_events": 7698,
+          "winner_node_visits": 8602
+        },
+        "segment": {
+          "admitted_event_ranges": 854,
+          "admitted_rows": 1249,
+          "elapsed_ms": 121.75310499151237,
+          "exact_recompute_rows": 1249,
+          "final_changed_rows": 895,
+          "final_route_change_ranges": 870,
+          "raw_events": 7698,
+          "winner_node_visits": 46270
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 0.75,
+      "hard_routes": {
+        "diagonal_ms": 0.6740489916410297,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 0.7695539970882237,
+        "direct_symbol_comparisons": 4028
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.009101000614464283,
+          "discover_ms": 33.140202023787424,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 33.14930302440189
+        },
+        "dyadic": {
+          "build_ms": 0.15552598051726818,
+          "discover_ms": 48.13903599279001,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 48.29456197330728
+        },
+        "rolling_hash": {
+          "build_ms": 0.09274299372918904,
+          "discover_ms": 103.62707599415444,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 103.71981898788363
+        },
+        "suffix_array": {
+          "build_ms": 0.45594500261358917,
+          "discover_ms": 71.10478699905798,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 71.56073200167157
+        }
+      },
+      "max_winner_length": 6,
+      "mean_winner_length": 2.142857142857143,
+      "normalized_symbol_entropy": 0.24303657767039533,
+      "occurrence_build_ms": 0.050205999286845326,
+      "occurrence_pair_fraction": 0.5084945436507936,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 16402,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 0.5714285714285714,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 1682,
+          "admitted_rows": 2275,
+          "elapsed_ms": 167.09205298684537,
+          "exact_recompute_rows": 2275,
+          "final_changed_rows": 1673,
+          "final_route_change_ranges": 1580,
+          "raw_events": 16402,
+          "winner_node_visits": 22650
+        },
+        "segment": {
+          "admitted_event_ranges": 1682,
+          "admitted_rows": 2275,
+          "elapsed_ms": 174.42848900100216,
+          "exact_recompute_rows": 2275,
+          "final_changed_rows": 1673,
+          "final_route_change_ranges": 1580,
+          "raw_events": 16402,
+          "winner_node_visits": 110592
+        }
+      }
+    },
+    {
+      "bit_width": 8,
+      "clarity": 1.0,
+      "hard_routes": {
+        "diagonal_ms": 0.593211007071659,
+        "diagonal_symbol_comparisons": 2016,
+        "direct_ms": 2.712563000386581,
+        "direct_symbol_comparisons": 43680
+      },
+      "match_indexes": {
+        "direct": {
+          "build_ms": 0.008553004590794444,
+          "discover_ms": 149.77034300682135,
+          "exact": true,
+          "logical_bytes": 128,
+          "total_ms": 149.77889601141214
+        },
+        "dyadic": {
+          "build_ms": 0.13296300312504172,
+          "discover_ms": 79.8162360151764,
+          "exact": true,
+          "logical_bytes": 5248,
+          "total_ms": 79.94919901830144
+        },
+        "rolling_hash": {
+          "build_ms": 0.08671899558976293,
+          "discover_ms": 196.13432299229316,
+          "exact": false,
+          "logical_bytes": 3120,
+          "total_ms": 196.22104198788293
+        },
+        "suffix_array": {
+          "build_ms": 0.6007690099067986,
+          "discover_ms": 125.73925999458879,
+          "exact": true,
+          "logical_bytes": 7476,
+          "total_ms": 126.34002900449559
+        }
+      },
+      "max_winner_length": 63,
+      "mean_winner_length": 32.0,
+      "normalized_symbol_entropy": -0.0,
+      "occurrence_build_ms": 0.0462440075352788,
+      "occurrence_pair_fraction": 1.0,
+      "pair_scan_checks": 32256,
+      "raw_local_pair_events": 32256,
+      "seed": 17,
+      "sequence_length": 64,
+      "shift_agreement": 1.0,
+      "trajectory": "collapse",
+      "winner_indexes": {
+        "rle": {
+          "admitted_event_ranges": 1008,
+          "admitted_rows": 32256,
+          "elapsed_ms": 1392.2300990088843,
+          "exact_recompute_rows": 32256,
+          "final_changed_rows": 8448,
+          "final_route_change_ranges": 8448,
+          "raw_events": 32256,
+          "winner_node_visits": 32256
+        },
+        "segment": {
+          "admitted_event_ranges": 1008,
+          "admitted_rows": 32256,
+          "elapsed_ms": 1424.869504000526,
+          "exact_recompute_rows": 32256,
+          "final_changed_rows": 8448,
+          "final_route_change_ranges": 8448,
+          "raw_events": 32256,
+          "winner_node_visits": 39456
+        }
+      }
+    }
+  ],
+  "configuration": {
+    "bit_widths": [
+      1,
+      4,
+      8
+    ],
+    "clarities": [
+      0.0,
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "repeats": 3,
+    "seed": 17,
+    "sequence_lengths": [
+      64
+    ],
+    "torch_version": "2.11.0+cu128",
+    "trajectories": [
+      "shift_random",
+      "shift_motif",
+      "collapse"
+    ]
+  },
+  "summary": {
+    "case_count": 45,
+    "exact_match_index_wins": {
+      "direct": 39,
+      "dyadic": 6,
+      "suffix_array": 0
+    },
+    "mean_occurrence_pair_fraction": 0.4627659281305115,
+    "winner_index_wins": {
+      "rle": 42,
+      "segment": 3
+    }
+  }
+}

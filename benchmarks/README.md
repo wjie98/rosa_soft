@@ -2,6 +2,11 @@
 
 These scripts are manual probes, not correctness tests.
 
+The frozen first filtered-bitflip index route is summarized in
+`docs/research/FILTERED_BITFLIP_V1.md`. Its current entry point is
+`filtered_bitflip_compact.py`; earlier solvers are exact baselines and the
+orthogonal indexes are post-v1 experiments.
+
 - `rosa_soft.py` measures RosaSoft forward or training-step latency and peak
   CUDA allocator usage. It can independently select dense or packed-varlen
   layout and any required subset of Q/K/value gradients.
@@ -20,6 +25,55 @@ These scripts are manual probes, not correctness tests.
   one globally shared assignment of every relevant Q/K bit. It implements
   exact local expectation, mean-field winner marginals, ARM/DisARM, exact and
   sampled-residual bitflip VJPs, and exact loss-augmented margin edits.
+- `filtered_bitflip.py` defines a separate unlimited-suffix full-bitflip
+  oracle and exact create/break influence intervals.  The companion
+  `filtered_bitflip_indexes.py`, `filtered_bitflip_winner.py`, and
+  `filtered_bitflip_profile.py` compare static LCE indexes, code-occurrence
+  discovery, normalized-winner filtering, and synthetic training-clarity
+  trajectories.  They remain research-only and do not modify frozen
+  RosaSoft semantics.  `csrc/filtered_bitflip_cpu_scan.cpp` is the standalone
+  packed CPU hard-scan microbenchmark.
+- `filtered_bitflip_certificates.py` treats each maximal matching diagonal run
+  as a constant normalized-priority interval and computes exact temporary
+  delete/add winner envelopes.  `filtered_bitflip_suffix_nodes.py` provides
+  exact LCP-node replacement queries with flat or arithmetic-run postings.
+  `filtered_bitflip_hybrid.py` dispatches each flip between those exact paths
+  using measured interval compression only.  Their common trajectory profiler
+  is `filtered_bitflip_certificate_profile.py`.
+- `filtered_bitflip_compact.py` is the frozen exact v1 research solver. It
+  combines a pinned optional `libsais` backend, packed wavelet
+  range predecessor, parent-linked LCP nodes, periodic route exclusions,
+  indexed event families, bounded top-k certificates with exact suffix
+  fallback, and direct affine-range VJP accumulation.
+  `filtered_bitflip_periodic.py` adds conservative whole-interval proofs for
+  shifted query edits, finite-period shifted key edits, and the uniform
+  period-one case.  It also generates exact event families directly from
+  periodic occurrence phases, without materializing every changed pair.
+  Staircase-affine winners and `PeriodicRouteRange` represent complete
+  periodic row ranges through replacement and VJP without leaf queries or
+  per-period Python objects.  Early key edits outside the proof retain the
+  general exact path.  These files deliberately do not modify or replace the
+  frozen dense-gradient operator.  Reproduce their measurements with
+  `filtered_bitflip_compact_profile.py`.
+- `filtered_bitflip_monotone.py` studies arbitrary, nonperiodic occurrence
+  lists through exact suffix-rank LCE plateaus.  It uses semantic sentinels,
+  previous/next-smaller LCP links, and intersections of forward and reversed
+  runs to form exact `(left_lce, right_lce)` cells.  The compact solver uses
+  one latest-route representative per query-create cell only where its
+  existing shifted-query baseline proof makes all break events redundant.
+  `filtered_bitflip_monotone_profile.py` measures both singleton failure cases
+  and useful low-alphabet compression; it is not evidence of a universal
+  subquadratic bitflip bound.
+- `filtered_bitflip_orthogonal.py` replaces query-create occurrence scans with
+  one code-partitioned dynamic range tree.  A causal position sweep realizes
+  the static `(forward rank, reverse rank, position)` query as an active 2D
+  aggregate, and synchronized band traversal enumerates exact nonempty cells
+  without probing their members.  `filtered_bitflip_orthogonal_kd.py` is the
+  linear-space static 3D reference with arbitrary position-box count and
+  predecessor/successor extrema.  Both remain research-only because range
+  trees regress on fragmented inputs and use `O(T log T)` logical storage,
+  while the kd tree has linear worst-case query work.  Compare them with the
+  occurrence scan using `filtered_bitflip_orthogonal_profile.py`.
 - `global_bit_fit.py` trains only three key logits on one-edit and coordinated
   two-edit hard-route tasks. It is the multi-seed optimization gate for the
   global-bit estimators and deliberately has no residual or readout shortcut.
@@ -150,6 +204,19 @@ python benchmarks/diagonal_recurrence.py \
 python benchmarks/pretraining_codebook.py \
   --concepts 64 --trajectory-length 8 --bits 4 \
   --json-out validation/pretraining_codebook.json
+
+python benchmarks/filtered_bitflip_compact_profile.py \
+  --build-native --sequence-lengths 64 128 256 \
+  --execution-length 64 --top-k 4 8 --repeats 3 \
+  --json-out validation/filtered_bitflip_compact.json
+
+python benchmarks/filtered_bitflip_monotone_profile.py \
+  --sequence-lengths 64 128 --repeats 3 \
+  --json-out validation/filtered_bitflip_monotone.json
+
+python benchmarks/filtered_bitflip_orthogonal_profile.py \
+  --sequence-lengths 128 256 512 1024 --repeats 3 \
+  --json-out validation/filtered_bitflip_orthogonal.json
 
 CUDA_VISIBLE_DEVICES=1 python benchmarks/estimator_fit_ablation.py \
   --device cuda --model-seeds 0 1 2 3 4 5 6 7 \

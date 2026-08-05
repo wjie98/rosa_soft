@@ -1,0 +1,640 @@
+{
+  "cases": [
+    {
+      "base_structures": {
+        "certificate_tree": {
+          "build_ms": 0.5313860019668937,
+          "candidate_lines": 126,
+          "canonical_postings": 174,
+          "logical_bytes": 3216
+        },
+        "suffix_nodes": {
+          "build_ms": 0.8893859921954572,
+          "logical_bytes": 3156,
+          "nodes": 57,
+          "route_postings": 152,
+          "route_runs": 83
+        }
+      },
+      "bit_width": 1,
+      "clarity": 1.0,
+      "execution": {
+        "certificate": {
+          "base_candidates_probed": 2180,
+          "canonical_add_entries": 1064,
+          "canonical_forbid_entries": 762,
+          "elapsed_ms": 25.534162996336818,
+          "tree_nodes_visited": 1374
+        },
+        "certificate_periodic": {
+          "base_candidates_probed": 2180,
+          "compressed_events": 174,
+          "elapsed_ms": 102.91238999343477,
+          "event_families": 862,
+          "tree_nodes_visited": 1374
+        },
+        "hybrid": {
+          "certificate_flips": 8,
+          "certificate_tree_nodes_visited": 168,
+          "elapsed_ms": 18.893278000177816,
+          "empty_flips": 0,
+          "estimated_overlay_entries": 1826,
+          "periodic_postings": false,
+          "suffix_node_flips": 54,
+          "suffix_replacement_rows": 772
+        },
+        "suffix_flat": {
+          "elapsed_ms": 21.397241012891755,
+          "replacement_rows": 992,
+          "route_candidates_probed": 5378,
+          "suffix_nodes_visited": 3091
+        },
+        "suffix_periodic": {
+          "elapsed_ms": 26.066366001032293,
+          "periodic_jumps": 2984,
+          "replacement_rows": 992,
+          "route_candidates_probed": 4498,
+          "suffix_nodes_visited": 3091
+        }
+      },
+      "seed": 17,
+      "sequence_length": 32,
+      "shared": {
+        "event_cells": 2670,
+        "final_changed_rows": 217,
+        "final_route_change_ranges": 113,
+        "raw_events": 992
+      },
+      "trajectory": "shift_random"
+    },
+    {
+      "base_structures": {
+        "certificate_tree": {
+          "build_ms": 0.2545629977248609,
+          "candidate_lines": 128,
+          "canonical_postings": 148,
+          "logical_bytes": 3152
+        },
+        "suffix_nodes": {
+          "build_ms": 0.41385501390323043,
+          "logical_bytes": 4044,
+          "nodes": 59,
+          "route_postings": 264,
+          "route_runs": 73
+        }
+      },
+      "bit_width": 1,
+      "clarity": 1.0,
+      "execution": {
+        "certificate": {
+          "base_candidates_probed": 2849,
+          "canonical_add_entries": 1130,
+          "canonical_forbid_entries": 848,
+          "elapsed_ms": 21.03158298996277,
+          "tree_nodes_visited": 1334
+        },
+        "certificate_periodic": {
+          "base_candidates_probed": 2849,
+          "compressed_events": 0,
+          "elapsed_ms": 121.30335799884051,
+          "event_families": 992,
+          "tree_nodes_visited": 1334
+        },
+        "hybrid": {
+          "certificate_flips": 30,
+          "certificate_tree_nodes_visited": 622,
+          "elapsed_ms": 28.30329700373113,
+          "empty_flips": 0,
+          "estimated_overlay_entries": 1978,
+          "periodic_postings": true,
+          "suffix_node_flips": 32,
+          "suffix_replacement_rows": 299
+        },
+        "suffix_flat": {
+          "elapsed_ms": 24.20434998930432,
+          "replacement_rows": 992,
+          "route_candidates_probed": 19423,
+          "suffix_nodes_visited": 7820
+        },
+        "suffix_periodic": {
+          "elapsed_ms": 26.245757995638996,
+          "periodic_jumps": 7848,
+          "replacement_rows": 992,
+          "route_candidates_probed": 9586,
+          "suffix_nodes_visited": 7820
+        }
+      },
+      "seed": 17,
+      "sequence_length": 32,
+      "shared": {
+        "event_cells": 4066,
+        "final_changed_rows": 281,
+        "final_route_change_ranges": 96,
+        "raw_events": 992
+      },
+      "trajectory": "shift_motif"
+    },
+    {
+      "base_structures": {
+        "certificate_tree": {
+          "build_ms": 0.15969399828463793,
+          "candidate_lines": 31,
+          "canonical_postings": 80,
+          "logical_bytes": 940
+        },
+        "suffix_nodes": {
+          "build_ms": 0.3796310047619045,
+          "logical_bytes": 4960,
+          "nodes": 31,
+          "route_postings": 496,
+          "route_runs": 31
+        }
+      },
+      "bit_width": 1,
+      "clarity": 1.0,
+      "execution": {
+        "certificate": {
+          "base_candidates_probed": 8474,
+          "canonical_add_entries": 1984,
+          "canonical_forbid_entries": 2144,
+          "elapsed_ms": 27.397206984460354,
+          "tree_nodes_visited": 1566
+        },
+        "certificate_periodic": {
+          "base_candidates_probed": 8474,
+          "compressed_events": 986,
+          "elapsed_ms": 48.116984020452946,
+          "event_families": 64,
+          "tree_nodes_visited": 1566
+        },
+        "hybrid": {
+          "certificate_flips": 41,
+          "certificate_tree_nodes_visited": 1025,
+          "elapsed_ms": 22.9020889964886,
+          "empty_flips": 0,
+          "estimated_overlay_entries": 4128,
+          "periodic_postings": true,
+          "suffix_node_flips": 21,
+          "suffix_replacement_rows": 133
+        },
+        "suffix_flat": {
+          "elapsed_ms": 31.801962002646178,
+          "replacement_rows": 992,
+          "route_candidates_probed": 103602,
+          "suffix_nodes_visited": 12772
+        },
+        "suffix_periodic": {
+          "elapsed_ms": 30.15243899426423,
+          "periodic_jumps": 11842,
+          "replacement_rows": 992,
+          "route_candidates_probed": 12772,
+          "suffix_nodes_visited": 12772
+        }
+      },
+      "seed": 17,
+      "sequence_length": 32,
+      "shared": {
+        "event_cells": 10912,
+        "final_changed_rows": 272,
+        "final_route_change_ranges": 272,
+        "raw_events": 992
+      },
+      "trajectory": "collapse"
+    },
+    {
+      "base_structures": {
+        "certificate_tree": {
+          "build_ms": 0.10231099440716207,
+          "candidate_lines": 21,
+          "canonical_postings": 26,
+          "logical_bytes": 524
+        },
+        "suffix_nodes": {
+          "build_ms": 0.3480789891909808,
+          "logical_bytes": 1732,
+          "nodes": 43,
+          "route_postings": 61,
+          "route_runs": 46
+        }
+      },
+      "bit_width": 4,
+      "clarity": 1.0,
+      "execution": {
+        "certificate": {
+          "base_candidates_probed": 3587,
+          "canonical_add_entries": 862,
+          "canonical_forbid_entries": 824,
+          "elapsed_ms": 96.26194500015117,
+          "tree_nodes_visited": 4736
+        },
+        "certificate_periodic": {
+          "base_candidates_probed": 3587,
+          "compressed_events": 21,
+          "elapsed_ms": 105.13414701563306,
+          "event_families": 650,
+          "tree_nodes_visited": 4736
+        },
+        "hybrid": {
+          "certificate_flips": 168,
+          "certificate_tree_nodes_visited": 3214,
+          "elapsed_ms": 52.41840798407793,
+          "empty_flips": 0,
+          "estimated_overlay_entries": 1686,
+          "periodic_postings": false,
+          "suffix_node_flips": 80,
+          "suffix_replacement_rows": 493
+        },
+        "suffix_flat": {
+          "elapsed_ms": 66.43542897654697,
+          "replacement_rows": 3968,
+          "route_candidates_probed": 10596,
+          "suffix_nodes_visited": 7834
+        },
+        "suffix_periodic": {
+          "elapsed_ms": 74.73093600128777,
+          "periodic_jumps": 7506,
+          "replacement_rows": 3968,
+          "route_candidates_probed": 10457,
+          "suffix_nodes_visited": 7834
+        }
+      },
+      "seed": 17,
+      "sequence_length": 32,
+      "shared": {
+        "event_cells": 4414,
+        "final_changed_rows": 260,
+        "final_route_change_ranges": 250,
+        "raw_events": 664
+      },
+      "trajectory": "shift_random"
+    },
+    {
+      "base_structures": {
+        "certificate_tree": {
+          "build_ms": 0.10802800534293056,
+          "candidate_lines": 8,
+          "canonical_postings": 28,
+          "logical_bytes": 272
+        },
+        "suffix_nodes": {
+          "build_ms": 0.35757498699240386,
+          "logical_bytes": 1960,
+          "nodes": 31,
+          "route_postings": 136,
+          "route_runs": 31
+        }
+      },
+      "bit_width": 4,
+      "clarity": 1.0,
+      "execution": {
+        "certificate": {
+          "base_candidates_probed": 10848,
+          "canonical_add_entries": 2448,
+          "canonical_forbid_entries": 2432,
+          "elapsed_ms": 75.64856298267841,
+          "tree_nodes_visited": 5368
+        },
+        "certificate_periodic": {
+          "base_candidates_probed": 10848,
+          "compressed_events": 744,
+          "elapsed_ms": 156.63084198604338,
+          "event_families": 722,
+          "tree_nodes_visited": 5368
+        },
+        "hybrid": {
+          "certificate_flips": 172,
+          "certificate_tree_nodes_visited": 3766,
+          "elapsed_ms": 59.89849497564137,
+          "empty_flips": 0,
+          "estimated_overlay_entries": 4880,
+          "periodic_postings": true,
+          "suffix_node_flips": 76,
+          "suffix_replacement_rows": 443
+        },
+        "suffix_flat": {
+          "elapsed_ms": 70.46678199549206,
+          "replacement_rows": 3968,
+          "route_candidates_probed": 45856,
+          "suffix_nodes_visited": 15840
+        },
+        "suffix_periodic": {
+          "elapsed_ms": 79.97214398346841,
+          "periodic_jumps": 15397,
+          "replacement_rows": 3968,
+          "route_candidates_probed": 19677,
+          "suffix_nodes_visited": 15840
+        }
+      },
+      "seed": 17,
+      "sequence_length": 32,
+      "shared": {
+        "event_cells": 12720,
+        "final_changed_rows": 1004,
+        "final_route_change_ranges": 380,
+        "raw_events": 1328
+      },
+      "trajectory": "shift_motif"
+    },
+    {
+      "base_structures": {
+        "certificate_tree": {
+          "build_ms": 0.1303899916820228,
+          "candidate_lines": 31,
+          "canonical_postings": 80,
+          "logical_bytes": 940
+        },
+        "suffix_nodes": {
+          "build_ms": 0.3908619983121753,
+          "logical_bytes": 4960,
+          "nodes": 31,
+          "route_postings": 496,
+          "route_runs": 31
+        }
+      },
+      "bit_width": 4,
+      "clarity": 1.0,
+      "execution": {
+        "certificate": {
+          "base_candidates_probed": 33896,
+          "canonical_add_entries": 7936,
+          "canonical_forbid_entries": 8576,
+          "elapsed_ms": 99.86465598922223,
+          "tree_nodes_visited": 6264
+        },
+        "certificate_periodic": {
+          "base_candidates_probed": 33896,
+          "compressed_events": 3944,
+          "elapsed_ms": 156.4509320014622,
+          "event_families": 256,
+          "tree_nodes_visited": 6264
+        },
+        "hybrid": {
+          "certificate_flips": 164,
+          "certificate_tree_nodes_visited": 4100,
+          "elapsed_ms": 93.45504801603965,
+          "empty_flips": 0,
+          "estimated_overlay_entries": 16512,
+          "periodic_postings": true,
+          "suffix_node_flips": 84,
+          "suffix_replacement_rows": 532
+        },
+        "suffix_flat": {
+          "elapsed_ms": 137.17789598740637,
+          "replacement_rows": 3968,
+          "route_candidates_probed": 414408,
+          "suffix_nodes_visited": 51088
+        },
+        "suffix_periodic": {
+          "elapsed_ms": 138.11523001641035,
+          "periodic_jumps": 47368,
+          "replacement_rows": 3968,
+          "route_candidates_probed": 51088,
+          "suffix_nodes_visited": 51088
+        }
+      },
+      "seed": 17,
+      "sequence_length": 32,
+      "shared": {
+        "event_cells": 43648,
+        "final_changed_rows": 1088,
+        "final_route_change_ranges": 1088,
+        "raw_events": 3968
+      },
+      "trajectory": "collapse"
+    },
+    {
+      "base_structures": {
+        "certificate_tree": {
+          "build_ms": 0.07127001299522817,
+          "candidate_lines": 1,
+          "canonical_postings": 5,
+          "logical_bytes": 40
+        },
+        "suffix_nodes": {
+          "build_ms": 0.28140400536358356,
+          "logical_bytes": 1120,
+          "nodes": 31,
+          "route_postings": 31,
+          "route_runs": 31
+        }
+      },
+      "bit_width": 8,
+      "clarity": 1.0,
+      "execution": {
+        "certificate": {
+          "base_candidates_probed": 6448,
+          "canonical_add_entries": 1222,
+          "canonical_forbid_entries": 1280,
+          "elapsed_ms": 91.3385930180084,
+          "tree_nodes_visited": 9424
+        },
+        "certificate_periodic": {
+          "base_candidates_probed": 6448,
+          "compressed_events": 0,
+          "elapsed_ms": 132.14130900450982,
+          "event_families": 518,
+          "tree_nodes_visited": 9424
+        },
+        "hybrid": {
+          "certificate_flips": 384,
+          "certificate_tree_nodes_visited": 7296,
+          "elapsed_ms": 82.20898199942894,
+          "empty_flips": 0,
+          "estimated_overlay_entries": 2502,
+          "periodic_postings": false,
+          "suffix_node_flips": 112,
+          "suffix_replacement_rows": 448
+        },
+        "suffix_flat": {
+          "elapsed_ms": 113.96029900060967,
+          "replacement_rows": 7936,
+          "route_candidates_probed": 7936,
+          "suffix_nodes_visited": 7936
+        },
+        "suffix_periodic": {
+          "elapsed_ms": 131.81640801485628,
+          "periodic_jumps": 7918,
+          "replacement_rows": 7936,
+          "route_candidates_probed": 7936,
+          "suffix_nodes_visited": 7936
+        }
+      },
+      "seed": 17,
+      "sequence_length": 32,
+      "shared": {
+        "event_cells": 7958,
+        "final_changed_rows": 496,
+        "final_route_change_ranges": 496,
+        "raw_events": 518
+      },
+      "trajectory": "shift_random"
+    },
+    {
+      "base_structures": {
+        "certificate_tree": {
+          "build_ms": 0.09046599734574556,
+          "candidate_lines": 8,
+          "canonical_postings": 28,
+          "logical_bytes": 272
+        },
+        "suffix_nodes": {
+          "build_ms": 0.30672698630951345,
+          "logical_bytes": 1960,
+          "nodes": 31,
+          "route_postings": 136,
+          "route_runs": 31
+        }
+      },
+      "bit_width": 8,
+      "clarity": 1.0,
+      "execution": {
+        "certificate": {
+          "base_candidates_probed": 21696,
+          "canonical_add_entries": 4544,
+          "canonical_forbid_entries": 4864,
+          "elapsed_ms": 123.99406102485955,
+          "tree_nodes_visited": 10736
+        },
+        "certificate_periodic": {
+          "base_candidates_probed": 21696,
+          "compressed_events": 1852,
+          "elapsed_ms": 203.70001401170157,
+          "event_families": 796,
+          "tree_nodes_visited": 10736
+        },
+        "hybrid": {
+          "certificate_flips": 351,
+          "certificate_tree_nodes_visited": 7687,
+          "elapsed_ms": 112.16629500268027,
+          "empty_flips": 0,
+          "estimated_overlay_entries": 9408,
+          "periodic_postings": true,
+          "suffix_node_flips": 145,
+          "suffix_replacement_rows": 814
+        },
+        "suffix_flat": {
+          "elapsed_ms": 134.37702500959858,
+          "replacement_rows": 7936,
+          "route_candidates_probed": 91712,
+          "suffix_nodes_visited": 31680
+        },
+        "suffix_periodic": {
+          "elapsed_ms": 158.03960000630468,
+          "periodic_jumps": 30255,
+          "replacement_rows": 7936,
+          "route_candidates_probed": 38659,
+          "suffix_nodes_visited": 31680
+        }
+      },
+      "seed": 17,
+      "sequence_length": 32,
+      "shared": {
+        "event_cells": 25088,
+        "final_changed_rows": 2008,
+        "final_route_change_ranges": 760,
+        "raw_events": 2304
+      },
+      "trajectory": "shift_motif"
+    },
+    {
+      "base_structures": {
+        "certificate_tree": {
+          "build_ms": 0.13171700993552804,
+          "candidate_lines": 31,
+          "canonical_postings": 80,
+          "logical_bytes": 940
+        },
+        "suffix_nodes": {
+          "build_ms": 0.39739697240293026,
+          "logical_bytes": 4960,
+          "nodes": 31,
+          "route_postings": 496,
+          "route_runs": 31
+        }
+      },
+      "bit_width": 8,
+      "clarity": 1.0,
+      "execution": {
+        "certificate": {
+          "base_candidates_probed": 67792,
+          "canonical_add_entries": 15872,
+          "canonical_forbid_entries": 17152,
+          "elapsed_ms": 230.7851850055158,
+          "tree_nodes_visited": 12528
+        },
+        "certificate_periodic": {
+          "base_candidates_probed": 67792,
+          "compressed_events": 7888,
+          "elapsed_ms": 313.57484401087277,
+          "event_families": 512,
+          "tree_nodes_visited": 12528
+        },
+        "hybrid": {
+          "certificate_flips": 328,
+          "certificate_tree_nodes_visited": 8200,
+          "elapsed_ms": 183.64270200254396,
+          "empty_flips": 0,
+          "estimated_overlay_entries": 33024,
+          "periodic_postings": true,
+          "suffix_node_flips": 168,
+          "suffix_replacement_rows": 1064
+        },
+        "suffix_flat": {
+          "elapsed_ms": 261.3242999941576,
+          "replacement_rows": 7936,
+          "route_candidates_probed": 828816,
+          "suffix_nodes_visited": 102176
+        },
+        "suffix_periodic": {
+          "elapsed_ms": 270.77922099852003,
+          "periodic_jumps": 94736,
+          "replacement_rows": 7936,
+          "route_candidates_probed": 102176,
+          "suffix_nodes_visited": 102176
+        }
+      },
+      "seed": 17,
+      "sequence_length": 32,
+      "shared": {
+        "event_cells": 87296,
+        "final_changed_rows": 2176,
+        "final_route_change_ranges": 2176,
+        "raw_events": 7936
+      },
+      "trajectory": "collapse"
+    }
+  ],
+  "configuration": {
+    "bit_widths": [
+      1,
+      4,
+      8
+    ],
+    "clarities": [
+      1.0
+    ],
+    "repeats": 1,
+    "seed": 17,
+    "sequence_lengths": [
+      32
+    ],
+    "structure_only": false,
+    "torch_version": "2.11.0+cu128",
+    "trajectories": [
+      "shift_random",
+      "shift_motif",
+      "collapse"
+    ]
+  },
+  "summary": {
+    "all_backends_exactly_agreed": true,
+    "case_count": 9,
+    "execution_wins": {
+      "certificate": 1,
+      "certificate_periodic": 0,
+      "hybrid": 8,
+      "suffix_flat": 0,
+      "suffix_periodic": 0
+    }
+  }
+}

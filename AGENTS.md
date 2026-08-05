@@ -186,6 +186,36 @@ the main CUDA training path. Before it can be considered, it must measure
 gradient bias against the dense VJP, route discovery recall, multi-seed
 collapse rate, and hard-forward fitting quality.
 
+The `filtered-bitflip-index-v1` tag freezes the first exact unlimited-suffix
+index route. Its canonical entry point is `compact_filtered_bitflip`, and its
+architecture map is `docs/research/FILTERED_BITFLIP_V1.md`. New bitflip index
+routes must use a separate module and entry point rather than adding dispatch
+switches to v1. Compare them against the frozen routes, lengths, compressed
+VJP, logical storage, and work counters. Only correctness or reproducibility
+fixes may change the v1 path after the tag.
+
+Exact filtered-bitflip research must distinguish proven suffix-rank structure
+from periodic heuristics. For a fixed suffix, LCE is monotone separately on
+the lower and upper suffix-array rank arms, but left LCE, right LCE, and latest
+route position use three different orders. Do not assume joint monotonicity in
+the original occurrence order. The forward index must end key suffixes at the
+semantic `K[T-2]` boundary; a candidate-dependent cap applied after an ordinary
+LCP does not preserve the theorem. Nonperiodic compression may intersect
+forward and reversed LCE plateaus exactly, but it must retain complete break
+exclusions and must not replace key-side cells by one representative.
+
+A code-partitioned orthogonal index may replace query-create occurrence scans
+only through exact `(forward_suffix_rank, reverse_suffix_rank, position)`
+boxes. Processing query positions in order may realize the causal position
+prefix as a dynamic active 2D set; this is exactly equivalent to the static 3D
+query, not an approximation. Do not promote the research range tree solely
+from sequence length, alphabet width, code density, or occurrence count. It
+regresses when LCE cells fragment, and its `O(T log T)` logical storage is not
+a 100M-token design. The linear-space static kd reference can also degrade to
+linear query work. Production dispatch requires a measured fragmentation gate
+and a direct-scan fallback. Position extrema from one query-create cell do not
+solve key-side row envelopes or break-event exclusions.
+
 Global-bit stochastic research must sample each semantic Q/K bit once and
 reuse that assignment everywhere the bit participates. Per-pair or per-suffix
 resampling is a different model and cannot be reported as an ARM/DisARM

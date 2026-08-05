@@ -1,0 +1,147 @@
+{
+  "cases": [
+    {
+      "admitted_rows": 8,
+      "case": "early_random",
+      "elapsed_ms": 11.923454003408551,
+      "final_changed_rows": 8,
+      "final_route_change_ranges": 8,
+      "raw_events": 8,
+      "sequence_length": 16
+    },
+    {
+      "admitted_rows": 56,
+      "case": "early_random",
+      "elapsed_ms": 26.110728998901322,
+      "final_changed_rows": 56,
+      "final_route_change_ranges": 56,
+      "raw_events": 60,
+      "sequence_length": 32
+    },
+    {
+      "admitted_rows": 272,
+      "case": "early_random",
+      "elapsed_ms": 68.41937400167808,
+      "final_changed_rows": 272,
+      "final_route_change_ranges": 272,
+      "raw_events": 308,
+      "sequence_length": 64
+    },
+    {
+      "admitted_rows": 1920,
+      "case": "clear_unique",
+      "elapsed_ms": 28.95284298574552,
+      "final_changed_rows": 240,
+      "final_route_change_ranges": 240,
+      "raw_events": 250,
+      "sequence_length": 16
+    },
+    {
+      "admitted_rows": 7936,
+      "case": "clear_unique",
+      "elapsed_ms": 99.54244899563491,
+      "final_changed_rows": 496,
+      "final_route_change_ranges": 496,
+      "raw_events": 518,
+      "sequence_length": 32
+    },
+    {
+      "admitted_rows": 32256,
+      "case": "clear_unique",
+      "elapsed_ms": 410.8777250221465,
+      "final_changed_rows": 1008,
+      "final_route_change_ranges": 1008,
+      "raw_events": 1254,
+      "sequence_length": 64
+    },
+    {
+      "admitted_rows": 1920,
+      "case": "clear_motif",
+      "elapsed_ms": 33.55895500862971,
+      "final_changed_rows": 552,
+      "final_route_change_ranges": 360,
+      "raw_events": 1024,
+      "sequence_length": 16
+    },
+    {
+      "admitted_rows": 7936,
+      "case": "clear_motif",
+      "elapsed_ms": 118.19330498110503,
+      "final_changed_rows": 2008,
+      "final_route_change_ranges": 760,
+      "raw_events": 2304,
+      "sequence_length": 32
+    },
+    {
+      "admitted_rows": 32256,
+      "case": "clear_motif",
+      "elapsed_ms": 519.3519550084602,
+      "final_changed_rows": 7608,
+      "final_route_change_ranges": 1560,
+      "raw_events": 4480,
+      "sequence_length": 64
+    },
+    {
+      "admitted_rows": 1920,
+      "case": "collapse",
+      "elapsed_ms": 38.29503498855047,
+      "final_changed_rows": 576,
+      "final_route_change_ranges": 576,
+      "raw_events": 1920,
+      "sequence_length": 16
+    },
+    {
+      "admitted_rows": 7936,
+      "case": "collapse",
+      "elapsed_ms": 180.10938397492282,
+      "final_changed_rows": 2176,
+      "final_route_change_ranges": 2176,
+      "raw_events": 7936,
+      "sequence_length": 32
+    },
+    {
+      "admitted_rows": 32256,
+      "case": "collapse",
+      "elapsed_ms": 1432.0866419875529,
+      "final_changed_rows": 8448,
+      "final_route_change_ranges": 8448,
+      "raw_events": 32256,
+      "sequence_length": 64
+    }
+  ],
+  "configuration": {
+    "bit_width": 8,
+    "seed": 17,
+    "sequence_lengths": [
+      16,
+      32,
+      64
+    ]
+  },
+  "summary": {
+    "clear_motif": {
+      "admitted_rows_slope_32_64": 2.0230836131130414,
+      "final_changed_rows_slope_32_64": 1.9217579769097914,
+      "final_route_change_ranges_slope_32_64": 1.037474705418663,
+      "raw_events_slope_32_64": 0.9593580155026541
+    },
+    "clear_unique": {
+      "admitted_rows_slope_32_64": 2.0230836131130414,
+      "final_changed_rows_slope_32_64": 1.0230836131130412,
+      "final_route_change_ranges_slope_32_64": 1.0230836131130412,
+      "raw_events_slope_32_64": 1.275513345115485
+    },
+    "collapse": {
+      "admitted_rows_slope_32_64": 2.0230836131130414,
+      "final_changed_rows_slope_32_64": 1.956931278108114,
+      "final_route_change_ranges_slope_32_64": 1.956931278108114,
+      "raw_events_slope_32_64": 2.0230836131130414
+    },
+    "early_random": {
+      "admitted_rows_slope_32_64": 2.2801079191927354,
+      "final_changed_rows_slope_32_64": 2.2801079191927354,
+      "final_route_change_ranges_slope_32_64": 2.2801079191927354,
+      "raw_events_slope_32_64": 2.359895945086383
+    }
+  }
+}

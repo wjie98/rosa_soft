@@ -1,0 +1,200 @@
+{
+  "include_boxes": false,
+  "repeats": 3,
+  "results": [
+    {
+      "bit_width": 8,
+      "case": "independent_byte",
+      "create_occurrences": 65798,
+      "dynamic_range_tree": {
+        "build_ms": 11.229205993004143,
+        "logical_bytes": 319636,
+        "point_activations": 2047,
+        "query_ms": 754.4104430126026,
+        "rectangle_queries": 0,
+        "speedup_over_scan": 0.694197042546307,
+        "total_ms": 765.6396490056068,
+        "tree_nodes_visited": 129492
+      },
+      "lce_cells": 14895,
+      "query_flips": 16376,
+      "scan": {
+        "elapsed_ms": 531.5047799958847,
+        "occurrence_visits": 65798
+      },
+      "sequence_length": 2048,
+      "static_kd": {
+        "build_ms": 6.876767030917108,
+        "logical_bytes": 75872,
+        "point_probes": 65104,
+        "query_ms": 565.4805029626004,
+        "speedup_over_scan": 0.9286241441502168,
+        "total_ms": 572.3572699935175,
+        "tree_nodes": 1078,
+        "tree_nodes_visited": 49313
+      }
+    },
+    {
+      "bit_width": 2,
+      "case": "independent_quaternary",
+      "create_occurrences": 1048171,
+      "dynamic_range_tree": {
+        "build_ms": 14.55749198794365,
+        "logical_bytes": 671560,
+        "point_activations": 2047,
+        "query_ms": 1949.1553050465882,
+        "rectangle_queries": 0,
+        "speedup_over_scan": 0.6554737403104872,
+        "total_ms": 1963.7127970345318,
+        "tree_nodes_visited": 809248
+      },
+      "lce_cells": 49586,
+      "query_flips": 4094,
+      "scan": {
+        "elapsed_ms": 1287.1621719677933,
+        "occurrence_visits": 1048171
+      },
+      "sequence_length": 2048,
+      "static_kd": {
+        "build_ms": 9.17622196720913,
+        "logical_bytes": 75712,
+        "point_probes": 645769,
+        "query_ms": 2429.6475219889544,
+        "speedup_over_scan": 0.5277799083093269,
+        "total_ms": 2438.8237439561635,
+        "tree_nodes": 1074,
+        "tree_nodes_visited": 547309
+      }
+    },
+    {
+      "bit_width": 8,
+      "case": "shifted_random_byte",
+      "create_occurrences": 65695,
+      "dynamic_range_tree": {
+        "build_ms": 10.533539985772222,
+        "logical_bytes": 320936,
+        "point_activations": 2047,
+        "query_ms": 730.9032520279288,
+        "rectangle_queries": 0,
+        "speedup_over_scan": 0.7452317445097005,
+        "total_ms": 741.436792013701,
+        "tree_nodes_visited": 127631
+      },
+      "lce_cells": 14850,
+      "query_flips": 16376,
+      "scan": {
+        "elapsed_ms": 552.5422339560464,
+        "occurrence_visits": 65695
+      },
+      "sequence_length": 2048,
+      "static_kd": {
+        "build_ms": 7.288463006261736,
+        "logical_bytes": 76352,
+        "point_probes": 62883,
+        "query_ms": 646.2258779793046,
+        "speedup_over_scan": 0.8454936629588821,
+        "total_ms": 653.5143409855664,
+        "tree_nodes": 1090,
+        "tree_nodes_visited": 48811
+      }
+    },
+    {
+      "bit_width": 3,
+      "case": "shifted_motif_noise",
+      "create_occurrences": 784605,
+      "dynamic_range_tree": {
+        "build_ms": 51.33680801372975,
+        "logical_bytes": 589568,
+        "point_activations": 2047,
+        "query_ms": 929.998738982249,
+        "rectangle_queries": 0,
+        "speedup_over_scan": 1.1269368621292588,
+        "total_ms": 981.3355469959788,
+        "tree_nodes_visited": 148592
+      },
+      "lce_cells": 11051,
+      "query_flips": 6141,
+      "scan": {
+        "elapsed_ms": 1105.903202027548,
+        "occurrence_visits": 784605
+      },
+      "sequence_length": 2048,
+      "static_kd": {
+        "build_ms": 8.196578011848032,
+        "logical_bytes": 77072,
+        "point_probes": 267652,
+        "query_ms": 1372.5546280038543,
+        "speedup_over_scan": 0.8009431367572323,
+        "total_ms": 1380.7512060157023,
+        "tree_nodes": 1108,
+        "tree_nodes_visited": 317631
+      }
+    },
+    {
+      "bit_width": 1,
+      "case": "shifted_thue_morse",
+      "create_occurrences": 1047552,
+      "dynamic_range_tree": {
+        "build_ms": 12.750019028317183,
+        "logical_bytes": 671632,
+        "point_activations": 2047,
+        "query_ms": 680.6206209585071,
+        "rectangle_queries": 0,
+        "speedup_over_scan": 1.476968133607392,
+        "total_ms": 693.3706399868242,
+        "tree_nodes_visited": 209223
+      },
+      "lce_cells": 13470,
+      "query_flips": 2047,
+      "scan": {
+        "elapsed_ms": 1024.0863400395028,
+        "occurrence_visits": 1047552
+      },
+      "sequence_length": 2048,
+      "static_kd": {
+        "build_ms": 9.777434985153377,
+        "logical_bytes": 73632,
+        "point_probes": 322753,
+        "query_ms": 1142.4124509794638,
+        "speedup_over_scan": 0.8888173316867248,
+        "total_ms": 1152.1898859646171,
+        "tree_nodes": 1022,
+        "tree_nodes_visited": 349050
+      }
+    },
+    {
+      "bit_width": 2,
+      "case": "shifted_ruler",
+      "create_occurrences": 1005322,
+      "dynamic_range_tree": {
+        "build_ms": 16.55147800920531,
+        "logical_bytes": 740160,
+        "point_activations": 2047,
+        "query_ms": 571.658325032331,
+        "rectangle_queries": 0,
+        "speedup_over_scan": 1.865347516042912,
+        "total_ms": 588.2098030415364,
+        "tree_nodes_visited": 127445
+      },
+      "lce_cells": 8232,
+      "query_flips": 4094,
+      "scan": {
+        "elapsed_ms": 1097.2156950156204,
+        "occurrence_visits": 1005322
+      },
+      "sequence_length": 2048,
+      "static_kd": {
+        "build_ms": 9.24634502734989,
+        "logical_bytes": 81152,
+        "point_probes": 207268,
+        "query_ms": 870.4655769979581,
+        "speedup_over_scan": 1.2472443166276144,
+        "total_ms": 879.711922025308,
+        "tree_nodes": 1210,
+        "tree_nodes_visited": 287772
+      }
+    }
+  ],
+  "seed": 2718,
+  "validation": "exact cells, extrema, and dominant events"
+}
