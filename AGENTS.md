@@ -214,9 +214,20 @@ arithmetic progression; every uncertified state must use the exact fallback.
 The optional last-M cache remains default-off.
 
 `benchmarks/csrc/sam_bitflip_cpu.cpp` is the independent native parity and
-performance backend. Its current ABI materializes quadratic output and is not
-a production training interface. Preserve exhaustive parity with the Python
-SAM route before adding compressed output or a direct native VJP.
+performance backend. Its primary ABI is factorized: base winners, per-Q affine
+changes, one shared K-deletion list per key position, and per-bit K overrides
+that record exact `from` and `to` winners. The materialized ABI must reconstruct
+that same representation and remain validation-only. Do not restore a second
+materialized solver or make quadratic route matrices an internal dependency.
+
+Native K deletion processes all affected key positions for one query row with
+the exact nested intervals `[latest[l]-l+1, minimum[l]]`. It must not replace
+these intervals with heuristic winner envelopes or bounded candidates. The
+CUDA descriptor VJP contracts `base -> Q`, `base -> shared delete`, and
+`shared delete -> bit override`; preserving the override's `from` winner is
+required for exactness. This path remains benchmark-only and is not a
+production training interface. Preserve exhaustive Python/native parity and
+FP64 VJP parity before changing its descriptors, batching, or ABI.
 
 Exact filtered-bitflip research must distinguish proven suffix-rank structure
 from periodic heuristics. For a fixed suffix, LCE is monotone separately on

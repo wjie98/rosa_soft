@@ -191,7 +191,7 @@ The solver asks for the latest occurrence before `j` and the latest occurrence
 before `bound`. If the latter is right of `j`, it supports at most `e-j`
 symbols. Feasibility is monotone in candidate length: once a length is
 feasible, every shorter suffix is feasible because its endpos set can only
-grow and its right-of-edit threshold can only weaken. The implementation
+grow and its right-of-edit threshold can only weaken. The Python reference
 therefore binary-searches the maximum feasible length. Binary lifting maps a
 length to its canonical suffix-link ancestor, reducing a linear suffix-link
 walk to `O(log L)` exact feasibility probes. The final two predecessors choose
@@ -204,6 +204,23 @@ segment tree and reports exactly those rows stabbed by a key position.
 
 Replacement rows are shared by every bit at the same key position because
 deleting the old symbol is independent of which new bit value is inserted.
+
+The native core batches this problem in the other direction. For one query
+row with base length `L`, it walks the suffix-link chain once and records, for
+every suffix length `l`, its canonical state, minimum occurrence end
+`minimum[l]`, and latest causal occurrence end `latest[l]`. Every occurrence
+of that suffix crosses key position `j` exactly on the interval
+
+```text
+[latest[l] - l + 1, minimum[l]].
+```
+
+These invalid-position intervals are nested as `l` increases. An ascending
+length sweep assigns only newly covered key positions the replacement length
+`l-1`. One final predecessor query is needed only when the selected occurrence
+must come from the left side of the edit. This computes all K-deletion
+replacements for the row together and removes the per-`(row,j)` binary search.
+The native path therefore does not need a winner-interval segment tree.
 
 ### 6.2 Anchored virtual runs
 
@@ -270,7 +287,7 @@ and pattern dependent. Both remain explicit execution backends. A native CPU
 implementation can use word-level bitset intersection only after profiles
 show enough selected centers to amortize scanning the words.
 
-## 9. Compressed result and direct VJP
+## 9. Factorized result and direct VJP
 
 The default Python result does not allocate the full `[2(T-1)D, T]` route and
 length matrices. Each flip stores only affine row intervals:
@@ -282,68 +299,133 @@ route(row)  = route_start  + (row - start) * route_step.
 ```
 
 Validation can reconstruct the matrices with `materialize_route_changes`.
-The bitflip VJP consumes the intervals directly, so unchanged rows are never
-stored or visited. `materialize_routes=False` is the default; setting it true
-is a test/debug operation. The current direct VJP still visits every changed
-row inside an interval and is not yet a closed-form range reduction.
+The Python bitflip VJP consumes the intervals directly, so unchanged rows are
+not stored. It still visits each changed row and remains a reference path.
 
-## 10. Native C++ core
+The native representation further factorizes K edits. Let
+`F=(T-1)D` be the number of Q flips and also the number of K flips. It stores:
+
+1. one base route/length vector of length `T`;
+2. one affine change list for each Q flip, relative to the base;
+3. one shared K-deletion change list for each key position, relative to the
+   base;
+4. one K-insertion override list for each K flip, relative to that position's
+   shared deletion result.
+
+An affine change is six `int32` values:
+
+```text
+[start, stop, length_start, length_step, route_start, route_step]
+```
+
+A K override is ten `int32` values and records both affine winners:
+
+```text
+[start, stop,
+ from_length_start, from_length_step, from_route_start, from_route_step,
+ to_length_start,   to_length_step,   to_route_start,   to_route_step]
+```
+
+The `from` winner is required for a direct VJP: a virtual insertion may
+replace a non-base deletion winner. Keeping only the final route would force a
+materialization or recomputation. CSR-style `int64` offsets delimit each list.
+
+For an upstream row gradient `g`, define `delta(a,b)` as the contraction of
+`g` with the hard value change from route `a` to route `b`. The exact work is
+then
+
+```text
+Q flip: delta(base, q_counterfactual)
+K flip: delta(base, shared_delete) + delta(shared_delete, bit_override).
+```
+
+This identity is why K deletion can be evaluated once per key position rather
+than once per bit. Route matrices are needed only for validation.
+
+## 10. Native C++ and CUDA path
 
 `benchmarks/csrc/sam_bitflip_cpu.cpp` is an independent C++17 implementation
-of the same dual-SAM algorithm. It includes the arithmetic certificate,
-grouped Q branches, binary K replacement search, and anchored virtual runs.
-`benchmarks/sam_bitflip_native.py` builds and calls it through a small ctypes
-ABI. It currently materializes complete route/length matrices on purpose so
-its timing can be compared with the Python materialized path and every cell
-can be checked exactly.
+of the dual-SAM algorithm. It includes causal endpos queries, exact arithmetic
+certificates, grouped Q branches, row-batched K deletion, and anchored virtual
+runs. `benchmarks/sam_bitflip_native.py` exposes two APIs:
 
-This core is not a production operator yet. Its output alone is
-`Theta(D T^2)` and dominates memory at long lengths: `T=512,D=8` writes about
-`64 MiB` for routes plus lengths. The next native interface should consume
-compressed changes or accumulate the VJP directly before this path is used in
-training.
+- `solve_factorized()` returns the base and three descriptor families;
+- `solve()` reconstructs the legacy full matrices from that same factorized
+  result for parity tests.
+
+There is no second materialized solver. The opaque C ABI uses
+`factorized_create`, `factorized_sizes`, `factorized_copy`, and
+`factorized_destroy`, so allocation ownership and descriptor sizes are
+explicit. The legacy `rosa_sam_bitflip_routes` symbol remains a validation
+adapter.
+
+The native profiler exports 31 counters covering SAM construction, endpos and
+trace construction, Q/K solve time, materialization time, allocated capacity,
+predecessor work, virtual-run work, descriptor counts, and factorized versus
+materialized bytes. The original first 13 counters retain their ABI order.
+
+`benchmarks/csrc/sam_bitflip_vjp_cuda.cu` consumes the descriptors without
+building route matrices. It launches:
+
+- one Q block per Q flip;
+- one shared-delete block per key position;
+- one override-correction block per K flip.
+
+Each 256-thread block walks its affine ranges, distributes value features
+across threads, and performs one block reduction. FP16 and BF16 accumulate in
+FP32; FP32 and FP64 use their PyTorch accumulation types. The extension keeps
+value and upstream-gradient tensors on the GPU, supports the current CUDA
+stream/device, and intentionally does not use `--use_fast_math`.
+
+This remains a benchmark-only research backend. It is not wired into
+`RosaSoftFunction`, does not alter hard forward semantics, and does not replace
+the frozen dense-gradient production reference.
 
 ## 11. Complexity and remaining bottleneck
 
-Let `S <= 2T-1` be the SAM state count.
+Let `S <= 2T-1` be the SAM state count and `C` be the number of changed rows
+represented by the emitted descriptors.
 
-- SAM, link tree, and prefix terminals: `O(T)` logical structure.
-- explicit endpos: up to `Theta(T^2)` entries.
-- implicit wavelet prototype: `O(T log S)` rank/select entries.
-- one endpos predecessor: `O(log S)` in the implicit backend.
-- one Q flip: actual replay recovery distance, worst-case `O(T)`.
-- one key position's base replacement: stabbed rows times `O(log L)` length
-  probes and predecessor cost.
-- one virtual-run group: selected centers plus active envelope rows, with heap
-  logarithms.
+- SAM, suffix-link tree, traces, and terminal arrays use `O(T)` storage.
+- The implicit endpos index uses `O(T log S)` rank/select entries.
+- One ordinary endpos predecessor is logarithmic; certified arithmetic states
+  answer directly.
+- One Q flip replays only until exact trace coalescence, but remains `O(T)` in
+  the worst case.
+- Native K deletion walks the suffix lengths of each query row once and then
+  writes affected key positions. It removes a binary-search factor but remains
+  `O(T^2)` in the worst case over all rows.
+- Anchored insertion centers and active virtual rows can also be quadratic on
+  low-alphabet structured input.
+- Factorized output uses `O(T + descriptor_count)` storage; its worst case is
+  still `O(D T^2)` because exact counterfactuals need not compress.
+- CUDA VJP work is `O(C * Dv)` for value width `Dv`, with `O(DT)` output and
+  no persistent `[2(T-1)D,T]` route/length tensors.
 
-The route does not prove subquadratic work across all K flips. At low alphabet
-width, the number of created `(j,p)` centers can be quadratic. Materializing
-all counterfactual route matrices is itself `Theta(D T^2)`. The Python path
-has separated compressed VJP consumption from validation materialization; the
-C++ ABI has not. Neither path proves subquadratic total work for all possible
-low-alphabet inputs.
+There is no suffix window `W`: all matches are exact and unbounded. The route
+does not establish an `O(T log T)` worst-case bitflip algorithm. It removes
+avoidable repeated work and quadratic materialization in the common path,
+not the inherent adversarial number of changed counterfactual rows.
 
 ## 12. Validation and measurements
 
-`tests/test_sam_bitflip.py` covers:
+`tests/test_sam_bitflip.py` covers exhaustive binary inputs at `T=4,5`, random
+`D=1,2,4,8` inputs, periodic/collapsed/shifted/tie cases, dual-SAM LCE,
+explicit versus implicit endpos, Q replay, K replacement, virtual runs,
+compressed reconstruction, direct VJP, and arithmetic certificates.
 
-- every binary Q/K pair at `T=4` and `T=5`;
-- random `D=1,2,4,8` sequences;
-- periodic, collapsed, shifted, and latest-route tie cases;
-- direct LCE versus dual-SAM LCA;
-- every-state/every-bound explicit versus implicit endpos queries;
-- query replay, K replacement, virtual runs, cache cold fallback, and VJP;
-- occurrence-list and bitset center enumeration;
-- compressed descriptor reconstruction and direct VJP parity;
-- arithmetic certificates against explicit predecessor answers.
+`tests/test_sam_bitflip_native.py` independently checks materialized and
+factorized native results against Python, including exhaustive binary inputs.
+`tests/test_sam_bitflip_vjp.py` checks the CUDA descriptor VJP against the
+Python bitflip oracle in FP64, FP32, FP16, and BF16. FP64 parity is constrained
+to `rtol=atol=1e-12`. The 2026-08-06 validation run also passed strict C++
+warnings, a 176-case UBSan corpus, and the complete repository suite:
 
-`tests/test_sam_bitflip_native.py` additionally compiles the C++ core and
-checks empty and singleton boundaries, random and structured cases, and every
-binary Q/K pair at `T=4,5`. A separate UBSan corpus covers
-`T=0..32,64,128`.
+```text
+1176 passed, 2 skipped
+```
 
-Reproduce timing and work counters with:
+Reproduce CPU timing, compression, and work counters with:
 
 ```bash
 python benchmarks/sam_bitflip_profile.py \
@@ -351,55 +433,63 @@ python benchmarks/sam_bitflip_profile.py \
   --json-out validation/sam_bitflip.json
 ```
 
-The profiler checks every configuration against the full-rerun oracle before
-recording it. The frozen v1 comparison is a route comparison, not a claim that
-either architecture dominates all input structures.
+Reproduce factorized CPU plus CUDA VJP timing on GPU 1 with:
 
-The WSL2/Python 3.12 profile recorded these logical endpos entry counts. They
-are structure counts, not Python heap bytes:
+```bash
+CUDA_VISIBLE_DEVICES=1 python benchmarks/sam_bitflip_vjp_profile.py \
+  --sequence-lengths 64 128 256 512 --feature-size 128 --repeats 5 \
+  --validate-max-length 128 \
+  --json-out validation/sam_bitflip_vjp.json
+```
 
-| Key | T | Explicit entries | Implicit entries | Explicit / implicit |
+The VJP profiler repeats the expensive Python full-bitflip oracle only through
+the configured validation length. Longer records set `oracle_validated=false`;
+the standalone exhaustive and FP64 tests remain the correctness gate.
+
+The five-repeat `T=64` native measurements below include oracle parity checks.
+Times are milliseconds; bytes include base arrays, offsets, and descriptors:
+
+| Case | Materialized C++ | Factorized C++ | Descriptor bytes | Matrix / descriptor |
 | --- | ---: | ---: | ---: | ---: |
-| Random D8 | 64 | 136 | 1,081 | 0.13x |
-| Random D8 | 1,024 | 3,052 | 25,814 | 0.12x |
-| Collapse | 64 | 2,079 | 945 | 2.20x |
-| Collapse | 256 | 32,895 | 4,845 | 6.79x |
-| Collapse | 1,024 | 524,799 | 23,529 | 22.30x |
+| Independent D1 | 0.357 | 0.362 | 15,616 | 8.3x |
+| Independent D8 | 0.238 | 0.186 | 14,632 | 70.5x |
+| Shift D8 | 0.540 | 0.465 | 35,888 | 28.8x |
+| Motif D4 | 0.408 | 0.406 | 20,912 | 24.7x |
+| Collapse D8 | 0.962 | 0.798 | 35,192 | 29.3x |
 
-This motivated the implemented exact hybrid: retain small explicit posting
-lists and use the implicit predecessor for large endpos classes. The current
-default still uses implicit endpos plus arithmetic certificates to preserve a
-simple nonquadratic storage bound.
-
-The five-repeat `T=64` measurements below include complete correctness checks
-against rerunning every bit flip. Times are milliseconds on the recorded WSL2
-CPU environment:
-
-| Case | Python compressed | Python materialized | C++ materialized | Frozen v1 materialized |
-| --- | ---: | ---: | ---: | ---: |
-| Independent D1 | 22.33 | 30.87 | 0.35 | 152.09 |
-| Independent D8 | 7.05 | 14.00 | 0.21 | 39.97 |
-| Shift D8 | 165.33 | 393.74 | 0.42 | 328.84 |
-| Motif D4 | 100.81 | 211.21 | 0.52 | 159.97 |
-| Collapse D8 | 167.26 | 386.94 | 0.56 | 200.63 |
-
-The C++ result shows that implementation language and data layout dominate
-the short-sequence timings. Libsais in frozen v1 accelerates SA/LCP
-construction only and does not remove Python solve-loop overhead. It also
-does not remove the quadratic materialized-output bound.
+At short lengths, factorized timing can be similar to materialization because
+handle creation and descriptor copies dominate. Its important property is
+that persistent result bytes track actual changes rather than forcing
+`Theta(D T^2)` matrices.
 
 ## 13. Outcome of optimization pass 1-6
 
-1. **Retain:** compressed affine route changes and default-off
-   materialization. Direct VJP reads the compressed form.
-2. **Retain:** monotone binary search for K replacement length. Exhaustive
-   binary tests prove parity with full reruns.
-3. **Retain:** grouped Q counterfactual branches. It is exact and strongly
-   reduces replay on low-alphabet and collapsed trajectories.
-4. **Retain as optional:** exact last-M plus cold fallback. It helps only some
-   sparse cases, so `hot_cache_size=0` remains the default.
-5. **Retain and enable by default:** exact arithmetic-progression endpos
-   certificates. They improve structured cases without semantic risk.
-6. **Retain as a research backend:** the independent C++ core. Its large
-   speedup justifies a native direct-VJP follow-up, but the current
-   materialized ABI is not a production training interface.
+1. **Retain native phase and capacity profiling.** It localized work to Q
+   replay, K deletion, virtual overrides, descriptor copying, or optional
+   materialization instead of attributing all time to SAM construction.
+2. **Retain the compressed C++ ABI.** Both APIs now share one factorized solve;
+   full matrices are a reconstruction target, not the native algorithm's
+   internal contract.
+3. **Retain factorized K delete plus override.** The bit-independent deletion
+   term is stored and contracted once per key position. Exact `from/to`
+   overrides preserve the inserted-bit correction without hidden state.
+4. **Retain CUDA descriptor VJP as research infrastructure.** It passes the
+   exact oracle and removes host-side value contraction and route-matrix
+   storage. Integration into training requires a separate architecture and
+   scaling decision.
+5. **Delete the winner-index and event-envelope experiments from the native
+   implementation.** A winner interval index improved the old point-query
+   path by about 25% on one random D8 `T=512` case but was neutral on structured
+   cases; row batching superseded it. The event envelope slowed random D1-D4
+   cases by roughly 20-33% because construction cost exceeded saved scans.
+6. **Retain row-batched K replacement.** The nested invalid-interval sweep
+   replaced per-cell binary search. On structured `T=2048` probes fell from
+   about 21.66 million to 2.096 million. The earlier point path's `T=1024`
+   collapse case fell from about 254 ms to 76 ms before later cleanup; final
+   behavior remains exact on exhaustive, random, and structured corpora. A
+   final five-repeat CPU run at `T=2048` measured 204.9 ms for shift D8,
+   203.9 ms for motif D4, and 246.9 ms for collapse D8.
+
+The final native implementation deliberately contains no heuristic candidate
+limit, suffix window, approximate occurrence cache, winner event special case,
+or duplicate materialized solver.

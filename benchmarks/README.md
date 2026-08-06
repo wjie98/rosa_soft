@@ -80,9 +80,14 @@ orthogonal indexes are post-v1 experiments.
   decomposition for K edits. The default result uses compressed affine route
   changes, grouped Q branches, binary K replacement search, and exact
   arithmetic-progression endpos certificates. `sam_bitflip_native.py` builds
-  the independent materialized C++17 parity/performance backend.
-  `sam_bitflip_profile.py` compares those paths, optional exact last-M caching,
-  the full-rerun oracle, and the frozen v1 route. The design and proof map is
+  the independent C++17 backend, whose primary ABI emits base winners,
+  affine Q changes, shared K-deletion changes, and bit-specific K overrides;
+  its materialized API reconstructs that factorized result for validation.
+  `sam_bitflip_vjp.py` JIT-builds the benchmark-only CUDA descriptor VJP.
+  `sam_bitflip_profile.py` compares CPU routes, compression, optional exact
+  last-M caching, the full-rerun oracle, and frozen v1.
+  `sam_bitflip_vjp_profile.py` separates CPU indexing, descriptor transfer,
+  and cached CUDA contraction. The design and proof map is
   `docs/research/SAM_BITFLIP.md`.
 - `global_bit_fit.py` trains only three key logits on one-edit and coordinated
   two-edit hard-route tasks. It is the multi-seed optimization gate for the
@@ -231,6 +236,11 @@ python benchmarks/filtered_bitflip_orthogonal_profile.py \
 python benchmarks/sam_bitflip_profile.py \
   --build-native --sequence-lengths 32 64 --repeats 5 --compare-v1 \
   --json-out validation/sam_bitflip.json
+
+CUDA_VISIBLE_DEVICES=1 python benchmarks/sam_bitflip_vjp_profile.py \
+  --sequence-lengths 64 128 256 512 --feature-size 128 --repeats 5 \
+  --validate-max-length 128 \
+  --json-out validation/sam_bitflip_vjp.json
 
 CUDA_VISIBLE_DEVICES=1 python benchmarks/estimator_fit_ablation.py \
   --device cuda --model-seeds 0 1 2 3 4 5 6 7 \

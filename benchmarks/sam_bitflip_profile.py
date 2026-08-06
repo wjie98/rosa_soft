@@ -133,6 +133,7 @@ def profile_case(
         }
 
     native_result = None
+    native_factorized = None
     if native is not None:
         result, elapsed_ms = _median_ms(
             lambda: native.solve(query, key, bit_width),
@@ -146,6 +147,29 @@ def profile_case(
             "elapsed_ms": elapsed_ms,
             "speedup_over_full_rerun": brute_ms / elapsed_ms,
             "profile": result.profile,
+        }
+        factorized, elapsed_ms = _median_ms(
+            lambda: native.solve_factorized(query, key, bit_width),
+            repeats,
+        )
+        routes, lengths = factorized.materialize()
+        if not torch.equal(routes, brute.flipped_routes):
+            raise RuntimeError("native factorized routes differ from full rerun")
+        if not torch.equal(lengths, brute.flipped_lengths):
+            raise RuntimeError("native factorized lengths differ from full rerun")
+        materialized_bytes = (
+            2
+            * brute.flipped_routes.numel()
+            * brute.flipped_routes.element_size()
+        )
+        native_factorized = {
+            "elapsed_ms": elapsed_ms,
+            "speedup_over_full_rerun": brute_ms / elapsed_ms,
+            "descriptor_bytes": factorized.descriptor_bytes,
+            "materialized_bytes": materialized_bytes,
+            "compression_ratio": materialized_bytes
+            / max(factorized.descriptor_bytes, 1),
+            "profile": factorized.profile,
         }
 
     v1 = None
@@ -177,6 +201,7 @@ def profile_case(
         "full_rerun_ms": brute_ms,
         "sam": configurations,
         "native_cpp_materialized": native_result,
+        "native_cpp_factorized": native_factorized,
         "frozen_v1": v1,
     }
 

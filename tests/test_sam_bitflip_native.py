@@ -20,10 +20,21 @@ def native_sam_bitflip_library(tmp_path_factory):
 
 
 def _assert_native_parity(query, key, bit_width, library):
-    native = NativeSamBitflip(library).solve(query, key, bit_width)
+    backend = NativeSamBitflip(library)
+    native = backend.solve(query, key, bit_width)
+    factorized = backend.solve_factorized(query, key, bit_width)
+    factorized_routes, factorized_lengths = factorized.materialize()
     expected = sam_bitflip(query, key, bit_width, materialize_routes=True)
     assert torch.equal(native.flipped_routes, expected.flipped_routes)
     assert torch.equal(native.flipped_lengths, expected.flipped_lengths)
+    assert torch.equal(factorized_routes, expected.flipped_routes)
+    assert torch.equal(factorized_lengths, expected.flipped_lengths)
+    assert torch.equal(
+        factorized.base_routes.to(torch.int64), expected.base.routes
+    )
+    assert torch.equal(
+        factorized.base_lengths.to(torch.int64), expected.base.lengths
+    )
 
 
 def _binary_codes(state, sequence_length):
@@ -112,3 +123,90 @@ def test_native_profile_reports_grouped_query_work(native_sam_bitflip_library):
     assert result.profile["query_replay_steps"] < ungrouped_steps
     assert result.profile["query_branches_merged"] > 0
     assert result.profile["arithmetic_hits"] > 0
+    for field in (
+        "forward_sam_build_ns",
+        "reverse_sam_build_ns",
+        "endpos_build_ns",
+        "trace_build_ns",
+        "query_solve_ns",
+        "key_solve_ns",
+        "total_solve_ns",
+        "forward_sam_bytes",
+        "reverse_sam_bytes",
+        "endpos_bytes",
+        "solver_working_bytes",
+        "materialized_output_bytes",
+    ):
+        assert result.profile[field] > 0
+
+
+def test_factorized_k_overrides_store_exact_from_winner(
+    native_sam_bitflip_library,
+):
+    query = torch.tensor([0, 1, 2, 3] * 8, dtype=torch.uint8)
+    key = torch.tensor([3, 0, 1, 2] * 8, dtype=torch.uint8)
+    result = NativeSamBitflip(native_sam_bitflip_library).solve_factorized(
+        query,
+        key,
+        2,
+    )
+    routes = result.base_routes.to(torch.int64)
+    lengths = result.base_lengths.to(torch.int64)
+    for local_flip in range(result.query_flip_count):
+        key_position = local_flip // result.bit_width
+        delete_start = int(result.key_delete_offsets[key_position])
+        delete_stop = int(result.key_delete_offsets[key_position + 1])
+        delete_routes = routes.clone()
+        delete_lengths = lengths.clone()
+        result._apply_changes(
+            delete_routes,
+            delete_lengths,
+            result.key_delete_changes[delete_start:delete_stop],
+        )
+        start = int(result.key_override_offsets[local_flip])
+        stop = int(result.key_override_offsets[local_flip + 1])
+        for change in result.key_overrides[start:stop].tolist():
+            row_start, row_stop = change[:2]
+            for row in range(row_start, row_stop):
+                offset = row - row_start
+                assert change[2] + offset * change[3] == delete_lengths[row]
+                assert change[4] + offset * change[5] == delete_routes[row]
+                before = delete_lengths[row], delete_routes[row]
+                after = (
+                    change[6] + offset * change[7],
+                    change[8] + offset * change[9],
+                )
+                assert after > before
+
+
+def test_factorized_result_avoids_quadratic_materialization(
+    native_sam_bitflip_library,
+):
+    sequence_length = 128
+    query = torch.zeros(sequence_length, dtype=torch.uint8)
+    key = torch.zeros_like(query)
+    backend = NativeSamBitflip(native_sam_bitflip_library)
+    factorized = backend.solve_factorized(query, key, 8)
+    materialized_bytes = (
+        2
+        * 2
+        * (sequence_length - 1)
+        * 8
+        * sequence_length
+        * torch.tensor([], dtype=torch.int64).element_size()
+    )
+    assert factorized.descriptor_bytes < materialized_bytes // 8
+    assert factorized.profile["materialized_output_bytes"] == 0
+    assert (
+        factorized.profile["factorized_result_bytes"]
+        == factorized.descriptor_bytes
+    )
+    assert factorized.profile["query_change_descriptors"] == len(
+        factorized.query_changes
+    )
+    assert factorized.profile["key_delete_descriptors"] == len(
+        factorized.key_delete_changes
+    )
+    assert factorized.profile["key_override_descriptors"] == len(
+        factorized.key_overrides
+    )

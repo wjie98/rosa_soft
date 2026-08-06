@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <numeric>
@@ -11,6 +13,20 @@
 #include <vector>
 
 namespace {
+
+using Clock = std::chrono::steady_clock;
+
+uint64_t elapsed_ns(Clock::time_point start) {
+  return static_cast<uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          Clock::now() - start)
+          .count());
+}
+
+template <typename T>
+uint64_t vector_bytes(const std::vector<T>& values) {
+  return static_cast<uint64_t>(values.capacity()) * sizeof(T);
+}
 
 struct State {
   int32_t max_length = 0;
@@ -32,6 +48,7 @@ struct Trace {
 class SuffixAutomaton {
  public:
   explicit SuffixAutomaton(const std::vector<uint8_t>& symbols) {
+    const auto started = Clock::now();
     states_.emplace_back();
     int32_t last = 0;
     for (uint8_t symbol : symbols) {
@@ -45,6 +62,7 @@ class SuffixAutomaton {
     build_tree_order();
     build_ancestors();
     build_latest_ends();
+    build_ns_ = elapsed_ns(started);
   }
 
   int32_t transition(int32_t state, uint8_t symbol) const {
@@ -66,21 +84,6 @@ class SuffixAutomaton {
         break;
       }
       state = parent;
-    }
-    return state;
-  }
-
-  int32_t state_for_length(int32_t state, int32_t length) const {
-    if (length <= 0) {
-      return 0;
-    }
-    for (int32_t level = static_cast<int32_t>(ancestors_.size()) - 1;
-         level >= 0;
-         --level) {
-      const int32_t ancestor = ancestors_[level][state];
-      if (ancestor != 0 && states_[ancestor].max_length >= length) {
-        state = ancestor;
-      }
     }
     return state;
   }
@@ -141,6 +144,24 @@ class SuffixAutomaton {
   int32_t tin(int32_t state) const { return tin_[state]; }
   int32_t tout(int32_t state) const { return tout_[state]; }
   int32_t latest_end(int32_t state) const { return latest_ends_[state]; }
+  uint64_t build_ns() const { return build_ns_; }
+
+  uint64_t allocated_bytes() const {
+    uint64_t result = vector_bytes(states_);
+    for (const State& state : states_) {
+      result += vector_bytes(state.transitions);
+    }
+    result += vector_bytes(prefix_states_) + vector_bytes(children_) +
+        vector_bytes(tin_) + vector_bytes(tout_) + vector_bytes(depth_) +
+        vector_bytes(ancestors_) + vector_bytes(latest_ends_);
+    for (const auto& children : children_) {
+      result += vector_bytes(children);
+    }
+    for (const auto& ancestors : ancestors_) {
+      result += vector_bytes(ancestors);
+    }
+    return result;
+  }
 
  private:
   void set_transition(int32_t state, uint8_t symbol, int32_t target) {
@@ -249,6 +270,7 @@ class SuffixAutomaton {
   std::vector<int32_t> depth_;
   std::vector<std::vector<int32_t>> ancestors_;
   std::vector<int32_t> latest_ends_;
+  uint64_t build_ns_ = 0;
 };
 
 struct WaveletNode {
@@ -266,11 +288,13 @@ class WaveletRangePredecessor {
   WaveletRangePredecessor(
       const std::vector<int32_t>& values,
       int32_t value_count) {
+    const auto started = Clock::now();
     int32_t high = 1;
     while (high < std::max(value_count, 1)) {
       high <<= 1;
     }
     root_ = build(values, 0, high);
+    build_ns_ = elapsed_ns(started);
   }
 
   int32_t latest(
@@ -281,6 +305,18 @@ class WaveletRangePredecessor {
       return -1;
     }
     return latest_node(root_, prefix_size, value_low, value_high);
+  }
+
+  uint64_t build_ns() const { return build_ns_; }
+
+  uint64_t allocated_bytes() const {
+    uint64_t result = vector_bytes(nodes_);
+    for (const WaveletNode& node : nodes_) {
+      result += vector_bytes(node.prefix_ones) +
+          vector_bytes(node.zero_positions) +
+          vector_bytes(node.one_positions);
+    }
+    return result;
   }
 
  private:
@@ -357,6 +393,7 @@ class WaveletRangePredecessor {
 
   int32_t root_ = -1;
   std::vector<WaveletNode> nodes_;
+  uint64_t build_ns_ = 0;
 };
 
 class EndPositionIndex {
@@ -364,6 +401,7 @@ class EndPositionIndex {
   explicit EndPositionIndex(const SuffixAutomaton& automaton)
       : automaton_(automaton),
         wavelet_(terminal_euler(automaton), automaton.state_count()) {
+    const auto certificate_started = Clock::now();
     const int32_t count = automaton.state_count();
     counts_.assign(count, 0);
     minimums_.assign(count, -1);
@@ -411,6 +449,7 @@ class EndPositionIndex {
         }
       }
     }
+    build_ns_ = wavelet_.build_ns() + elapsed_ns(certificate_started);
   }
 
   int32_t predecessor(int32_t state, int32_t bound) const {
@@ -436,6 +475,15 @@ class EndPositionIndex {
         prefix, automaton_.tin(state), automaton_.tout(state));
   }
 
+  int32_t minimum(int32_t state) const { return minimums_[state]; }
+  uint64_t build_ns() const { return build_ns_; }
+
+  uint64_t allocated_bytes() const {
+    return wavelet_.allocated_bytes() + vector_bytes(counts_) +
+        vector_bytes(minimums_) + vector_bytes(maximums_) +
+        vector_bytes(gaps_) + vector_bytes(steps_);
+  }
+
   mutable uint64_t queries = 0;
   mutable uint64_t arithmetic_hits = 0;
   mutable uint64_t wavelet_fallbacks = 0;
@@ -458,6 +506,7 @@ class EndPositionIndex {
   std::vector<int32_t> maximums_;
   std::vector<int32_t> gaps_;
   std::vector<int32_t> steps_;
+  uint64_t build_ns_ = 0;
 };
 
 Trace advance(
@@ -529,14 +578,183 @@ struct Branch {
   uint16_t bits = 0;
 };
 
+struct Winner {
+  int32_t length = 0;
+  int32_t route = 0;
+
+  bool operator==(const Winner& other) const {
+    return length == other.length && route == other.route;
+  }
+
+  bool operator<(const Winner& other) const {
+    return std::tie(length, route) < std::tie(other.length, other.route);
+  }
+};
+
+struct RowWinner {
+  int32_t row = 0;
+  Winner winner;
+};
+
+struct AffineChange {
+  int32_t start = 0;
+  int32_t stop = 0;
+  int32_t length_start = 0;
+  int32_t length_step = 0;
+  int32_t route_start = 0;
+  int32_t route_step = 0;
+
+  Winner value(int32_t row) const {
+    const int32_t offset = row - start;
+    return {
+        length_start + offset * length_step,
+        route_start + offset * route_step};
+  }
+};
+
+struct WinnerOverride {
+  int32_t start = 0;
+  int32_t stop = 0;
+  int32_t from_length_start = 0;
+  int32_t from_length_step = 0;
+  int32_t from_route_start = 0;
+  int32_t from_route_step = 0;
+  int32_t to_length_start = 0;
+  int32_t to_length_step = 0;
+  int32_t to_route_start = 0;
+  int32_t to_route_step = 0;
+
+  Winner from(int32_t row) const {
+    const int32_t offset = row - start;
+    return {
+        from_length_start + offset * from_length_step,
+        from_route_start + offset * from_route_step};
+  }
+
+  Winner to(int32_t row) const {
+    const int32_t offset = row - start;
+    return {
+        to_length_start + offset * to_length_step,
+        to_route_start + offset * to_route_step};
+  }
+};
+
+struct RowOverride {
+  int32_t row = 0;
+  Winner from;
+  Winner to;
+};
+
+std::vector<AffineChange> compress_winners(
+    const std::vector<RowWinner>& rows) {
+  std::vector<AffineChange> result;
+  size_t index = 0;
+  while (index < rows.size()) {
+    const RowWinner& first = rows[index];
+    size_t stop = index + 1;
+    int32_t length_step = 0;
+    int32_t route_step = 0;
+    if (stop < rows.size() && rows[stop].row == first.row + 1) {
+      length_step = rows[stop].winner.length - first.winner.length;
+      route_step = rows[stop].winner.route - first.winner.route;
+      ++stop;
+      while (stop < rows.size() &&
+             rows[stop].row == rows[stop - 1].row + 1 &&
+             rows[stop].winner.length - rows[stop - 1].winner.length ==
+                 length_step &&
+             rows[stop].winner.route - rows[stop - 1].winner.route ==
+                 route_step) {
+        ++stop;
+      }
+    }
+    result.push_back(
+        {first.row,
+         rows[stop - 1].row + 1,
+         first.winner.length,
+         length_step,
+         first.winner.route,
+         route_step});
+    index = stop;
+  }
+  return result;
+}
+
+std::vector<WinnerOverride> compress_overrides(
+    const std::vector<RowOverride>& rows) {
+  std::vector<WinnerOverride> result;
+  size_t index = 0;
+  while (index < rows.size()) {
+    const RowOverride& first = rows[index];
+    size_t stop = index + 1;
+    int32_t from_length_step = 0;
+    int32_t from_route_step = 0;
+    int32_t to_length_step = 0;
+    int32_t to_route_step = 0;
+    if (stop < rows.size() && rows[stop].row == first.row + 1) {
+      from_length_step = rows[stop].from.length - first.from.length;
+      from_route_step = rows[stop].from.route - first.from.route;
+      to_length_step = rows[stop].to.length - first.to.length;
+      to_route_step = rows[stop].to.route - first.to.route;
+      ++stop;
+      while (stop < rows.size() &&
+             rows[stop].row == rows[stop - 1].row + 1 &&
+             rows[stop].from.length - rows[stop - 1].from.length ==
+                 from_length_step &&
+             rows[stop].from.route - rows[stop - 1].from.route ==
+                 from_route_step &&
+             rows[stop].to.length - rows[stop - 1].to.length ==
+                 to_length_step &&
+             rows[stop].to.route - rows[stop - 1].to.route ==
+                 to_route_step) {
+        ++stop;
+      }
+    }
+    result.push_back(
+        {first.row,
+         rows[stop - 1].row + 1,
+         first.from.length,
+         from_length_step,
+         first.from.route,
+         from_route_step,
+         first.to.length,
+         to_length_step,
+         first.to.route,
+         to_route_step});
+    index = stop;
+  }
+  return result;
+}
+
+struct FactorizedResult {
+  int32_t sequence_length = 0;
+  int32_t bit_width = 0;
+  std::vector<int32_t> base_routes;
+  std::vector<int32_t> base_lengths;
+  std::vector<std::vector<AffineChange>> query_changes;
+  std::vector<std::vector<AffineChange>> key_delete_changes;
+  std::vector<std::vector<WinnerOverride>> key_overrides;
+};
+
 struct SolverStats {
   uint64_t query_advances = 0;
   uint64_t query_merged = 0;
   uint64_t replacement_probes = 0;
   uint64_t replacement_rows = 0;
+  uint64_t replacement_left_queries = 0;
   uint64_t virtual_runs = 0;
   uint64_t virtual_rows = 0;
+  uint64_t trace_build_ns = 0;
+  uint64_t output_initialize_ns = 0;
+  uint64_t query_solve_ns = 0;
+  uint64_t key_solve_ns = 0;
+  uint64_t total_solve_ns = 0;
+  uint64_t query_descriptors = 0;
+  uint64_t delete_descriptors = 0;
+  uint64_t override_descriptors = 0;
+  uint64_t factorized_bytes = 0;
 };
+
+constexpr int64_t kStatCount = 31;
 
 class Solver {
  public:
@@ -553,43 +771,184 @@ class Solver {
         automaton_(usable_key()),
         endpos_(automaton_),
         reverse_automaton_(reverse_key()) {
+    const auto trace_started = Clock::now();
     build_traces();
     for (int32_t position = 1; position < length_; ++position) {
       query_positions_[query_[position]].push_back(position);
     }
+    stats_.trace_build_ns = elapsed_ns(trace_started);
   }
 
-  void solve(int64_t* routes, int64_t* lengths, uint64_t* output_stats) {
+  void solve(
+      int64_t* routes,
+      int64_t* lengths,
+      uint64_t* output_stats,
+      int64_t stats_count) {
+    const auto solve_started = Clock::now();
+    const FactorizedResult result = solve_factorized();
     const int64_t flip_count =
         int64_t{2} * key_length_ * bit_width_;
-    for (int64_t flip = 0; flip < flip_count; ++flip) {
-      std::copy(
-          base_routes_.begin(),
-          base_routes_.end(),
-          routes + flip * length_);
-      std::copy(
-          base_lengths_.begin(),
-          base_lengths_.end(),
-          lengths + flip * length_);
+    const auto initialize_started = Clock::now();
+    materialize(result, routes, lengths);
+    stats_.output_initialize_ns = elapsed_ns(initialize_started);
+    stats_.total_solve_ns = elapsed_ns(solve_started);
+    write_stats(output_stats, stats_count, flip_count);
+  }
+
+  FactorizedResult solve_factorized() {
+    const auto solve_started = Clock::now();
+    FactorizedResult result;
+    result.sequence_length = length_;
+    result.bit_width = bit_width_;
+    result.base_routes = base_routes_;
+    result.base_lengths = base_lengths_;
+
+    const auto query_started = Clock::now();
+    result.query_changes = solve_query_changes();
+    stats_.query_solve_ns = elapsed_ns(query_started);
+    const auto key_started = Clock::now();
+    solve_key_factorized(result);
+    stats_.key_solve_ns = elapsed_ns(key_started);
+    for (const auto& changes : result.query_changes) {
+      stats_.query_descriptors += changes.size();
     }
-    solve_query_flips(routes, lengths);
-    solve_key_flips(routes, lengths);
-    output_stats[0] = automaton_.state_count();
-    output_stats[1] = automaton_.edge_count();
-    output_stats[2] = reverse_automaton_.state_count();
-    output_stats[3] = reverse_automaton_.edge_count();
-    output_stats[4] = endpos_.queries;
-    output_stats[5] = endpos_.arithmetic_hits;
-    output_stats[6] = endpos_.wavelet_fallbacks;
-    output_stats[7] = stats_.query_advances;
-    output_stats[8] = stats_.query_merged;
-    output_stats[9] = stats_.replacement_probes;
-    output_stats[10] = stats_.replacement_rows;
-    output_stats[11] = stats_.virtual_runs;
-    output_stats[12] = stats_.virtual_rows;
+    for (const auto& changes : result.key_delete_changes) {
+      stats_.delete_descriptors += changes.size();
+    }
+    for (const auto& changes : result.key_overrides) {
+      stats_.override_descriptors += changes.size();
+    }
+    stats_.factorized_bytes =
+        static_cast<uint64_t>(2) * length_ * sizeof(int32_t) +
+        static_cast<uint64_t>(result.query_changes.size() + 1) *
+            sizeof(int64_t) +
+        stats_.query_descriptors * sizeof(AffineChange) +
+        static_cast<uint64_t>(result.key_delete_changes.size() + 1) *
+            sizeof(int64_t) +
+        stats_.delete_descriptors * sizeof(AffineChange) +
+        static_cast<uint64_t>(result.key_overrides.size() + 1) *
+            sizeof(int64_t) +
+        stats_.override_descriptors * sizeof(WinnerOverride);
+    stats_.total_solve_ns = elapsed_ns(solve_started);
+    return result;
+  }
+
+  void copy_stats(
+      uint64_t* output,
+      int64_t stats_count,
+      uint64_t output_bytes = 0) const {
+    write_stats(
+        output,
+        stats_count,
+        int64_t{2} * key_length_ * bit_width_,
+        output_bytes);
   }
 
  private:
+  uint64_t working_bytes() const {
+    uint64_t result = vector_bytes(query_) + vector_bytes(key_) +
+        vector_bytes(base_traces_) + vector_bytes(full_query_traces_) +
+        vector_bytes(reverse_query_traces_) + vector_bytes(base_routes_) +
+        vector_bytes(base_lengths_);
+    for (const auto& positions : query_positions_) {
+      result += vector_bytes(positions);
+    }
+    return result;
+  }
+
+  void materialize(
+      const FactorizedResult& result,
+      int64_t* routes,
+      int64_t* lengths) const {
+    const int64_t query_flip_count = int64_t{key_length_} * bit_width_;
+    const int64_t flip_count = 2 * query_flip_count;
+    for (int64_t flip = 0; flip < flip_count; ++flip) {
+      std::copy(
+          result.base_routes.begin(),
+          result.base_routes.end(),
+          routes + flip * length_);
+      std::copy(
+          result.base_lengths.begin(),
+          result.base_lengths.end(),
+          lengths + flip * length_);
+    }
+    const auto apply_change = [&](
+                                  int64_t flip,
+                                  const AffineChange& change) {
+      for (int32_t row = change.start; row < change.stop; ++row) {
+        const Winner winner = change.value(row);
+        routes[flip * length_ + row] = winner.route;
+        lengths[flip * length_ + row] = winner.length;
+      }
+    };
+    for (int64_t flip = 0; flip < query_flip_count; ++flip) {
+      for (const AffineChange& change : result.query_changes[flip]) {
+        apply_change(flip, change);
+      }
+    }
+    for (int64_t local_flip = 0;
+         local_flip < query_flip_count;
+         ++local_flip) {
+      const int64_t flip = query_flip_count + local_flip;
+      const int32_t key_position =
+          static_cast<int32_t>(local_flip / bit_width_);
+      for (const AffineChange& change :
+           result.key_delete_changes[key_position]) {
+        apply_change(flip, change);
+      }
+      for (const WinnerOverride& change : result.key_overrides[local_flip]) {
+        for (int32_t row = change.start; row < change.stop; ++row) {
+          const Winner winner = change.to(row);
+          routes[flip * length_ + row] = winner.route;
+          lengths[flip * length_ + row] = winner.length;
+        }
+      }
+    }
+  }
+
+  void write_stats(
+      uint64_t* output,
+      int64_t count,
+      int64_t flip_count,
+      uint64_t output_bytes = UINT64_MAX) const {
+    const std::array<uint64_t, kStatCount> values = {
+        static_cast<uint64_t>(automaton_.state_count()),
+        static_cast<uint64_t>(automaton_.edge_count()),
+        static_cast<uint64_t>(reverse_automaton_.state_count()),
+        static_cast<uint64_t>(reverse_automaton_.edge_count()),
+        endpos_.queries,
+        endpos_.arithmetic_hits,
+        endpos_.wavelet_fallbacks,
+        stats_.query_advances,
+        stats_.query_merged,
+        stats_.replacement_probes,
+        stats_.replacement_rows,
+        stats_.virtual_runs,
+        stats_.virtual_rows,
+        automaton_.build_ns(),
+        reverse_automaton_.build_ns(),
+        endpos_.build_ns(),
+        stats_.trace_build_ns,
+        stats_.output_initialize_ns,
+        stats_.query_solve_ns,
+        stats_.key_solve_ns,
+        stats_.total_solve_ns,
+        automaton_.allocated_bytes(),
+        reverse_automaton_.allocated_bytes(),
+        endpos_.allocated_bytes(),
+        working_bytes(),
+        output_bytes == UINT64_MAX
+            ? static_cast<uint64_t>(flip_count) * length_ * sizeof(int64_t) * 2
+            : output_bytes,
+        stats_.query_descriptors,
+        stats_.delete_descriptors,
+        stats_.override_descriptors,
+        stats_.factorized_bytes,
+        stats_.replacement_left_queries,
+    };
+    std::copy(values.begin(), values.begin() + std::min(count, kStatCount), output);
+  }
+
   std::vector<uint8_t> usable_key() const {
     return std::vector<uint8_t>(key_.begin(), key_.begin() + key_length_);
   }
@@ -633,11 +992,6 @@ class Solver {
     return int64_t{position - 1} * bit_width_ + bit;
   }
 
-  int64_t key_flip_index(int32_t position, int32_t bit) const {
-    return int64_t{key_length_} * bit_width_ +
-        int64_t{position} * bit_width_ + bit;
-  }
-
   static void merge_branch(
       std::vector<Branch>& branches,
       const Trace& trace,
@@ -651,18 +1005,9 @@ class Solver {
     branches.push_back({trace, bits});
   }
 
-  void write_trace(
-      int64_t flip,
-      int32_t row,
-      const Trace& trace,
-      int64_t* routes,
-      int64_t* lengths) const {
-    const int64_t index = flip * length_ + row;
-    lengths[index] = trace.length;
-    routes[index] = trace.length > 0 ? trace.latest_end + 1 : 0;
-  }
-
-  void solve_query_flips(int64_t* routes, int64_t* lengths) {
+  std::vector<std::vector<AffineChange>> solve_query_changes() {
+    const int64_t query_flip_count = int64_t{key_length_} * bit_width_;
+    std::vector<std::vector<RowWinner>> updates(query_flip_count);
     for (int32_t position = 1; position < length_; ++position) {
       std::vector<Branch> branches;
       for (int32_t bit = 0; bit < bit_width_; ++bit) {
@@ -673,13 +1018,10 @@ class Solver {
             query_[position] ^ (uint8_t{1} << bit),
             position - 1);
         ++stats_.query_advances;
-        write_trace(
-            query_flip_index(position, bit),
-            position,
-            trace,
-            routes,
-            lengths);
         if (!(trace == base_traces_[position])) {
+          updates[query_flip_index(position, bit)].push_back(
+              {position,
+               {trace.length, trace.length > 0 ? trace.latest_end + 1 : 0}});
           merge_branch(branches, trace, uint16_t{1} << bit);
         }
       }
@@ -693,64 +1035,28 @@ class Solver {
           const Trace trace = advance(
               automaton_, endpos_, branch.trace, query_[row], row - 1);
           ++stats_.query_advances;
+          if (trace == base_traces_[row]) {
+            continue;
+          }
           for (int32_t bit = 0; bit < bit_width_; ++bit) {
             if ((branch.bits & (uint16_t{1} << bit)) != 0) {
-              write_trace(
-                  query_flip_index(position, bit),
-                  row,
-                  trace,
-                  routes,
-                  lengths);
+              updates[query_flip_index(position, bit)].push_back(
+                  {row,
+                   {trace.length,
+                    trace.length > 0 ? trace.latest_end + 1 : 0}});
             }
           }
-          if (!(trace == base_traces_[row])) {
-            merge_branch(next, trace, branch.bits);
-          }
+          merge_branch(next, trace, branch.bits);
         }
         branches.swap(next);
       }
     }
-  }
 
-  bool feasible_avoiding(
-      const Trace& trace,
-      int32_t bound,
-      int32_t key_position,
-      int32_t length) {
-    ++stats_.replacement_probes;
-    const int32_t state = automaton_.state_for_length(trace.state, length);
-    const int32_t left = endpos_.predecessor(
-        state, std::min(bound, key_position - 1));
-    if (left >= 0) {
-      return true;
+    std::vector<std::vector<AffineChange>> result(query_flip_count);
+    for (int64_t flip = 0; flip < query_flip_count; ++flip) {
+      result[flip] = compress_winners(updates[flip]);
     }
-    const int32_t latest = endpos_.predecessor(state, bound);
-    return latest >= key_position + length;
-  }
-
-  std::pair<int32_t, int32_t> best_avoiding(
-      const Trace& trace,
-      int32_t bound,
-      int32_t key_position) {
-    int32_t low = 0;
-    int32_t high = trace.length;
-    while (low < high) {
-      const int32_t middle = low + (high - low + 1) / 2;
-      if (feasible_avoiding(trace, bound, key_position, middle)) {
-        low = middle;
-      } else {
-        high = middle - 1;
-      }
-    }
-    if (low == 0) {
-      return {0, 0};
-    }
-    const int32_t state = automaton_.state_for_length(trace.state, low);
-    const int32_t left = endpos_.predecessor(
-        state, std::min(bound, key_position - 1));
-    const int32_t latest = endpos_.predecessor(state, bound);
-    const int32_t end = latest >= key_position + low ? latest : left;
-    return {low, end + 1};
+    return result;
   }
 
   int32_t left_context(int32_t query_position, int32_t key_position) const {
@@ -770,13 +1076,12 @@ class Solver {
         key_length_ - key_position - 2);
   }
 
-  void apply_runs(
-      int64_t flip,
+  std::vector<WinnerOverride> apply_runs_factorized(
       const std::vector<Run>& runs,
-      int64_t* routes,
-      int64_t* lengths) {
+      const std::vector<Winner>& baseline) {
+    std::vector<RowOverride> rows;
     if (runs.empty()) {
-      return;
+      return {};
     }
     std::priority_queue<HeapEntry> heap;
     int32_t run_index = 0;
@@ -797,53 +1102,131 @@ class Solver {
         continue;
       }
       ++stats_.virtual_rows;
-      const int64_t index = flip * length_ + row;
-      const int32_t candidate_length = heap.top().length_offset + row;
-      const int32_t candidate_route = heap.top().route_offset + row;
-      if (std::tie(candidate_length, candidate_route) >
-          std::tie(lengths[index], routes[index])) {
-        lengths[index] = candidate_length;
-        routes[index] = candidate_route;
+      const Winner candidate = {
+          heap.top().length_offset + row,
+          heap.top().route_offset + row};
+      if (baseline[row] < candidate) {
+        rows.push_back({row, baseline[row], candidate});
       }
       ++row;
     }
+
+    return compress_overrides(rows);
   }
 
-  void solve_key_flips(int64_t* routes, int64_t* lengths) {
-    std::vector<int64_t> replacement_routes(base_routes_.begin(), base_routes_.end());
-    std::vector<int64_t> replacement_lengths(base_lengths_.begin(), base_lengths_.end());
-    for (int32_t key_position = 0; key_position < key_length_; ++key_position) {
-      std::copy(base_routes_.begin(), base_routes_.end(), replacement_routes.begin());
-      std::copy(base_lengths_.begin(), base_lengths_.end(), replacement_lengths.begin());
-      for (int32_t row = 1; row < length_; ++row) {
-        const int32_t route = base_routes_[row];
-        const int32_t length = base_lengths_[row];
-        if (route == 0 || length == 0 ||
-            route - length > key_position || route - 1 < key_position) {
-          continue;
-        }
-        ++stats_.replacement_rows;
-        const auto [new_length, new_route] = best_avoiding(
-            base_traces_[row], row - 1, key_position);
-        replacement_lengths[row] = new_length;
-        replacement_routes[row] = new_route;
+  std::vector<std::vector<AffineChange>> solve_delete_batch() {
+    std::vector<std::vector<RowWinner>> updates(key_length_);
+    for (int32_t row = 1; row < length_; ++row) {
+      const Trace& trace = base_traces_[row];
+      const int32_t maximum_length = trace.length;
+      const int32_t base_route = base_routes_[row];
+      if (maximum_length == 0 || base_route == 0) {
+        continue;
       }
 
+      std::vector<int32_t> states(maximum_length + 1, 0);
+      std::vector<int32_t> minimums(maximum_length + 1, -1);
+      std::vector<int32_t> latest(maximum_length + 1, -1);
+      int32_t state = trace.state;
+      int32_t previous_state = -1;
+      for (int32_t length = maximum_length; length >= 1; --length) {
+        while (state != 0) {
+          const int32_t parent = automaton_.state(state).suffix_link;
+          if (automaton_.state(parent).max_length < length) {
+            break;
+          }
+          state = parent;
+        }
+        states[length] = state;
+        minimums[length] = endpos_.minimum(state);
+        if (state != previous_state) {
+          latest[length] = endpos_.predecessor(state, row - 1);
+          previous_state = state;
+        } else {
+          latest[length] = latest[length + 1];
+        }
+      }
+
+      const int32_t first_key = base_route - maximum_length;
+      const int32_t last_key = base_route - 1;
+      std::vector<int32_t> answers(
+          static_cast<size_t>(last_key - first_key + 1), maximum_length);
+      int32_t covered_left = 1;
+      int32_t covered_right = 0;
+      for (int32_t length = 1; length <= maximum_length; ++length) {
+        ++stats_.replacement_probes;
+        const int32_t invalid_left = latest[length] - length + 1;
+        const int32_t invalid_right = minimums[length];
+        if (invalid_left > invalid_right) {
+          continue;
+        }
+        if (covered_left <= covered_right &&
+            (invalid_left > covered_left || invalid_right < covered_right)) {
+          throw std::runtime_error("replacement invalid intervals are not nested");
+        }
+        const int32_t left_stop = covered_left <= covered_right
+            ? covered_left - 1
+            : invalid_right;
+        for (int32_t key_position = std::max(first_key, invalid_left);
+             key_position <= std::min(last_key, left_stop);
+             ++key_position) {
+          answers[key_position - first_key] = length - 1;
+        }
+        if (covered_left <= covered_right) {
+          for (int32_t key_position =
+                   std::max(first_key, covered_right + 1);
+               key_position <= std::min(last_key, invalid_right);
+               ++key_position) {
+            answers[key_position - first_key] = length - 1;
+          }
+        }
+        covered_left = invalid_left;
+        covered_right = invalid_right;
+      }
+
+      for (int32_t key_position = first_key;
+           key_position <= last_key;
+           ++key_position) {
+        ++stats_.replacement_rows;
+        const int32_t low = answers[key_position - first_key];
+        Winner winner;
+        if (low > 0) {
+          int32_t end = latest[low];
+          if (end < key_position + low) {
+            ++stats_.replacement_left_queries;
+            end = endpos_.predecessor(states[low], key_position - 1);
+          }
+          winner = {low, end + 1};
+        }
+        if (!(winner == Winner{maximum_length, base_route})) {
+          updates[key_position].push_back({row, winner});
+        }
+      }
+    }
+
+    std::vector<std::vector<AffineChange>> result(key_length_);
+    for (int32_t key_position = 0;
+         key_position < key_length_;
+         ++key_position) {
+      result[key_position] = compress_winners(updates[key_position]);
+    }
+    return result;
+  }
+
+  void solve_key_factorized(FactorizedResult& result) {
+    result.key_delete_changes = solve_delete_batch();
+    result.key_overrides.resize(
+        static_cast<size_t>(key_length_) * bit_width_);
+    std::vector<Winner> replacement(length_);
+    for (int32_t key_position = 0; key_position < key_length_; ++key_position) {
+      std::vector<std::vector<Run>> run_batches(bit_width_);
+      bool has_runs = false;
       for (int32_t bit = 0; bit < bit_width_; ++bit) {
-        const int64_t flip = key_flip_index(key_position, bit);
-        std::copy(
-            replacement_routes.begin(),
-            replacement_routes.end(),
-            routes + flip * length_);
-        std::copy(
-            replacement_lengths.begin(),
-            replacement_lengths.end(),
-            lengths + flip * length_);
         const uint8_t target = key_[key_position] ^ (uint8_t{1} << bit);
         const auto& positions = query_positions_[target];
         auto center = std::upper_bound(
             positions.begin(), positions.end(), key_position);
-        std::vector<Run> runs;
+        auto& runs = run_batches[bit];
         runs.reserve(static_cast<size_t>(positions.end() - center));
         for (; center != positions.end(); ++center) {
           const int32_t query_position = *center;
@@ -856,7 +1239,28 @@ class Solver {
                key_position + 1 - query_position});
         }
         stats_.virtual_runs += runs.size();
-        apply_runs(flip, runs, routes, lengths);
+        has_runs = has_runs || !runs.empty();
+      }
+      if (!has_runs) {
+        continue;
+      }
+
+      for (int32_t row = 0; row < length_; ++row) {
+        replacement[row] = {base_lengths_[row], base_routes_[row]};
+      }
+      for (const AffineChange& change :
+           result.key_delete_changes[key_position]) {
+        for (int32_t row = change.start; row < change.stop; ++row) {
+          replacement[row] = change.value(row);
+        }
+      }
+
+      for (int32_t bit = 0; bit < bit_width_; ++bit) {
+        const auto overrides = apply_runs_factorized(
+            run_batches[bit], replacement);
+        result.key_overrides[
+            static_cast<size_t>(key_position) * bit_width_ + bit] =
+            overrides;
       }
     }
   }
@@ -878,7 +1282,183 @@ class Solver {
   SolverStats stats_;
 };
 
+struct FactorizedHandle {
+  FactorizedResult result;
+};
+
+template <typename Change>
+int64_t flattened_size(const std::vector<std::vector<Change>>& groups) {
+  int64_t result = 0;
+  for (const auto& group : groups) {
+    result += static_cast<int64_t>(group.size());
+  }
+  return result;
+}
+
+template <typename Change>
+void copy_offsets(
+    const std::vector<std::vector<Change>>& groups,
+    int64_t* offsets) {
+  int64_t total = 0;
+  offsets[0] = 0;
+  for (size_t group = 0; group < groups.size(); ++group) {
+    total += static_cast<int64_t>(groups[group].size());
+    offsets[group + 1] = total;
+  }
+}
+
+void copy_affine_changes(
+    const std::vector<std::vector<AffineChange>>& groups,
+    int32_t* output) {
+  for (const auto& group : groups) {
+    for (const AffineChange& change : group) {
+      *output++ = change.start;
+      *output++ = change.stop;
+      *output++ = change.length_start;
+      *output++ = change.length_step;
+      *output++ = change.route_start;
+      *output++ = change.route_step;
+    }
+  }
+}
+
+void copy_overrides(
+    const std::vector<std::vector<WinnerOverride>>& groups,
+    int32_t* output) {
+  for (const auto& group : groups) {
+    for (const WinnerOverride& change : group) {
+      *output++ = change.start;
+      *output++ = change.stop;
+      *output++ = change.from_length_start;
+      *output++ = change.from_length_step;
+      *output++ = change.from_route_start;
+      *output++ = change.from_route_step;
+      *output++ = change.to_length_start;
+      *output++ = change.to_length_step;
+      *output++ = change.to_route_start;
+      *output++ = change.to_route_step;
+    }
+  }
+}
+
 }  // namespace
+
+extern "C" void* rosa_sam_bitflip_factorized_create(
+    const uint8_t* query,
+    const uint8_t* key,
+    int64_t sequence_length,
+    int64_t bit_width,
+    uint64_t* stats,
+    int64_t stats_count,
+    int32_t* error) {
+  if (error != nullptr) {
+    *error = 0;
+  }
+  try {
+    if (sequence_length < 0 || sequence_length > INT32_MAX ||
+        bit_width < 1 || bit_width > 8 || stats_count < 0 ||
+        (stats_count > 0 && stats == nullptr)) {
+      if (error != nullptr) {
+        *error = 1;
+      }
+      return nullptr;
+    }
+    auto handle = new FactorizedHandle;
+    handle->result.sequence_length = static_cast<int32_t>(sequence_length);
+    handle->result.bit_width = static_cast<int32_t>(bit_width);
+    if (sequence_length == 0) {
+      if (stats != nullptr) {
+        std::fill(
+            stats,
+            stats + std::min(stats_count, kStatCount),
+            uint64_t{0});
+      }
+      return handle;
+    }
+    if (query == nullptr || key == nullptr) {
+      delete handle;
+      if (error != nullptr) {
+        *error = 2;
+      }
+      return nullptr;
+    }
+    Solver solver(
+        query,
+        key,
+        static_cast<int32_t>(sequence_length),
+        static_cast<int32_t>(bit_width));
+    handle->result = solver.solve_factorized();
+    if (stats != nullptr) {
+      solver.copy_stats(stats, stats_count);
+    }
+    return handle;
+  } catch (...) {
+    if (error != nullptr) {
+      *error = 3;
+    }
+    return nullptr;
+  }
+}
+
+extern "C" int32_t rosa_sam_bitflip_factorized_sizes(
+    const void* opaque,
+    int64_t* sizes,
+    int64_t size_count) {
+  if (opaque == nullptr || sizes == nullptr || size_count < 7) {
+    return 1;
+  }
+  const auto& result = static_cast<const FactorizedHandle*>(opaque)->result;
+  const int64_t key_length = std::max(result.sequence_length - 1, 0);
+  sizes[0] = result.sequence_length;
+  sizes[1] = result.bit_width;
+  sizes[2] = key_length * result.bit_width;
+  sizes[3] = key_length;
+  sizes[4] = flattened_size(result.query_changes);
+  sizes[5] = flattened_size(result.key_delete_changes);
+  sizes[6] = flattened_size(result.key_overrides);
+  return 0;
+}
+
+extern "C" int32_t rosa_sam_bitflip_factorized_copy(
+    const void* opaque,
+    int32_t* base_routes,
+    int32_t* base_lengths,
+    int64_t* query_offsets,
+    int32_t* query_changes,
+    int64_t* delete_offsets,
+    int32_t* delete_changes,
+    int64_t* override_offsets,
+    int32_t* overrides) {
+  if (opaque == nullptr) {
+    return 1;
+  }
+  const auto& result = static_cast<const FactorizedHandle*>(opaque)->result;
+  const bool missing_base = result.sequence_length > 0 &&
+      (base_routes == nullptr || base_lengths == nullptr);
+  const bool missing_query = query_offsets == nullptr ||
+      (flattened_size(result.query_changes) > 0 && query_changes == nullptr);
+  const bool missing_delete = delete_offsets == nullptr ||
+      (flattened_size(result.key_delete_changes) > 0 &&
+       delete_changes == nullptr);
+  const bool missing_override = override_offsets == nullptr ||
+      (flattened_size(result.key_overrides) > 0 && overrides == nullptr);
+  if (missing_base || missing_query || missing_delete || missing_override) {
+    return 2;
+  }
+  std::copy(result.base_routes.begin(), result.base_routes.end(), base_routes);
+  std::copy(result.base_lengths.begin(), result.base_lengths.end(), base_lengths);
+  copy_offsets(result.query_changes, query_offsets);
+  copy_affine_changes(result.query_changes, query_changes);
+  copy_offsets(result.key_delete_changes, delete_offsets);
+  copy_affine_changes(result.key_delete_changes, delete_changes);
+  copy_offsets(result.key_overrides, override_offsets);
+  copy_overrides(result.key_overrides, overrides);
+  return 0;
+}
+
+extern "C" void rosa_sam_bitflip_factorized_destroy(void* opaque) {
+  delete static_cast<FactorizedHandle*>(opaque);
+}
 
 extern "C" int32_t rosa_sam_bitflip_routes(
     const uint8_t* query,
@@ -898,7 +1478,10 @@ extern "C" int32_t rosa_sam_bitflip_routes(
       if (stats == nullptr) {
         return 2;
       }
-      std::fill(stats, stats + 13, uint64_t{0});
+      std::fill(
+          stats,
+          stats + std::min(stats_count, kStatCount),
+          uint64_t{0});
       return 0;
     }
     if (query == nullptr || key == nullptr || stats == nullptr ||
@@ -910,7 +1493,7 @@ extern "C" int32_t rosa_sam_bitflip_routes(
         key,
         static_cast<int32_t>(sequence_length),
         static_cast<int32_t>(bit_width));
-    solver.solve(routes, lengths, stats);
+    solver.solve(routes, lengths, stats, stats_count);
     return 0;
   } catch (...) {
     return 3;
