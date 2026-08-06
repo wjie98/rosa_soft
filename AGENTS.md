@@ -194,6 +194,30 @@ switches to v1. Compare them against the frozen routes, lengths, compressed
 VJP, logical storage, and work counters. Only correctness or reproducibility
 fixes may change the v1 path after the tag.
 
+The second exact research route is `sam_bitflip` in
+`benchmarks/sam_bitflip.py`; its proof map is
+`docs/research/SAM_BITFLIP.md`. Keep it independent from the frozen compact
+solver. A static full-key SAM must enforce each row's causal end-position
+bound. K edits must be represented as the union of original substrings that
+exclude the edited position and anchored virtual runs that cross it; never
+insert an edited edge into a globally merged SAM state. A last-M endpos cache
+is an execution optimization only and must retain an exact cold fallback.
+Fixed-M truncation, future-only transitions, or unanchored virtual edges are
+semantic errors.
+
+The retained SAM reference emits compressed affine route changes by default;
+full `[2(T-1)D, T]` route/length matrices are validation-only. Q alternatives
+may share work only after their complete `(state, length, latest_end)` traces
+agree. K replacement length may use monotone binary search, and an endpos
+shortcut may be enabled by default only when count/min/max/GCD prove a complete
+arithmetic progression; every uncertified state must use the exact fallback.
+The optional last-M cache remains default-off.
+
+`benchmarks/csrc/sam_bitflip_cpu.cpp` is the independent native parity and
+performance backend. Its current ABI materializes quadratic output and is not
+a production training interface. Preserve exhaustive parity with the Python
+SAM route before adding compressed output or a direct native VJP.
+
 Exact filtered-bitflip research must distinguish proven suffix-rank structure
 from periodic heuristics. For a fixed suffix, LCE is monotone separately on
 the lower and upper suffix-array rank arms, but left LCE, right LCE, and latest

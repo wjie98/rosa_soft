@@ -74,6 +74,16 @@ orthogonal indexes are post-v1 experiments.
   trees regress on fragmented inputs and use `O(T log T)` logical storage,
   while the kd tree has linear worst-case query work.  Compare them with the
   occurrence scan using `filtered_bitflip_orthogonal_profile.py`.
+- `sam_bitflip.py` is a second independent exact unlimited-suffix route. It
+  uses a dual suffix automaton, suffix-link-tree endpos predecessor queries,
+  exact checkpoint replay for Q edits, and an exclude-plus-anchored-run
+  decomposition for K edits. The default result uses compressed affine route
+  changes, grouped Q branches, binary K replacement search, and exact
+  arithmetic-progression endpos certificates. `sam_bitflip_native.py` builds
+  the independent materialized C++17 parity/performance backend.
+  `sam_bitflip_profile.py` compares those paths, optional exact last-M caching,
+  the full-rerun oracle, and the frozen v1 route. The design and proof map is
+  `docs/research/SAM_BITFLIP.md`.
 - `global_bit_fit.py` trains only three key logits on one-edit and coordinated
   two-edit hard-route tasks. It is the multi-seed optimization gate for the
   global-bit estimators and deliberately has no residual or readout shortcut.
@@ -217,6 +227,10 @@ python benchmarks/filtered_bitflip_monotone_profile.py \
 python benchmarks/filtered_bitflip_orthogonal_profile.py \
   --sequence-lengths 128 256 512 1024 --repeats 3 \
   --json-out validation/filtered_bitflip_orthogonal.json
+
+python benchmarks/sam_bitflip_profile.py \
+  --build-native --sequence-lengths 32 64 --repeats 5 --compare-v1 \
+  --json-out validation/sam_bitflip.json
 
 CUDA_VISIBLE_DEVICES=1 python benchmarks/estimator_fit_ablation.py \
   --device cuda --model-seeds 0 1 2 3 4 5 6 7 \
