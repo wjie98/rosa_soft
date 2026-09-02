@@ -1,0 +1,545 @@
+{
+  "device": "NVIDIA GeForce RTX 3070",
+  "compute_capability": [
+    8,
+    6
+  ],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "heads": 4,
+  "value_heads": 2,
+  "rows": [
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 1,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 18.524160385131836,
+      "latency_ms": 17.79427146911621,
+      "latency_ratio": 0.9605980027790377,
+      "max_abs_errors": [
+        0.00014990568161010742,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 2,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 20.7890567779541,
+      "latency_ms": 19.918848037719727,
+      "latency_ratio": 0.9581410186364399,
+      "max_abs_errors": [
+        0.0,
+        0.00017261505126953125,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 3,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 19.43961524963379,
+      "latency_ms": 20.239072799682617,
+      "latency_ratio": 1.0411251735069134,
+      "max_abs_errors": [
+        0.00014990568161010742,
+        0.00017261505126953125,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 4,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 7.842432022094727,
+      "latency_ms": 7.598080158233643,
+      "latency_ratio": 0.9688423357483158,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        0.0007394552230834961
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 5,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 19.48124885559082,
+      "latency_ms": 18.7576961517334,
+      "latency_ratio": 0.9628590184735629,
+      "max_abs_errors": [
+        0.00014990568161010742,
+        0.0,
+        0.0007393360137939453
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 6,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 20.13644790649414,
+      "latency_ms": 19.518463134765625,
+      "latency_ratio": 0.9693101397725061,
+      "max_abs_errors": [
+        0.0,
+        0.00017261505126953125,
+        0.0007393360137939453
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 7,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 21.07366371154785,
+      "latency_ms": 20.300800323486328,
+      "latency_ratio": 0.9633256277294577,
+      "max_abs_errors": [
+        0.00014990568161010742,
+        0.00017261505126953125,
+        0.0007394552230834961
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 1,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 68.64281463623047,
+      "latency_ms": 66.14630126953125,
+      "latency_ratio": 0.9636303758823209,
+      "max_abs_errors": [
+        0.0001344233751296997,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 2,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 69.27011108398438,
+      "latency_ms": 65.112060546875,
+      "latency_ratio": 0.9399733814188911,
+      "max_abs_errors": [
+        0.0,
+        0.0001783818006515503,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 3,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 68.2874526977539,
+      "latency_ms": 65.75718688964844,
+      "latency_ratio": 0.9629468415038903,
+      "max_abs_errors": [
+        0.0001344233751296997,
+        0.0001783818006515503,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 4,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 29.097984313964844,
+      "latency_ms": 26.644319534301758,
+      "latency_ratio": 0.9156757817590303,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        0.0008928775787353516
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 5,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 74.14579010009766,
+      "latency_ms": 70.89657592773438,
+      "latency_ratio": 0.9561780356244528,
+      "max_abs_errors": [
+        0.0001344233751296997,
+        0.0,
+        0.0008928775787353516
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 6,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 77.97337341308594,
+      "latency_ms": 73.24774169921875,
+      "latency_ratio": 0.9393942892680579,
+      "max_abs_errors": [
+        0.0,
+        0.0001783818006515503,
+        0.0008928775787353516
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 7,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 79.1629409790039,
+      "latency_ms": 75.54354858398438,
+      "latency_ratio": 0.9542792075400598,
+      "max_abs_errors": [
+        0.0001344233751296997,
+        0.0001783818006515503,
+        0.0008928775787353516
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 1,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 19.184640884399414,
+      "latency_ms": 18.932735443115234,
+      "latency_ratio": 0.9868694210748024,
+      "max_abs_errors": [
+        2.5013461709022522e-05,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 2,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 20.528127670288086,
+      "latency_ms": 19.672767639160156,
+      "latency_ratio": 0.9583322919232445,
+      "max_abs_errors": [
+        0.0,
+        4.0172599256038666e-05,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 3,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 23.217695236206055,
+      "latency_ms": 23.213695526123047,
+      "latency_ratio": 0.999827730098,
+      "max_abs_errors": [
+        2.5013461709022522e-05,
+        4.0172599256038666e-05,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 4,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 8.097920417785645,
+      "latency_ms": 7.3318400382995605,
+      "latency_ratio": 0.9053978873633378,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        0.0007174015045166016
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 5,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 22.263647079467773,
+      "latency_ms": 20.800575256347656,
+      "latency_ratio": 0.9342842698728634,
+      "max_abs_errors": [
+        2.5013461709022522e-05,
+        0.0,
+        0.0007175207138061523
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 6,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 21.68943977355957,
+      "latency_ms": 20.772607803344727,
+      "latency_ratio": 0.9577291078152925,
+      "max_abs_errors": [
+        0.0,
+        4.0172599256038666e-05,
+        0.0007175207138061523
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 7,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 26.049535751342773,
+      "latency_ms": 26.465984344482422,
+      "latency_ratio": 1.0159867952010693,
+      "max_abs_errors": [
+        2.5013461709022522e-05,
+        4.0172599256038666e-05,
+        0.0007175207138061523
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 1,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 73.1974105834961,
+      "latency_ms": 72.22067260742188,
+      "latency_ratio": 0.9866561129924117,
+      "max_abs_errors": [
+        2.765469253063202e-05,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 2,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 76.17648315429688,
+      "latency_ms": 69.74348449707031,
+      "latency_ratio": 0.9155513829091269,
+      "max_abs_errors": [
+        0.0,
+        3.517419099807739e-05,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 3,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 85.17632293701172,
+      "latency_ms": 80.40447998046875,
+      "latency_ratio": 0.9439768847491601,
+      "max_abs_errors": [
+        2.765469253063202e-05,
+        3.517419099807739e-05,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 4,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 28.74470329284668,
+      "latency_ms": 26.94553565979004,
+      "latency_ratio": 0.9374087248448177,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        0.0006643533706665039
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 5,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 80.88575744628906,
+      "latency_ms": 78.62866973876953,
+      "latency_ratio": 0.9720953629071433,
+      "max_abs_errors": [
+        2.765469253063202e-05,
+        0.0,
+        0.0006644725799560547
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 6,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 78.46297454833984,
+      "latency_ms": 75.8465576171875,
+      "latency_ratio": 0.9666541200328773,
+      "max_abs_errors": [
+        0.0,
+        3.517419099807739e-05,
+        0.0006644725799560547
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "dtype": "float32",
+      "dropout_p": 0.0,
+      "pattern": "random",
+      "gradient_mask": 7,
+      "plan": "block_tf32_pipeline",
+      "baseline_plan": "block_tf32",
+      "baseline_ms": 87.68793487548828,
+      "latency_ms": 84.99779510498047,
+      "latency_ratio": 0.9693214377288317,
+      "max_abs_errors": [
+        2.765469253063202e-05,
+        3.517419099807739e-05,
+        0.0006644725799560547
+      ]
+    }
+  ]
+}

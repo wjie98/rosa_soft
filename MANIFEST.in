@@ -1,5 +1,15 @@
 include README.md
 include LICENSE
-recursive-include rosa_soft/csrc *.cpp *.cu
-recursive-include docs *.md
+recursive-include rosa_soft/csrc *.h *.cuh *.cpp *.cu
+include docs/CONCEPT.md
+include docs/DENSE_REFERENCE_FREEZE.md
+include docs/PRODUCTION_GUIDE.md
+include docs/README.md
+include docs/ROSA_SOFT_DESIGN.md
+include docs/ROSA_SOFT_REFERENCE.md
 recursive-include examples *.py
+prune benchmarks
+prune contrib
+prune docs/research
+prune tests
+prune validation

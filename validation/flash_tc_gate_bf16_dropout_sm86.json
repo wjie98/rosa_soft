@@ -1,0 +1,109 @@
+{
+  "compute_capability": [
+    8,
+    6
+  ],
+  "cuda": "12.8",
+  "device": "NVIDIA GeForce RTX 3070",
+  "dropout_p": 0.2,
+  "dtype": "bfloat16",
+  "heads": 4,
+  "repeats": 9,
+  "rows": [
+    {
+      "baseline_ms": 33.84422302246094,
+      "bits": 32,
+      "extra_mib": 8.0,
+      "gradient_mask": 7,
+      "latency_ms": 34.808990478515625,
+      "latency_ratio": 1.0285061192101947,
+      "max_abs_errors": [
+        3.725290298461914e-09,
+        9.313225746154785e-09,
+        7.450580596923828e-08
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        5.038278771962723e-08,
+        5.523349955183221e-08,
+        6.413919351189179e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 34.91737747192383,
+      "bits": 32,
+      "extra_mib": 8.0,
+      "gradient_mask": 7,
+      "latency_ms": 30.8275203704834,
+      "latency_ratio": 0.8828704388028861,
+      "max_abs_errors": [
+        5.498091923072934e-06,
+        4.796194843947887e-06,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        0.00015115828136913478,
+        0.000154006716911681,
+        8.115176086676001e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 34.739200592041016,
+      "bits": 32,
+      "extra_mib": 8.0,
+      "gradient_mask": 7,
+      "latency_ms": 34.60095977783203,
+      "latency_ratio": 0.9960206103809811,
+      "max_abs_errors": [
+        1.8812716007232666e-07,
+        3.5762786865234375e-07,
+        2.384185791015625e-07
+      ],
+      "pattern": "all_match",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        1.3106925962347304e-06,
+        1.5741042602712696e-07,
+        4.888131144298313e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 34.12739181518555,
+      "bits": 32,
+      "extra_mib": 8.0,
+      "gradient_mask": 7,
+      "latency_ms": 30.698495864868164,
+      "latency_ratio": 0.899526574755952,
+      "max_abs_errors": [
+        6.331130862236023e-06,
+        1.9669532775878906e-06,
+        2.086162567138672e-07
+      ],
+      "pattern": "all_match",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        5.235392018221319e-05,
+        2.1836449377587996e-06,
+        5.4760633361183864e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    }
+  ],
+  "torch": "2.11.0+cu128",
+  "value_heads": 2,
+  "warmup": 4
+}

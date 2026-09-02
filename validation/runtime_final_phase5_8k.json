@@ -1,0 +1,178 @@
+{
+  "settings": {
+    "sequence_lengths": [
+      8192
+    ],
+    "patterns": [
+      "random",
+      "all_match",
+      "periodic64",
+      "skewed"
+    ],
+    "chunk_sizes": [
+      8192
+    ],
+    "batch": 1,
+    "heads": 1,
+    "payload_heads": 1,
+    "bits": 8,
+    "seed": 123,
+    "repeats": 11,
+    "output": "validation/runtime_final_phase5_8k.json"
+  },
+  "torch": "2.11.0+cu128",
+  "rows": [
+    {
+      "sequence_length": 8192,
+      "pattern": "random",
+      "chunk_size": 8192,
+      "latency_ms": 1.077991008060053,
+      "tokens_per_second": 7599321.273321454,
+      "logical_bytes_per_update": 48.1776123046875,
+      "checksum": 30298148899854,
+      "memory": {
+        "states": 8907,
+        "edges": 17095,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 394671
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 92815,
+        "query_suffix_link_steps": 7950,
+        "extension_suffix_link_steps": 25490,
+        "latest_end_updates": 24804,
+        "clones": 714,
+        "copied_edges": 714,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 5,
+        "latest_path_updates": 0,
+        "latest_tree_rotations": 0,
+        "latest_tree_activations": 0,
+        "compressed_run_symbols": 1,
+        "compressed_materializations": 1,
+        "max_compressed_run_length": 1,
+        "root_table_lookups": 16074,
+        "root_table_activations": 1,
+        "transition_index_lookups": 8376,
+        "transition_index_activations": 256
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "pattern": "all_match",
+      "chunk_size": 8192,
+      "latency_ms": 0.39677100721746683,
+      "tokens_per_second": 20646669.869983807,
+      "logical_bytes_per_update": 1.001953125,
+      "checksum": 33542245670980,
+      "memory": {
+        "states": 1,
+        "edges": 0,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 8208
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 0,
+        "query_suffix_link_steps": 0,
+        "extension_suffix_link_steps": 0,
+        "latest_end_updates": 0,
+        "clones": 0,
+        "copied_edges": 0,
+        "max_query_suffix_link_steps": 0,
+        "max_latest_end_chain": 0,
+        "latest_path_updates": 0,
+        "latest_tree_rotations": 0,
+        "latest_tree_activations": 0,
+        "compressed_run_symbols": 8192,
+        "compressed_materializations": 0,
+        "max_compressed_run_length": 8192,
+        "root_table_lookups": 0,
+        "root_table_activations": 0,
+        "transition_index_lookups": 0,
+        "transition_index_activations": 0
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "pattern": "periodic64",
+      "chunk_size": 8192,
+      "latency_ms": 1.1403000098653138,
+      "tokens_per_second": 7184074.304241737,
+      "logical_bytes_per_update": 46.22607421875,
+      "checksum": 33028332121601,
+      "memory": {
+        "states": 8198,
+        "edges": 8260,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 378684
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 16615,
+        "query_suffix_link_steps": 11,
+        "extension_suffix_link_steps": 16393,
+        "latest_end_updates": 125782,
+        "clones": 5,
+        "copied_edges": 5,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 64,
+        "latest_path_updates": 4285,
+        "latest_tree_rotations": 26813,
+        "latest_tree_activations": 1,
+        "compressed_run_symbols": 1,
+        "compressed_materializations": 1,
+        "max_compressed_run_length": 1,
+        "root_table_lookups": 103,
+        "root_table_activations": 1,
+        "transition_index_lookups": 0,
+        "transition_index_activations": 0
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "pattern": "skewed",
+      "chunk_size": 8192,
+      "latency_ms": 1.03277200832963,
+      "tokens_per_second": 7932050.766218442,
+      "logical_bytes_per_update": 46.8570556640625,
+      "checksum": 24812852435950,
+      "memory": {
+        "states": 11949,
+        "edges": 17232,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 383853
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 57982,
+        "query_suffix_link_steps": 5093,
+        "extension_suffix_link_steps": 30453,
+        "latest_end_updates": 93150,
+        "clones": 3756,
+        "copied_edges": 3908,
+        "max_query_suffix_link_steps": 50,
+        "max_latest_end_chain": 68,
+        "latest_path_updates": 0,
+        "latest_tree_rotations": 0,
+        "latest_tree_activations": 0,
+        "compressed_run_symbols": 5,
+        "compressed_materializations": 1,
+        "max_compressed_run_length": 5,
+        "root_table_lookups": 1653,
+        "root_table_activations": 1,
+        "transition_index_lookups": 18185,
+        "transition_index_activations": 37
+      }
+    }
+  ]
+}

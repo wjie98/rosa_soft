@@ -315,7 +315,6 @@ class _HardForwardSuffixProxy(torch.autograd.Function):
             query.to(compute_dtype),
             key.to(compute_dtype),
             value.to(compute_dtype),
-            int(max_suffix_length),
         )
         ctx.max_suffix_length = int(max_suffix_length)
         ctx.scale = float(scale)

@@ -1,0 +1,100 @@
+{
+  "settings": {
+    "tokens": [
+      16384
+    ],
+    "chunk_sizes": [
+      256,
+      1024,
+      4096
+    ],
+    "modes": [
+      "blocking",
+      "stream_sync",
+      "stream_async"
+    ],
+    "batch": 1,
+    "heads": 8,
+    "payload_heads": 2,
+    "bits": 8,
+    "seed": 123,
+    "repeats": 5,
+    "device": "cuda:0",
+    "output": "validation/runtime_async_out_buffer_sm86.json"
+  },
+  "gpu": "NVIDIA GeForce RTX 3070",
+  "rows": [
+    {
+      "tokens": 16384,
+      "chunk_size": 256,
+      "mode": "blocking",
+      "latency_ms": 93.20989900152199,
+      "tokens_per_second": 175775.3218864927,
+      "checksum": 964772214774962
+    },
+    {
+      "tokens": 16384,
+      "chunk_size": 256,
+      "mode": "stream_sync",
+      "latency_ms": 106.4402740157675,
+      "tokens_per_second": 153926.69881301658,
+      "checksum": 964772214774962
+    },
+    {
+      "tokens": 16384,
+      "chunk_size": 256,
+      "mode": "stream_async",
+      "latency_ms": 123.68383799912408,
+      "tokens_per_second": 132466.78195833502,
+      "checksum": 964772214774962
+    },
+    {
+      "tokens": 16384,
+      "chunk_size": 1024,
+      "mode": "blocking",
+      "latency_ms": 28.216052014613524,
+      "tokens_per_second": 580662.382941259,
+      "checksum": 964772214774962
+    },
+    {
+      "tokens": 16384,
+      "chunk_size": 1024,
+      "mode": "stream_sync",
+      "latency_ms": 33.80910801934078,
+      "tokens_per_second": 484603.1427574899,
+      "checksum": 964772214774962
+    },
+    {
+      "tokens": 16384,
+      "chunk_size": 1024,
+      "mode": "stream_async",
+      "latency_ms": 35.057246015639976,
+      "tokens_per_second": 467349.88802858785,
+      "checksum": 964772214774962
+    },
+    {
+      "tokens": 16384,
+      "chunk_size": 4096,
+      "mode": "blocking",
+      "latency_ms": 8.517622976796702,
+      "tokens_per_second": 1923541.3500494803,
+      "checksum": 964772214774962
+    },
+    {
+      "tokens": 16384,
+      "chunk_size": 4096,
+      "mode": "stream_sync",
+      "latency_ms": 11.875163996592164,
+      "tokens_per_second": 1379686.2093611292,
+      "checksum": 964772214774962
+    },
+    {
+      "tokens": 16384,
+      "chunk_size": 4096,
+      "mode": "stream_async",
+      "latency_ms": 13.827442016918212,
+      "tokens_per_second": 1184890.161170358,
+      "checksum": 964772214774962
+    }
+  ]
+}

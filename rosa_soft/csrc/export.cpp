@@ -23,8 +23,8 @@ extern "C" {
 
 #ifdef ROSA_WITH_CUDA
 TORCH_LIBRARY(rosa_soft, m) {
-    m.def("hard_forward(Tensor query, Tensor key, Tensor value, int max_suffix_length) -> (Tensor output, Tensor packed_query_symbols, Tensor packed_key_symbols)");
-    m.def("hard_forward_varlen(Tensor query, Tensor key, Tensor value, Tensor cu_seqlens, int max_suffix_length) -> (Tensor output, Tensor packed_query_symbols, Tensor packed_key_symbols)");
+    m.def("hard_forward(Tensor query, Tensor key, Tensor value) -> (Tensor output, Tensor packed_query_symbols, Tensor packed_key_symbols)");
+    m.def("hard_forward_varlen(Tensor query, Tensor key, Tensor value, Tensor cu_seqlens) -> (Tensor output, Tensor packed_query_symbols, Tensor packed_key_symbols)");
     m.def("surrogate_vjp_masked(Tensor query, Tensor key, Tensor value, Tensor grad_output, Tensor packed_query_symbols, Tensor packed_key_symbols, Tensor dropout_seed, int max_suffix_length, float scale, float dropout_p, float mismatch_scale, int gradient_mask) -> (Tensor grad_query, Tensor grad_key, Tensor grad_value)");
     m.def("surrogate_vjp_varlen_masked(Tensor query, Tensor key, Tensor value, Tensor cu_seqlens, Tensor grad_output, Tensor packed_query_symbols, Tensor packed_key_symbols, Tensor dropout_seed, int max_suffix_length, float scale, float dropout_p, float mismatch_scale, int gradient_mask) -> (Tensor grad_query, Tensor grad_key, Tensor grad_value)");
 }

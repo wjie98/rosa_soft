@@ -3,11 +3,12 @@
 This is a research benchmark, not a production API. Every estimator returns
 the same exact hard ROSA value. They differ only in the custom backward:
 
-1. deterministic raw Hamming surrogate;
-2. independently perturbed mismatch scores;
-3. exact single-bit hard counterfactuals;
-4. production deterministic surrogate with post-softmax attention dropout;
-5. research-only long-suffix residual dropout.
+1. the compiled production operator (reference fallback on CPU);
+2. deterministic raw Hamming surrogate;
+3. independently perturbed mismatch scores;
+4. exact single-bit hard counterfactuals;
+5. production-equation post-softmax attention dropout in PyTorch;
+6. research-only long-suffix residual dropout.
 
 Model/data seeds and stochastic-estimator seeds can be crossed independently.
 """
@@ -36,6 +37,7 @@ from examples.fit_soft_reference import (
     loss_and_accuracy,
     make_copy_tokens,
 )
+from rosa_soft import rosa_soft as rosa_soft_production
 from rosa_soft.soft_contract import (
     ROSA_SOFT_DEFAULT_MISMATCH_SCALE,
     ROSA_SOFT_DEFAULT_SCALE,
@@ -59,6 +61,7 @@ from rosa_soft.soft_reference import (
 
 Estimator = Callable[..., Tensor]
 ESTIMATOR_NAMES = (
+    "production",
     "deterministic",
     "mismatch_random",
     "bitflip",
@@ -141,7 +144,6 @@ class _HardForwardResearchSurrogate(torch.autograd.Function):
             query.to(compute_dtype),
             key.to(compute_dtype),
             value.to(compute_dtype),
-            int(max_suffix_length),
         )
         ctx.max_suffix_length = int(max_suffix_length)
         ctx.scale = float(scale)
@@ -309,6 +311,42 @@ def make_attention_dropout_estimator(
     return estimator
 
 
+def make_production_estimator(dropout_p: float) -> Estimator:
+    """Use the compiled CUDA operator and its exact PyTorch CPU analogue."""
+
+    reference = make_attention_dropout_estimator(dropout_p)
+
+    def estimator(
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        *,
+        max_suffix_length: int = 32,
+        scale: float = ROSA_SOFT_DEFAULT_SCALE,
+        mismatch_scale: float = ROSA_SOFT_DEFAULT_MISMATCH_SCALE,
+    ) -> Tensor:
+        if not query.is_cuda:
+            return reference(
+                query,
+                key,
+                value,
+                max_suffix_length=max_suffix_length,
+                scale=scale,
+                mismatch_scale=mismatch_scale,
+            )
+        return rosa_soft_production(
+            query,
+            key,
+            value,
+            max_suffix_length=max_suffix_length,
+            scale=scale,
+            dropout_p=dropout_p,
+            mismatch_scale=mismatch_scale,
+        )
+
+    return estimator
+
+
 def _stratified_row_weights(
     batch: int,
     heads: int,
@@ -394,7 +432,6 @@ class _HardForwardSuffixDropout(torch.autograd.Function):
             query.to(compute_dtype),
             key.to(compute_dtype),
             value.to(compute_dtype),
-            int(max_suffix_length),
         )
         ctx.max_suffix_length = int(max_suffix_length)
         ctx.scale = float(scale)
@@ -569,39 +606,57 @@ def _bitflip_vjp_for_input(
     value: Tensor,
     base_output: Tensor,
     grad_output: Tensor,
-    max_suffix_length: int,
 ) -> Tensor:
     inputs = (query, key, value)
     selected = inputs[role]
-    if selected.size(0) != 1:
-        raise ValueError("exact bitflip research VJP requires batch size 1")
-    bit_count = selected.numel()
-    variants = selected.expand(
-        bit_count,
-        *selected.shape[1:],
-    ).clone()
-    flat_variants = variants.reshape(bit_count, bit_count)
-    flat_signs = _hard_sign(selected).reshape(-1)
-    bit_indices = torch.arange(bit_count, device=selected.device)
-    flat_variants[bit_indices, bit_indices] = -flat_signs
+    batch_size = selected.size(0)
+    bits_per_sample = selected[0].numel()
+    variant_count = batch_size * bits_per_sample
+    flat_signs = _hard_sign(selected).reshape(batch_size, bits_per_sample)
+    flat_gradient = torch.empty_like(flat_signs).reshape(-1)
 
-    expanded_inputs = [
-        tensor.expand(bit_count, *tensor.shape[1:])
-        for tensor in inputs
-    ]
-    expanded_inputs[role] = variants
-    flipped_output, _, _, _ = _hard_route_forward(
-        expanded_inputs[0],
-        expanded_inputs[1],
-        expanded_inputs[2],
-        max_suffix_length,
+    sequence_length = query.size(1)
+    route_work_per_variant = sequence_length**2 * query.size(2)
+    chunk_size = min(
+        2048,
+        max(1, (1 << 22) // route_work_per_variant),
     )
-    loss_delta = (
-        (flipped_output - base_output)
-        * grad_output
-    ).flatten(1).sum(dim=1)
-    gradient = -flat_signs * loss_delta
-    return gradient.reshape_as(selected)
+    for start in range(0, variant_count, chunk_size):
+        end = min(start + chunk_size, variant_count)
+        variant_indices = torch.arange(start, end, device=selected.device)
+        sample_indices = torch.div(
+            variant_indices,
+            bits_per_sample,
+            rounding_mode="floor",
+        )
+        local_bit_indices = variant_indices.remainder(bits_per_sample)
+        row_indices = torch.arange(end - start, device=selected.device)
+        signs = flat_signs[sample_indices, local_bit_indices]
+
+        variants = selected.index_select(0, sample_indices).clone()
+        variants.reshape(end - start, bits_per_sample)[
+            row_indices,
+            local_bit_indices,
+        ] = -signs
+        expanded_inputs = [
+            tensor.index_select(0, sample_indices)
+            for tensor in inputs
+        ]
+        expanded_inputs[role] = variants
+        flipped_output, _, _, _ = _hard_route_forward(
+            expanded_inputs[0],
+            expanded_inputs[1],
+            expanded_inputs[2],
+        )
+        loss_delta = (
+            (
+                flipped_output
+                - base_output.index_select(0, sample_indices)
+            )
+            * grad_output.index_select(0, sample_indices)
+        ).flatten(1).sum(dim=1)
+        flat_gradient[start:end] = -signs * loss_delta
+    return flat_gradient.reshape_as(selected)
 
 
 class _HardForwardExactBitflip(torch.autograd.Function):
@@ -612,15 +667,15 @@ class _HardForwardExactBitflip(torch.autograd.Function):
         key: Tensor,
         value: Tensor,
         max_suffix_length: int,
+        gradient_scale: float,
     ) -> Tensor:
         compute_dtype = _reference_compute_dtype(query.dtype)
         hard_output, _, _, _ = _hard_route_forward(
             query.to(compute_dtype),
             key.to(compute_dtype),
             value.to(compute_dtype),
-            int(max_suffix_length),
         )
-        ctx.max_suffix_length = int(max_suffix_length)
+        ctx.gradient_scale = float(gradient_scale)
         ctx.save_for_backward(query, key, value)
         return hard_output.to(query.dtype)
 
@@ -635,7 +690,6 @@ class _HardForwardExactBitflip(torch.autograd.Function):
         )
         base_output, _, _, _ = _hard_route_forward(
             *work_inputs,
-            ctx.max_suffix_length,
         )
         grad_output_work = grad_output.to(compute_dtype)
         gradients = []
@@ -649,10 +703,9 @@ class _HardForwardExactBitflip(torch.autograd.Function):
                     *work_inputs,
                     base_output,
                     grad_output_work,
-                    ctx.max_suffix_length,
-                ).to(query.dtype)
+                ).to(query.dtype) * ctx.gradient_scale
             )
-        return gradients[0], gradients[1], gradients[2], None
+        return gradients[0], gradients[1], gradients[2], None, None
 
 
 def rosa_soft_exact_bitflip(
@@ -663,6 +716,7 @@ def rosa_soft_exact_bitflip(
     max_suffix_length: int = 32,
     scale: float = ROSA_SOFT_DEFAULT_SCALE,
     mismatch_scale: float = ROSA_SOFT_DEFAULT_MISMATCH_SCALE,
+    gradient_scale: float = 1.0,
 ) -> Tensor:
     max_suffix_length = _validate_reference_call(
         query,
@@ -673,8 +727,8 @@ def rosa_soft_exact_bitflip(
         0.0,
         mismatch_scale,
     )
-    if query.size(0) != 1:
-        raise ValueError("exact bitflip research VJP requires batch size 1")
+    if not math.isfinite(float(gradient_scale)) or float(gradient_scale) <= 0.0:
+        raise ValueError("bitflip gradient_scale must be finite and > 0")
     if not _needs_backward(query, key, value):
         return rosa_soft_reference(
             query,
@@ -687,6 +741,7 @@ def rosa_soft_exact_bitflip(
         key,
         value,
         max_suffix_length,
+        float(gradient_scale),
     )
 
 
@@ -727,6 +782,8 @@ def _make_estimator(
     name: str,
     dropout_p: float,
 ) -> Estimator:
+    if name == "production":
+        return make_production_estimator(dropout_p)
     if name == "deterministic":
         return rosa_soft_reference
     if name == "mismatch_random":

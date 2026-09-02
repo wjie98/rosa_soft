@@ -1,281 +1,221 @@
 # RosaSoft Design
 
-This document describes the current implementation. The normative equations
-are in [CONCEPT.md](CONCEPT.md).
+This document maps the maintained implementation. Mathematical definitions
+are in [CONCEPT.md](CONCEPT.md), and the integration surface is in
+[PRODUCTION_GUIDE.md](PRODUCTION_GUIDE.md).
 
 ## 1. Module Boundaries
 
 | Module | Responsibility |
 | --- | --- |
-| `soft_contract.py` | Shared shapes, dtypes, scalar defaults, and validation. |
-| `soft_reference.py` | Pure PyTorch semantic oracle. |
-| `soft.py` | Public CUDA wrappers and custom-autograd boundary. |
-| `csrc/export.cpp` | PyTorch dispatcher schemas and registrations. |
-| `csrc/rosa_soft.cpp` | Native validation, allocation, and CUDA dispatch. |
-| `csrc/cuda/rosa_soft_kernels.cu` | Hard forward and dense surrogate VJP. |
-| `testing.py` | Development-only materialized inspection state. |
-| `diagnostics.py` | Summaries derived from inspection state. |
+| `soft_contract.py` | Shared public validation and scalar defaults. |
+| `soft_reference.py` | Materialized PyTorch semantic oracle. |
+| `soft.py` | CUDA custom-autograd wrapper. |
+| `sam.py` | Synchronous SAM validation API and hard value gather. |
+| `initialization.py` | Optional model projection initialization. |
+| `csrc/export.cpp` | Dispatcher schemas and registrations. |
+| `csrc/rosa_soft.cpp` | Native checks, allocations, and schedule dispatch. |
+| `csrc/rosa_sam_core.h` | Pure C++ online suffix automaton. |
+| `csrc/rosa_sam.cpp` | PyTorch custom-class binding. |
+| `csrc/cuda/rosa_soft_kernels.cu` | Hard scan, row VJP, and packed VJP. |
+| `csrc/cuda/rosa_soft_vjp_common.cuh` | Shared VJP math and finalization. |
+| `csrc/cuda/rosa_soft_streaming_kernels.cu` | Long fixed-length tiled VJP. |
+| `csrc/cuda/rosa_soft_block_diagonal_kernels.cu` | Gated SM80+ block VJP. |
 
-The public API does not expose estimator modes, seeds, random tensors, cache
-plans, or diagnostics.
+`testing.py` and `diagnostics.py` materialize development information; neither
+is imported by the hot path. Research and archived Runtime sources are not in
+the extension build graph.
 
-## 2. Forward Data Flow
+## 2. Hard Forward
 
-Dense CUDA forward:
+Dense CUDA flow:
 
 ```text
-Q/K logits
-  -> pack sign bits into int32 [B,H,T]
-  -> scan causal routes and exact suffixes
-  -> latest-longest route index
-V logits
-  -> sign selected value
+Q/K logits [B,T,H,D]
+  -> sign-pack int32 symbols [B,H,T]
+  -> scan every causal key end and its exact full suffix
+  -> choose globally longest, then latest
+V logits [B,T,Hv,Dv]
+  -> gather successor position and hard-sign
   -> hard output [B,T,H,Dv]
 ```
 
-Forward also returns packed Q/K symbols to the private autograd wrapper.
-Saving these avoids quantizing Q/K again in backward. The packed tensors are
-linear in input size, not quadratic in route count.
+Matching has no configured horizon. The hard dispatcher schema deliberately
+has no `max_suffix_length`; that scalar is sent only to backward. The packed
+variable-length kernel applies the same scan independently inside every
+segment.
 
-The no-gradient public path calls hard forward directly and discards packed
-symbols.
+The forward also returns private packed Q/K symbols to autograd. Reusing them
+avoids quantizing Q/K again in backward and costs only linear state. A no-grad
+call discards them after hard output.
 
-Packed variable-length forward stores private Q/K sign bits as head-major
-`[H,N]` tensors for coalesced route-lane reads. Public query/key/value tensors
-remain token-major, and the same state machine runs independently inside every
-`cu_seqlens` segment.
+The hard CUDA scan is simple and exact but quadratic. It is a training and
+validation implementation, not the package's answer to long-context inference.
 
 ## 3. Autograd State
 
-The dense custom autograd function saves:
+Dense autograd saves:
 
 ```text
 Q, K, V, packed_Q, packed_K, dropout_seed
 max_suffix_length, scale, dropout_p, mismatch_scale
 ```
 
-The packed variant additionally saves `cu_seqlens`.
+Packed autograd additionally saves `cu_seqlens`. The dropout seed is empty
+when `dropout_p=0` and scalar otherwise. Scores, probabilities, masks, route
+winners, and suffix adjoints are recomputed instead of saved.
 
-It saves one scalar RNG seed only when `dropout_p > 0`; it does not save route
-probabilities, suffix scores, random samples, winners, or a quadratic
-workspace. Backward recomputes route scores and reconstructs dropout decisions
-from route indices. This is the
-appropriate checkpoint boundary because route state is much larger than the
-inputs for long sequences.
+`ctx.needs_input_grad` becomes a Q/K/V bit mask. A disabled input may use an
+empty internal gradient output, but it must not change probabilities or credit
+used by another enabled input.
 
-`ctx.needs_input_grad` is converted to a three-bit mask:
+## 4. Backward Flow
 
-```text
-bit 0: Q
-bit 1: K
-bit 2: value
-```
+For each batch, head, query row, and causal route, CUDA:
 
-CUDA skips work and allocation that cannot affect requested gradients.
-Disabling a gradient must not alter the route distribution used by another
-enabled gradient.
+1. Reconstructs normalized Hamming mismatch from packed signs.
+2. Evaluates the exponential local match gate.
+3. Computes the complete finite-horizon suffix evidence `S`.
+4. Applies `U(S)=(sqrt(2)+1)(sqrt(1+S)-1)`.
+5. Merges null and non-null logits into online softmax statistics.
+6. Reconstructs post-softmax dropout from the scalar seed and route indices.
+7. Accumulates probability-weighted value credit.
+8. Applies the softmax, utility, suffix, gate, and softsign adjoints for Q/K.
 
-## 4. Backward Data Flow
-
-For each batch, head, and query row, CUDA performs:
-
-1. Visit null and every valid non-null causal route.
-2. Reconstruct normalized Hamming mismatch from packed Q/K symbols.
-3. Evaluate exponential gates and the complete raw suffix prefix sum `S`.
-4. Transform non-null evidence with
-   `U(S)=(sqrt(2)+1)(sqrt(1+S)-1)`.
-5. Compute online softmax statistics using the fixed null score and
-   non-null candidate correction.
-6. Apply post-softmax inverted dropout to each route probability.
-7. Accumulate probability-weighted value credit.
-8. For Q/K gradients, compute dropped route utility from `grad_output` and
-   signed value, then apply the exact adjoint of route softmax, `U`, the suffix
-   recurrence, exponential gate, and softsign VJP. The additional chain factor
-   is `U'(S)=(sqrt(2)+1)/(2 sqrt(1+S))`.
-
-The implementation may scan a row more than once to avoid storing all route
-scores. Recompute is an implementation choice; the visited candidate set and
-equations are fixed.
-
-## 5. CUDA Execution Plans
-
-The backward kernel has two internal shared-memory plans:
-
-- `RecomputeSuffixScores` for shapes where caching is not profitable or does
-  not fit;
-- `CacheSuffixScores`, which stores one row of raw suffix evidence plus the
-  row query symbols and `grad_output` when the complete shared layout fits.
-
-Both plans compute the same VJP. They are not estimator modes and never alter
-candidate support. Dense CUDA first applies a measured work gate: recompute
-is considered at `T >= 4096`, and value-only backward also requires
-`T >= 64 W`. It then queries active blocks for the exact dtype, gradient-mask,
-cooperative mode, and complete dynamic shared layout, converts occupancy into
-total grid waves for the actual row count, and recomputes only when the launch
-needs fewer waves. Equal waves prefer cache. Plan choice stays private because
-it depends on compiled kernel resources, not model semantics. Packed varlen
-always uses the recompute base plan because segment lengths vary inside one
-launch; its bounded Q-only tail cache is a separate exact reuse layer, not a
-full-row plan.
-
-Dense K gradients use a head-major FP32 accumulation layout to coalesce
-route-lane atomics, followed by a transpose to public `[B,T,H,D]`. For
-`D <= 8`, overlapping K contributions may first be aggregated in a
-`[D, blockDim + W - 1]` block-local FP32 tile. K/KV selects this path at
-`T >= 512`; QK/QKV waits until `T >= 1024`, where the saved atomics outweigh
-the tile and synchronization cost. Packed variable-length K gradients remain
-token-major because the dense layout increased register pressure and regressed
-measured SM75 kernels. Their block-local aggregation requires `D <= 8`, average
-and local segment length at least 256, an enabled K gradient, and a shared-memory
-fit. All other shapes use direct atomics.
-
-Several narrowly gated paths remove avoidable value-dimension serialization
-without changing route support:
-
-- Q-only backward with `Dv >= 32` caches one route utility per candidate.
-  Groups of 8 lanes cooperate at `Dv=32`; groups of 16 cooperate at larger
-  dimensions.
-- value-only backward with `Dv >= 32` caches one route tile of probabilities,
-  then flattens route and value dimensions so adjacent lanes update adjacent
-  value elements.
-- Dense and packed Q/K paths use the same cooperative utility tile for
-  sufficiently long sequences with `Dv >= 64`. Packed QK-only requires
-  `Dv >= 128`; other packed masks start at 64.
-- Packed Q-only backward with average segment length at least 256 caches the
-  most recent 1024 exact route scores. Earlier routes are still visited and
-  their scores are recomputed in the second pass.
-
-Every path is selected only when its complete shared layout fits the portable
-48 KiB limit. Small or unsupported shapes retain the generic path. These are
-execution plans, not estimator variants. The backward CTA remains a fixed 128
-threads: 64 and 256 won conflicting subsets of dense and packed masks, so a
-runtime block-size ladder was rejected.
-
-Temporary cooperative utility tiles are warp-owned: one warp produces and
-consumes 32 route slots and synchronizes before consumption and reuse. The
-full dense Q-only utility cache is produced across the block, synchronized
-before cross-warp reads, and never reuses a route slot. Representative dense
-full-cache, packed Q-only, and packed QKV paths pass both CUDA racecheck and
-synccheck.
-
-The row kernel accumulates raw FP32 Q/K/value symbol adjoints. A single
-finalize kernel then applies each input's softsign Jacobian once; for dense K
-it also transposes the head-major accumulator into public layout. This removes
-repeated Jacobian loads from the route/suffix hot loops without changing the
-surrogate.
-
-All score, normalizer, and gradient accumulation arithmetic is FP32. Public
-gradients are cast back to the input dtype in Python. `dropout_p=0` consumes no
-RNG; otherwise Python creates one scalar seed and CUDA reconstructs each mask
-with a counter hash over batch/sequence, head, query, and route indices. Global
-atomics can still make floating-point accumulation order nondeterministic, so
-PyTorch deterministic-algorithm mode remains guarded.
-
-## 6. Reference Mapping
-
-The reference deliberately materializes the same computation:
+The utility derivative is
 
 ```text
-pairwise hard symbols
-  -> pairwise mismatch rates
-  -> local gates [B,H,T,T]
-  -> raw suffix evidence [B,H,T,T]
-  -> normalized square-root route scores [B,H,T,T]
-  -> masked candidate-normalized probabilities [B,H,T,T]
-  -> optional post-softmax attention dropout
-  -> value carrier
+U'(S) = (sqrt(2) + 1) / (2 * sqrt(1 + S)).
 ```
 
-Its custom forward computes exact hard output. Its custom backward rebuilds
-the carrier under `torch.enable_grad()` and asks PyTorch for the VJP. This
-makes it slower and more memory hungry than CUDA but easy to inspect and
-differentiate.
+The implementation may make multiple complete route sweeps. Recompute avoids
+quadratic persistent state without changing candidate support.
 
-## 7. Dense and Packed Equivalence
+## 5. CUDA Schedules
 
-For every nonempty segment, packed execution must equal running the dense
-operator on that segment alone. With dropout, equivalence also requires the
-same seed and the segment's sequence index:
+Fixed-length backward has three internal schedules:
 
-- route indices are local;
-- suffix recurrences stop at the segment start;
-- candidate counts use the local row;
-- local position zero is null-only and cannot be returned as a value;
-- values and gradients never cross a boundary.
-
-Empty packed segments are valid and contribute no work.
-
-## 8. Numerical Behavior
-
-Hard output is bit exact across supported floating dtypes because only signs
-and exact symbol equality determine routing.
-
-Backward parity is numerical:
-
-- FP32 is the reference accumulation precision;
-- FP16 may underflow very small long-tail route gradients;
-- loss scaling recovers part of that tail;
-- BF16 retains wider exponent range but lower mantissa precision.
-
-Use FP32 projection logits when retaining the widest dense support is more
-important than projection bandwidth.
-
-The product of many gates can underflow. This is not structural pruning: the
-route is still visited. A lower `mismatch_scale` is the semantic control for
-long near-match credit; kernel code must not silently clamp, threshold, or
-drop the route.
-
-## 9. Why Removed Mechanisms Stay Removed
-
-| Removed mechanism | Reason |
+| Condition | Schedule |
 | --- | --- |
-| Per-mismatch random perturbation | Added RNG state and VJP variance without a held-out fitting advantage over its deterministic reduction. |
-| Antithetic second branch | Doubled local estimator work; measured gain was insufficient. |
-| Cubic perturbation shape | Only existed to parameterize random mismatch mass. |
-| Exact hard-tier wrapper | Made long-suffix gradients decay sharply and duplicated hard-state computation in backward. |
-| Separate numerical and derivative gates | Produced an incoherent surrogate and more kernel state. |
-| Dynamic scale or mismatch scale | Introduced policy and extra failure modes without a robust D/T/W law. |
-| Candidate top-k or suffix-index pruning | Removes discovery gradient and changes the training objective. |
+| SM80+, `T>=4096`, `W=32`, `Dv=64` | Block-diagonal TF32 path. |
+| SM75 `T>=4096`; SM80+ Q/K `T>=512`; SM80+ V-only `T>=2048` | 32-row tiled streaming. |
+| Other fixed shapes | Row-owned cache/recompute. |
 
-## 10. Optimization Rules
+Packed input uses the row-owned variable-length implementation. Unsupported
+block shapes fall through to streaming, and unsupported streaming shapes fall
+through to the generic row kernel. Selection is private and cannot alter the
+equations.
 
-Kernel work may be reduced by:
+### Tiled streaming
 
-- online reductions;
-- route/suffix tiling;
-- packed-symbol operations and warp collectives;
-- recompute versus bounded shared caching;
+One CTA owns 32 query rows, one warp owns a row, and lanes own route candidates.
+The first complete sweep computes row softmax statistics. The second sweep
+recomputes scores and fuses route utility, Q/K credit, and V accumulation.
+Suffix horizons advance in exact chunks; no score matrix is stored.
+
+### Block diagonal
+
+The gated block schedule owns adjacent query rows and routes. It computes the
+same finite-window recurrence on tile diagonals and uses TF32 WMMA only for
+matrix contractions. Scores, normalizers, dropout, recurrence state, and
+accumulators remain FP32. Its documented parity tolerance accounts for TF32
+rounding; candidate support remains exact.
+
+### Row owned
+
+Short rows select between exact score recomputation and a bounded shared cache
+when the whole layout fits. Cooperative value and route-utility tiles, K
+aggregation, and packed tail caches are execution details. Every older route
+is still recomputed when it is outside a cache.
+
+All schedules use `rosa_soft_vjp_common.cuh` for constants, score transforms,
+online softmax primitives, counter dropout, and the final softsign conversion.
+CUDA translation units include the header, never another `.cu` file.
+
+## 6. Layout And Precision
+
+Public dense tensors are token-major `[B,T,H,D]`. Private packed signs are
+head-major `[B,H,T]`, and packed-varlen signs are `[H,N]`, so neighboring route
+lanes read neighboring symbols.
+
+Dense K gradients may accumulate in FP32 `[B,H,D,T]` for coalesced atomics,
+then transpose to public layout. Other enabled gradients also accumulate in
+FP32 and are cast to input dtype after finalization.
+
+Global atomics can change summation order across launches. CUDA VJPs are
+numerically reproducible within tolerance, not bitwise deterministic. The
+operator reports this through PyTorch deterministic-algorithm checks.
+
+## 7. Dense And Packed Equivalence
+
+For each nonempty packed segment, execution must equal running the dense
+operator on that segment alone:
+
+- route positions are local;
+- suffix recurrence stops at segment start;
+- candidate count and null competition use the local row;
+- dropout counters include semantic sequence and local route indices;
+- output and gradients never cross a boundary.
+
+Empty segments perform no work and remain valid.
+
+## 8. SAM Validation Path
+
+The SAM is independent of CUDA hard scanning:
+
+```text
+Python logits
+  -> int32 sign symbols
+  -> synchronous CPU staging
+  -> one RosaSuffixAutomaton per sequence/head
+  -> local matched key end
+  -> optional Python successor-value gather
+```
+
+The pure C++ automaton stores a vector of states and a vector of sparse linked
+edges. `match_then_append` makes the causal order explicit. Standard SAM
+extension creates at most one new state and one clone per appended symbol;
+clones copy their sparse outgoing edges. Latest occurrence timestamps are
+updated directly along suffix links for clarity.
+
+This path deliberately excludes value history, async workers, locking, page
+management, persistent identifiers, and serialization. Its expected routes
+come from the independent O(T^2) DP in `tests/test_sam.py`, not from CUDA or a
+second automaton.
+
+## 9. Optimization Boundary
+
+Semantics-preserving work includes:
+
+- online reductions and exact tiling;
+- bounded cache/recompute tradeoffs;
+- packed symbols and warp collectives;
 - gradient-mask specialization;
-- coalesced FP32 accumulation;
-- launch fusion when numerical parity is retained.
+- coalesced accumulation and launch fusion;
+- simplifying validation code without changing causal order.
 
-It may not be reduced by omitting valid routes. Any new cache must account for
-bytes, occupancy, registers, spills, and the shapes where it is selected.
+The following change the objective and are excluded from production:
 
-The current row kernel assigns one lane to one route candidate. Its suffix
-loop has a static bound and does not branch on mismatch content. Assigning a
-whole warp to one candidate therefore loses route parallelism and is not a
-valid optimization by itself. Warp prefix scans become relevant only after a
-complete diagonal-recurrence redesign; that research result and its staging
-constraints are recorded in
-[KERNEL_OPTIMIZATION.md](research/KERNEL_OPTIMIZATION.md).
+- top-k, sampling, or approximate candidate indexes;
+- hard-neighborhood-only gradients;
+- dynamic temperature/mismatch schedules;
+- score thresholds or content-dependent backward termination;
+- stochastic mismatch perturbation branches;
+- hard-window truncation.
 
-## 11. Required Validation
+## 10. Validation
 
-A semantic or kernel change must pass:
+Changes must retain:
 
-- hard forward and latest-tie tests;
-- dense PyTorch/CUDA output and all Q/K/value gradient-mask parity at
-  `dropout_p=0` and fixed nonzero-dropout seeds;
-- FP32, FP16, BF16, grouped heads, `D=32`, singleton, and non-contiguous
+- SAM/DP equality for exhaustive, random, periodic, tie, chunked, and varlen
   cases;
-- packed segment isolation, empty segments, and unequal lengths;
-- full-graph `torch.compile` with the `aot_eager` backend, autocast,
-  GradScaler, and RNG-preserving checkpoint integration;
-- exhaustive small-problem hard-bit-flip alignment;
-- multi-seed fitting, trained-checkpoint alignment, and route-discovery
-  probes;
-- contextual reset-RNN recall with identical post-reset residuals,
-  complementary targets, and zero-route/current-value/residual-only
-  ablations;
-- latency, memory, registers, and spill reporting on the target GPU.
+- bit-exact hard CUDA/reference/SAM output;
+- hard independence from all surrogate controls;
+- all seven nonempty Q/K/V gradient masks;
+- fixed-seed dropout parity;
+- FP32, FP16, BF16, grouped heads, D32, non-contiguous and singleton inputs;
+- packed empty segments and invalid-offset handling;
+- compile, autocast, GradScaler, and checkpoint integration.
+
+Kernel promotion additionally needs target-device latency, peak memory,
+register, spill, racecheck, and synccheck evidence.

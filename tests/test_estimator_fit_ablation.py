@@ -62,6 +62,7 @@ def _inputs(requires_grad=True):
 @pytest.mark.parametrize(
     "estimator",
     [
+        ablation.make_production_estimator(0.25),
         ablation.rosa_soft_mismatch_random,
         ablation.rosa_soft_exact_bitflip,
         ablation.make_attention_dropout_estimator(0.25),
@@ -217,6 +218,45 @@ def test_exact_bitflip_vjp_matches_exhaustive_hard_counterfactuals():
         )
 
 
+def test_exact_bitflip_gradient_scale_preserves_forward_and_scales_vjp():
+    base_inputs = _inputs()
+    scaled_inputs = [
+        tensor.detach().clone().requires_grad_()
+        for tensor in base_inputs
+    ]
+    loss_weights = torch.randn_like(base_inputs[2])
+    base_output = ablation.rosa_soft_exact_bitflip(
+        *base_inputs,
+        max_suffix_length=3,
+    )
+    scaled_output = ablation.rosa_soft_exact_bitflip(
+        *scaled_inputs,
+        max_suffix_length=3,
+        gradient_scale=0.125,
+    )
+    base_gradients = torch.autograd.grad(
+        (base_output * loss_weights).sum(),
+        base_inputs,
+    )
+    scaled_gradients = torch.autograd.grad(
+        (scaled_output * loss_weights).sum(),
+        scaled_inputs,
+    )
+
+    torch.testing.assert_close(scaled_output, base_output, rtol=0, atol=0)
+    for scaled, base in zip(scaled_gradients, base_gradients):
+        torch.testing.assert_close(scaled, 0.125 * base, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize("gradient_scale", [0.0, -1.0, float("nan")])
+def test_exact_bitflip_rejects_invalid_gradient_scale(gradient_scale):
+    with pytest.raises(ValueError, match="gradient_scale"):
+        ablation.rosa_soft_exact_bitflip(
+            *_inputs(),
+            gradient_scale=gradient_scale,
+        )
+
+
 @pytest.mark.parametrize("probability", [-0.1, 1.0, float("nan")])
 def test_attention_dropout_rejects_invalid_probability(probability):
     with pytest.raises(ValueError, match="attention dropout"):
@@ -354,13 +394,61 @@ def test_suffix_dropout_vjp_is_unbiased_over_all_stratified_samples():
         )
 
 
-def test_exact_bitflip_rejects_batched_inputs():
-    query, key, value = _inputs()
-    with pytest.raises(ValueError, match="batch size 1"):
-        ablation.rosa_soft_exact_bitflip(
-            query.expand(2, -1, -1, -1),
-            key.expand(2, -1, -1, -1),
-            value.expand(2, -1, -1, -1),
+def test_exact_bitflip_batched_vjp_matches_independent_samples():
+    generator = torch.Generator().manual_seed(41)
+    tensors = [
+        torch.randn(3, 5, 1, 2, generator=generator, dtype=torch.float64)
+        for _ in range(3)
+    ]
+    loss_weights = torch.randn(
+        3,
+        5,
+        1,
+        2,
+        generator=generator,
+        dtype=torch.float64,
+    )
+    batched_inputs = [tensor.clone().requires_grad_() for tensor in tensors]
+    batched_output = ablation.rosa_soft_exact_bitflip(
+        *batched_inputs,
+        max_suffix_length=3,
+    )
+    batched_gradients = torch.autograd.grad(
+        (batched_output * loss_weights).sum(),
+        batched_inputs,
+    )
+
+    outputs = []
+    sample_gradients = []
+    for sample in range(3):
+        inputs = [
+            tensor[sample : sample + 1].clone().requires_grad_()
+            for tensor in tensors
+        ]
+        output = ablation.rosa_soft_exact_bitflip(
+            *inputs,
+            max_suffix_length=3,
+        )
+        outputs.append(output)
+        sample_gradients.append(
+            torch.autograd.grad(
+                (output * loss_weights[sample : sample + 1]).sum(),
+                inputs,
+            )
+        )
+
+    torch.testing.assert_close(
+        batched_output,
+        torch.cat(outputs),
+        rtol=0,
+        atol=0,
+    )
+    for role, gradient in enumerate(batched_gradients):
+        torch.testing.assert_close(
+            gradient,
+            torch.cat([sample[role] for sample in sample_gradients]),
+            rtol=0,
+            atol=0,
         )
 
 

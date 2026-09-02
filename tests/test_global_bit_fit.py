@@ -20,7 +20,6 @@ def test_joint_suffix_task_requires_a_coordinated_edit():
         task.query,
         task.initial_key,
         task.value,
-        2,
     )
     loss, grad_output = _loss_and_upstream(output, task.target_output)
     masks = {

@@ -84,6 +84,10 @@ exact local equality
   -> gather hard-signed value
 ```
 
+The exact diagonal scan always runs to the available sequence boundaries.
+`max_suffix_length` is not an input to `_hard_route_forward`; it appears only
+in the surrogate construction below.
+
 The null column contains no local match. If the largest exact suffix length is
 zero, the selected index is explicitly reset to zero.
 

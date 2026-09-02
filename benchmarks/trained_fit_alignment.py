@@ -171,7 +171,6 @@ def analyze_checkpoint(
         query.detach(),
         key.detach(),
         value.detach(),
-        model.max_suffix_length,
     )
     bitflip_started = time.perf_counter()
     bitflip_query_gradient = _bitflip_vjp_for_input(
@@ -181,7 +180,6 @@ def analyze_checkpoint(
         value.detach(),
         hard_output,
         grad_output,
-        model.max_suffix_length,
     )
     bitflip_key_gradient = _bitflip_vjp_for_input(
         1,
@@ -190,7 +188,6 @@ def analyze_checkpoint(
         value.detach(),
         hard_output,
         grad_output,
-        model.max_suffix_length,
     )
     if query.is_cuda:
         torch.cuda.synchronize(query.device)

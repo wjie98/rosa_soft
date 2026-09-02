@@ -31,7 +31,7 @@ def test_public_static_defaults_are_frozen():
     assert ROSA_SOFT_DEFAULT_MISMATCH_SCALE == 3.0
 
 
-def _naive_exact_suffix_lengths(query, key, max_suffix_length):
+def _naive_exact_suffix_lengths(query, key):
     batch, seq_len, heads, _ = query.shape
     q_bits = query > 0
     k_bits = key > 0
@@ -40,7 +40,7 @@ def _naive_exact_suffix_lengths(query, key, max_suffix_length):
         for h in range(heads):
             for query_pos in range(seq_len):
                 for route in range(1, query_pos + 1):
-                    limit = min(max_suffix_length, query_pos + 1, route)
+                    limit = min(query_pos + 1, route)
                     for offset in range(limit):
                         if not torch.equal(
                             q_bits[b, query_pos - offset, h],
@@ -125,7 +125,6 @@ def test_exact_suffix_dynamic_program_matches_naive(max_suffix_length):
         _naive_exact_suffix_lengths(
             query,
             key,
-            min(max_suffix_length, query.size(1)),
         ),
         rtol=0,
         atol=0,
@@ -185,6 +184,64 @@ def test_hard_forward_is_independent_of_soft_controls():
         mismatch_scale=100.0,
     )
     assert torch.equal(cold, hot)
+
+
+def test_hard_forward_can_match_beyond_surrogate_horizon():
+    query = torch.tensor(
+        [-1.0, -1.0, -1.0, -1.0, 1.0]
+    ).view(1, 5, 1, 1)
+    key = torch.tensor(
+        [-1.0, 1.0, 1.0, 1.0, -1.0]
+    ).view(1, 5, 1, 1)
+    value = torch.tensor(
+        [1.0, -1.0, 1.0, -1.0, -1.0]
+    ).view(1, 5, 1, 1)
+
+    short_output, short = inspect_rosa_soft(
+        query,
+        key,
+        value,
+        max_suffix_length=1,
+    )
+    long_output, long = inspect_rosa_soft(
+        query,
+        key,
+        value,
+        max_suffix_length=5,
+    )
+
+    assert short.selected_route_indices[0, 0, 4].item() == 2
+    assert long.selected_route_indices[0, 0, 4].item() == 2
+    assert short.exact_suffix_lengths[0, 0, 4, 2].item() == 2
+    assert short.soft_suffix_scores[0, 0, 4, 2].item() == 1
+    assert long.soft_suffix_scores[0, 0, 4, 2].item() == 2
+    assert torch.equal(short_output, long_output)
+    assert short_output[0, 4, 0, 0].item() == 1
+
+
+def test_surrogate_horizon_changes_gradient_but_not_hard_output():
+    base = (
+        _nonzero_randn((1, 7, 1, 3), seed=23),
+        _nonzero_randn((1, 7, 1, 3), seed=24),
+        _nonzero_randn((1, 7, 1, 2), seed=25),
+    )
+    grad_output = _nonzero_randn((1, 7, 1, 2), seed=26)
+    gradients = []
+    outputs = []
+    for horizon in (1, 7):
+        inputs = tuple(tensor.clone().requires_grad_() for tensor in base)
+        output = rosa_soft_reference(
+            *inputs,
+            max_suffix_length=horizon,
+        )
+        outputs.append(output)
+        gradients.append(torch.autograd.grad(output, inputs, grad_output))
+
+    assert torch.equal(outputs[0], outputs[1])
+    assert any(
+        not torch.allclose(short, long)
+        for short, long in zip(gradients[0], gradients[1])
+    )
 
 
 def test_local_match_gate_value_and_coherent_vjp_match_formula():

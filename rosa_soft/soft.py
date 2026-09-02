@@ -129,9 +129,8 @@ def _fake_hard_forward(
     query: Tensor,
     key: Tensor,
     value: Tensor,
-    max_suffix_length: int,
 ):
-    del key, max_suffix_length
+    del key
     output_shape = (
         *query.shape[:3],
         value.shape[3],
@@ -160,9 +159,8 @@ def _fake_hard_forward_varlen(
     key: Tensor,
     value: Tensor,
     cu_seqlens: Tensor,
-    max_suffix_length: int,
 ):
-    del key, cu_seqlens, max_suffix_length
+    del key, cu_seqlens
     token_head_shape = query.shape[:2]
     packed_symbol_shape = (
         query.shape[1],
@@ -274,7 +272,6 @@ class _HardForwardSoftVjpFunction(torch.autograd.Function):
                 query,
                 key,
                 value,
-                int(max_suffix_length),
             )
         )
         ctx.max_suffix_length = int(max_suffix_length)
@@ -352,7 +349,6 @@ class _HardForwardSoftVjpVarlenFunction(torch.autograd.Function):
                 key,
                 value,
                 cu_seqlens,
-                int(max_suffix_length),
             )
         )
         ctx.max_suffix_length = int(max_suffix_length)
@@ -424,7 +420,12 @@ def rosa_soft(
     dropout_p: float = ROSA_SOFT_DEFAULT_DROPOUT_P,
     mismatch_scale: float = ROSA_SOFT_DEFAULT_MISMATCH_SCALE,
 ) -> Tensor:
-    """Run exact hard ROSA forward with a dense attention-style CUDA VJP."""
+    """Run unlimited-suffix hard ROSA with a finite-window dense CUDA VJP.
+
+    ``max_suffix_length`` bounds only the surrogate backward. The hard
+    forward always considers the complete causal suffix available in the
+    input sequence.
+    """
 
     max_suffix_length = _validate_cuda_call(
         query,
@@ -443,7 +444,6 @@ def rosa_soft(
             query,
             key,
             value,
-            max_suffix_length,
         )[0]
 
     dropout_seed = make_dropout_seed(query, dropout_p, needs_backward)
@@ -470,7 +470,10 @@ def rosa_soft_varlen(
     dropout_p: float = ROSA_SOFT_DEFAULT_DROPOUT_P,
     mismatch_scale: float = ROSA_SOFT_DEFAULT_MISMATCH_SCALE,
 ) -> Tensor:
-    """Run RosaSoft independently over CUDA-packed variable-length sequences."""
+    """Run unlimited hard ROSA independently over packed sequences.
+
+    ``max_suffix_length`` bounds only the segment-local surrogate backward.
+    """
 
     max_suffix_length = _validate_cuda_varlen_call(
         query,
@@ -491,7 +494,6 @@ def rosa_soft_varlen(
             key,
             value,
             cu_seqlens,
-            max_suffix_length,
         )[0]
 
     dropout_seed = make_dropout_seed(query, dropout_p, needs_backward)

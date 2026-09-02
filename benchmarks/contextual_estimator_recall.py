@@ -23,6 +23,10 @@ from benchmarks.stochastic_hard_vjp import (  # noqa: E402
     mean_field_hard_rosa,
     stochastic_hard_rosa,
 )
+from benchmarks.estimator_fit_ablation import (  # noqa: E402
+    rosa_soft_exact_bitflip,
+)
+from benchmarks.fast_weight_proxy import rosa_fast_weight_proxy  # noqa: E402
 from benchmarks.suffix_proxy_ablation import (  # noqa: E402
     rosa_soft_suffix_proxy,
 )
@@ -43,12 +47,32 @@ from rosa_soft.soft_contract import (  # noqa: E402
 
 ESTIMATORS = (
     "production",
+    "bitflip",
     "production_dropout",
     "collision_lr",
     "mean_field",
     "arm",
     "disarm",
+    "state_linear_delta",
+    "state_quadratic_delta",
+    "state_cubic_delta",
+    "state_full_delta",
+    "state_linear_attention",
+    "state_quadratic_attention",
+    "state_cubic_attention",
+    "state_full_linear_attention",
 )
+
+_STATE_PROXIES = {
+    "state_linear_delta": "state_linear_delta",
+    "state_quadratic_delta": "state_quadratic_delta",
+    "state_cubic_delta": "state_cubic_delta",
+    "state_full_delta": "delta_rule",
+    "state_linear_attention": "state_linear_attention",
+    "state_quadratic_attention": "state_quadratic_attention",
+    "state_cubic_attention": "state_cubic_attention",
+    "state_full_linear_attention": "linear_attention",
+}
 
 
 class EstimatorResetRnnRosaLM(ResetRnnRosaLM):
@@ -58,14 +82,48 @@ class EstimatorResetRnnRosaLM(ResetRnnRosaLM):
         estimator: str,
         bit_temperature: float,
         antithetic_pairs: int,
+        bitflip_gradient_scale: float = 1.0,
+        context_depth: int = 1,
         **kwargs,
     ) -> None:
+        if isinstance(context_depth, bool) or not isinstance(context_depth, int):
+            raise TypeError("context_depth must be an integer")
+        if context_depth < 1:
+            raise ValueError("context_depth must be >= 1")
         super().__init__(**kwargs)
         if estimator not in ESTIMATORS:
             raise ValueError(f"estimator must be one of {ESTIMATORS}")
         self.estimator = estimator
         self.bit_temperature = float(bit_temperature)
         self.antithetic_pairs = int(antithetic_pairs)
+        self.bitflip_gradient_scale = float(bitflip_gradient_scale)
+        self.context_depth = context_depth
+        self.extra_recurrent = torch.nn.ModuleList(
+            torch.nn.GRUCell(
+                self.embedding.embedding_dim,
+                self.embedding.embedding_dim,
+            )
+            for _ in range(context_depth - 1)
+        )
+
+    def encode_residual(self, tokens: Tensor) -> Tensor:
+        if self.context_depth == 1:
+            return super().encode_residual(tokens)
+
+        inputs = self.embedding(tokens)
+        cells = (self.recurrent, *self.extra_recurrent)
+        states = [torch.zeros_like(inputs[:, 0]) for _ in cells]
+        residuals = []
+        for position in range(tokens.size(1)):
+            hidden = inputs[:, position]
+            reset = (tokens[:, position] == self.reset_token).unsqueeze(-1)
+            for layer, cell in enumerate(cells):
+                state = cell(hidden, states[layer])
+                state = torch.where(reset, torch.zeros_like(state), state)
+                states[layer] = state
+                hidden = hidden + self.context_scale * state
+            residuals.append(hidden)
+        return torch.stack(residuals, dim=1)
 
     def _routed_values(
         self,
@@ -76,6 +134,27 @@ class EstimatorResetRnnRosaLM(ResetRnnRosaLM):
     ) -> Tensor:
         if route_mode != "rosa" or self.estimator.startswith("production"):
             return super()._routed_values(query, key, value, route_mode)
+        if self.estimator == "bitflip":
+            return rosa_soft_exact_bitflip(
+                query,
+                key,
+                value,
+                max_suffix_length=1,
+                scale=self.scale,
+                mismatch_scale=self.mismatch_scale,
+                gradient_scale=self.bitflip_gradient_scale,
+            )
+        state_proxy = _STATE_PROXIES.get(self.estimator)
+        if state_proxy is not None:
+            return rosa_fast_weight_proxy(
+                query,
+                key,
+                value,
+                proxy=state_proxy,
+                max_suffix_length=1,
+                fingerprint_length=1,
+                mismatch_scale=self.mismatch_scale,
+            )
         if self.estimator == "collision_lr":
             return rosa_soft_suffix_proxy(
                 query,
@@ -222,6 +301,8 @@ def run_seed(args: argparse.Namespace, seed: int) -> Dict[str, object]:
         estimator="production",
         bit_temperature=args.bit_temperature,
         antithetic_pairs=args.antithetic_pairs,
+        bitflip_gradient_scale=args.bitflip_gradient_scale,
+        context_depth=args.context_depth,
     ).to(device)
 
     residual_model = copy.deepcopy(initial_model)
@@ -364,6 +445,7 @@ def run_benchmark(args: argparse.Namespace) -> Dict[str, object]:
         "validation_pairs": args.validation_pairs,
         "associations": args.associations,
         "hidden_size": args.hidden_size,
+        "context_depth": args.context_depth,
         "heads": args.heads,
         "qk_bits": args.qk_bits,
         "value_heads": args.value_heads,
@@ -371,6 +453,7 @@ def run_benchmark(args: argparse.Namespace) -> Dict[str, object]:
         "steps": args.steps,
         "bit_temperature": args.bit_temperature,
         "antithetic_pairs": args.antithetic_pairs,
+        "bitflip_gradient_scale": args.bitflip_gradient_scale,
         "dropout_p": args.dropout_p,
         "runs": runs,
         "summary": {
@@ -389,7 +472,10 @@ def run_benchmark(args: argparse.Namespace) -> Dict[str, object]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--estimators", nargs="+", choices=ESTIMATORS, default=list(ESTIMATORS)
+        "--estimators",
+        nargs="+",
+        choices=ESTIMATORS,
+        default=[estimator for estimator in ESTIMATORS if estimator != "bitflip"],
     )
     parser.add_argument(
         "--operator", choices=("reference", "cuda"), default="reference"
@@ -400,6 +486,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--validation-pairs", type=int, default=32)
     parser.add_argument("--associations", type=int, default=4)
     parser.add_argument("--hidden-size", type=int, default=32)
+    parser.add_argument("--context-depth", type=int, default=1)
     parser.add_argument("--heads", type=int, default=2)
     parser.add_argument("--qk-bits", type=int, default=8)
     parser.add_argument("--value-heads", type=int, default=2)
@@ -412,6 +499,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--bit-temperature", type=float, default=0.5)
     parser.add_argument("--antithetic-pairs", type=int, default=4)
+    parser.add_argument("--bitflip-gradient-scale", type=float, default=1.0)
     parser.add_argument("--scale", type=float, default=ROSA_SOFT_DEFAULT_SCALE)
     parser.add_argument("--dropout-p", type=float, default=0.1)
     parser.add_argument(

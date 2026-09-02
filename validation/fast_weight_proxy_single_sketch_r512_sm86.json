@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 3070",
+  "baselines": [
+    "production",
+    "bitflip"
+  ],
+  "estimators": [
+    "single_suffix_sketch_delta"
+  ],
+  "model_seeds": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "gradient_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "steps": 500,
+  "success_threshold": 0.001,
+  "sequence_length": 16,
+  "qk_bits": 4,
+  "value_bits": 4,
+  "max_suffix_length": 3,
+  "fingerprint_length": 3,
+  "sketch_dim": 512,
+  "sketch_seed": 0,
+  "scale": 1.0,
+  "mismatch_scale": 3.0,
+  "proxy_has_trainable_parameters": false,
+  "proxy_has_auxiliary_loss": false,
+  "state_dimensions": {
+    "local_feature": 16,
+    "single_suffix": 4096,
+    "single_suffix_sketch": 512,
+    "exact_multi_suffix": 4368,
+    "sketch_multi_suffix": 1536,
+    "sketch_delta_memory_floats_per_head": 6144
+  },
+  "fits": [
+    {
+      "estimator": "single_suffix_sketch_delta",
+      "model_seed": 0,
+      "initial_loss": 2.369891881942749,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.07499406486749649,
+        "value": 0.20674844086170197
+      },
+      "final_loss": 0.00044201858690939844,
+      "final_accuracy": 1.0,
+      "best_loss": 0.00044201858690939844,
+      "best_step": 500,
+      "first_below_threshold": 330,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 416,
+      "step_ms": 29.70147180999993
+    },
+    {
+      "estimator": "single_suffix_sketch_delta",
+      "model_seed": 1,
+      "initial_loss": 2.279224157333374,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.09140501171350479,
+        "value": 0.029256541281938553
+      },
+      "final_loss": 0.2590019404888153,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.255201518535614,
+      "best_step": 490,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 416,
+      "step_ms": 28.497435240000414
+    },
+    {
+      "estimator": "single_suffix_sketch_delta",
+      "model_seed": 2,
+      "initial_loss": 2.441319465637207,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.1026700884103775,
+        "value": 0.02369869500398636
+      },
+      "final_loss": 0.3268375098705292,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.30884286761283875,
+      "best_step": 354,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 416,
+      "step_ms": 28.468970690000788
+    },
+    {
+      "estimator": "single_suffix_sketch_delta",
+      "model_seed": 3,
+      "initial_loss": 3.021918773651123,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.1111830398440361,
+        "value": 0.06047222763299942
+      },
+      "final_loss": 0.0007207045564427972,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0007062393706291914,
+      "best_step": 500,
+      "first_below_threshold": 390,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 416,
+      "step_ms": 28.519432547998804
+    }
+  ],
+  "fit_summaries": {
+    "single_suffix_sketch_delta": {
+      "runs": 4,
+      "ever_successes": 2,
+      "final_successes": 2,
+      "median_best_loss": 0.1279538789531216,
+      "median_final_loss": 0.12986132252262905,
+      "median_final_accuracy": 0.9090909361839294,
+      "median_success_step": 360.0,
+      "mean_step_ms": 28.796827571999984
+    }
+  },
+  "gradient_cases": [],
+  "gradient_summaries": {}
+}

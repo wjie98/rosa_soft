@@ -1,0 +1,687 @@
+{
+  "device": "NVIDIA GeForce RTX 3070",
+  "compute_capability": [
+    8,
+    6
+  ],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "heads": 4,
+  "rows": [
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 8,
+      "method": "thread",
+      "latency_ms": 0.07552000135183334,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 8,
+      "method": "diagonal32",
+      "latency_ms": 0.1945600062608719,
+      "thread_ratio": 2.5762712232280527,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 8,
+      "method": "diagonal64",
+      "latency_ms": 0.20985600352287292,
+      "thread_ratio": 2.7788135562285503,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 8,
+      "method": "diagonal128",
+      "latency_ms": 0.22732800245285034,
+      "thread_ratio": 3.01016947012186,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 8,
+      "method": "warp_suffix",
+      "latency_ms": 0.8393279910087585,
+      "thread_ratio": 11.113982732845685,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 16,
+      "method": "thread",
+      "latency_ms": 0.104032002389431,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 16,
+      "method": "diagonal32",
+      "latency_ms": 0.19968000054359436,
+      "thread_ratio": 1.9194093736282885,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 16,
+      "method": "diagonal64",
+      "latency_ms": 0.20476800203323364,
+      "thread_ratio": 1.968317415122991,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 16,
+      "method": "diagonal128",
+      "latency_ms": 0.21564799547195435,
+      "thread_ratio": 2.072900554818724,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 16,
+      "method": "warp_suffix",
+      "latency_ms": 0.8376320004463196,
+      "thread_ratio": 8.05167622661676,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 32,
+      "method": "thread",
+      "latency_ms": 0.17100800573825836,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 32,
+      "method": "diagonal32",
+      "latency_ms": 0.21299199759960175,
+      "thread_ratio": 1.2455089262054977,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 32,
+      "method": "diagonal64",
+      "latency_ms": 0.22089600563049316,
+      "thread_ratio": 1.2917290314968788,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 32,
+      "method": "diagonal128",
+      "latency_ms": 0.2314240038394928,
+      "thread_ratio": 1.3532933902153448,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 32,
+      "method": "warp_suffix",
+      "latency_ms": 0.8304640054702759,
+      "thread_ratio": 4.85628729418299,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 64,
+      "method": "thread",
+      "latency_ms": 0.29900801181793213,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 64,
+      "method": "diagonal32",
+      "latency_ms": 0.2457599937915802,
+      "thread_ratio": 0.8219177549704756,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 64,
+      "method": "diagonal64",
+      "latency_ms": 0.23123200237751007,
+      "thread_ratio": 0.7733304568384232,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 64,
+      "method": "diagonal128",
+      "latency_ms": 0.2343679964542389,
+      "thread_ratio": 0.7838184503127864,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 64,
+      "method": "warp_suffix",
+      "latency_ms": 1.4704639911651611,
+      "thread_ratio": 4.917807995260461,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 128,
+      "method": "thread",
+      "latency_ms": 0.536736011505127,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 128,
+      "method": "diagonal32",
+      "latency_ms": 0.3113279938697815,
+      "thread_ratio": 0.5800393250990346,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 128,
+      "method": "diagonal64",
+      "latency_ms": 0.25488001108169556,
+      "thread_ratio": 0.4748703377791913,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 128,
+      "method": "diagonal128",
+      "latency_ms": 0.24985599517822266,
+      "thread_ratio": 0.46551002694522203,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 1024,
+      "window": 128,
+      "method": "warp_suffix",
+      "latency_ms": 2.694175958633423,
+      "thread_ratio": 5.019555052917644,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 8,
+      "method": "thread",
+      "latency_ms": 0.19148799777030945,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 8,
+      "method": "diagonal32",
+      "latency_ms": 0.3951680064201355,
+      "thread_ratio": 2.063669843653287,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 8,
+      "method": "diagonal64",
+      "latency_ms": 0.4280320107936859,
+      "thread_ratio": 2.2352942000423015,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 8,
+      "method": "diagonal128",
+      "latency_ms": 0.5065280199050903,
+      "thread_ratio": 2.6452207229858478,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 8,
+      "method": "warp_suffix",
+      "latency_ms": 2.8774399757385254,
+      "thread_ratio": 15.0267380161864,
+      "max_abs_error": 4.76837158203125e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 16,
+      "method": "thread",
+      "latency_ms": 0.3059839904308319,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 16,
+      "method": "diagonal32",
+      "latency_ms": 0.4106239974498749,
+      "thread_ratio": 1.341978699185234,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 16,
+      "method": "diagonal64",
+      "latency_ms": 0.43929600715637207,
+      "thread_ratio": 1.4356829798115713,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 16,
+      "method": "diagonal128",
+      "latency_ms": 0.5099520087242126,
+      "thread_ratio": 1.6665970268777444,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 16,
+      "method": "warp_suffix",
+      "latency_ms": 2.9030399322509766,
+      "thread_ratio": 9.487554980126363,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 32,
+      "method": "thread",
+      "latency_ms": 0.5488640069961548,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 32,
+      "method": "diagonal32",
+      "latency_ms": 0.44492799043655396,
+      "thread_ratio": 0.8106343006012982,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 32,
+      "method": "diagonal64",
+      "latency_ms": 0.44646400213241577,
+      "thread_ratio": 0.8134328293375295,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 32,
+      "method": "diagonal128",
+      "latency_ms": 0.7403519749641418,
+      "thread_ratio": 1.348880534207317,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 32,
+      "method": "warp_suffix",
+      "latency_ms": 2.851871967315674,
+      "thread_ratio": 5.195953698847032,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 64,
+      "method": "thread",
+      "latency_ms": 1.046336054801941,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 64,
+      "method": "diagonal32",
+      "latency_ms": 0.5269759893417358,
+      "thread_ratio": 0.5036393297576716,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 64,
+      "method": "diagonal64",
+      "latency_ms": 0.4822719991207123,
+      "thread_ratio": 0.4609150156944565,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 64,
+      "method": "diagonal128",
+      "latency_ms": 0.5353279709815979,
+      "thread_ratio": 0.5116214513729331,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 64,
+      "method": "warp_suffix",
+      "latency_ms": 5.2876482009887695,
+      "thread_ratio": 5.053489437472991,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 128,
+      "method": "thread",
+      "latency_ms": 2.2374401092529297,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 128,
+      "method": "diagonal32",
+      "latency_ms": 0.6347839832305908,
+      "thread_ratio": 0.28370993288510504,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 128,
+      "method": "diagonal64",
+      "latency_ms": 0.5314559936523438,
+      "thread_ratio": 0.23752858968358903,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 128,
+      "method": "diagonal128",
+      "latency_ms": 0.5642240047454834,
+      "thread_ratio": 0.2521739028509125,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 2048,
+      "window": 128,
+      "method": "warp_suffix",
+      "latency_ms": 10.564191818237305,
+      "thread_ratio": 4.721552891873667,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 8,
+      "method": "thread",
+      "latency_ms": 0.7737280130386353,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 8,
+      "method": "diagonal32",
+      "latency_ms": 1.2195839881896973,
+      "thread_ratio": 1.576243806140697,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 8,
+      "method": "diagonal64",
+      "latency_ms": 1.351680040359497,
+      "thread_ratio": 1.7469705343239297,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 8,
+      "method": "diagonal128",
+      "latency_ms": 1.619968056678772,
+      "thread_ratio": 2.0937177268750133,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 8,
+      "method": "warp_suffix",
+      "latency_ms": 12.556159973144531,
+      "thread_ratio": 16.22813154177158,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 16,
+      "method": "thread",
+      "latency_ms": 1.1376639604568481,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 16,
+      "method": "diagonal32",
+      "latency_ms": 1.2267520427703857,
+      "thread_ratio": 1.078307905858038,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 16,
+      "method": "diagonal64",
+      "latency_ms": 1.3420159816741943,
+      "thread_ratio": 1.1796242373145802,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 16,
+      "method": "diagonal128",
+      "latency_ms": 1.5689599514007568,
+      "thread_ratio": 1.3791066658828803,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 16,
+      "method": "warp_suffix",
+      "latency_ms": 12.312383651733398,
+      "thread_ratio": 10.822513571396911,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 32,
+      "method": "thread",
+      "latency_ms": 2.0336639881134033,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 32,
+      "method": "diagonal32",
+      "latency_ms": 1.3352960348129272,
+      "thread_ratio": 0.6565961941685654,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 32,
+      "method": "diagonal64",
+      "latency_ms": 1.3853440284729004,
+      "thread_ratio": 0.6812059595735189,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 32,
+      "method": "diagonal128",
+      "latency_ms": 1.6015360355377197,
+      "thread_ratio": 0.7875126101944886,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 32,
+      "method": "warp_suffix",
+      "latency_ms": 12.56220817565918,
+      "thread_ratio": 6.177130661251928,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 64,
+      "method": "thread",
+      "latency_ms": 4.006015777587891,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 64,
+      "method": "diagonal32",
+      "latency_ms": 1.5049279928207397,
+      "thread_ratio": 0.37566701590149243,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 64,
+      "method": "diagonal64",
+      "latency_ms": 1.447551965713501,
+      "thread_ratio": 0.36134454931805177,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 64,
+      "method": "diagonal128",
+      "latency_ms": 1.5797439813613892,
+      "thread_ratio": 0.39434292550704514,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 64,
+      "method": "warp_suffix",
+      "latency_ms": 22.26790428161621,
+      "thread_ratio": 5.5586162206840335,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 128,
+      "method": "thread",
+      "latency_ms": 7.548543930053711,
+      "thread_ratio": 1.0,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 128,
+      "method": "diagonal32",
+      "latency_ms": 1.8923519849777222,
+      "thread_ratio": 0.25069099451664145,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 128,
+      "method": "diagonal64",
+      "latency_ms": 1.6313279867172241,
+      "thread_ratio": 0.2161116106408639,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 128,
+      "method": "diagonal128",
+      "latency_ms": 1.6343040466308594,
+      "thread_ratio": 0.21650586679691358,
+      "max_abs_error": 7.152557373046875e-07
+    },
+    {
+      "bits": 8,
+      "seq_len": 4096,
+      "window": 128,
+      "method": "warp_suffix",
+      "latency_ms": 42.99760055541992,
+      "thread_ratio": 5.696144972307788,
+      "max_abs_error": 7.152557373046875e-07
+    }
+  ]
+}

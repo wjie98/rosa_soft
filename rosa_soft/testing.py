@@ -81,7 +81,6 @@ def inspect_rosa_soft(
         query,
         key,
         value,
-        max_suffix_length,
     )
     local_match_gates = _pairwise_soft_match_gates(
         query,

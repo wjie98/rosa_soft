@@ -72,7 +72,6 @@ def _route_and_output(
         query,
         key,
         value,
-        max_suffix_length,
     )
     return int(routes[0, 0, -1]), output[:, -1:].clone()
 
@@ -314,7 +313,6 @@ def run_fit(
             task.query,
             key.detach(),
             task.value,
-            args.max_suffix_length,
         )
         loss, grad_output = _loss_and_upstream(output, task.target_output)
         if step == 0:

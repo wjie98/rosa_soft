@@ -1,0 +1,3538 @@
+{
+  "schema_version": 1,
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 3070",
+  "baselines": [
+    "production",
+    "bitflip"
+  ],
+  "estimators": [
+    "production",
+    "bitflip",
+    "linear_attention",
+    "delta_rule",
+    "single_suffix_delta",
+    "exact_suffix_delta",
+    "sketch_suffix_delta"
+  ],
+  "model_seeds": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "gradient_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "steps": 500,
+  "success_threshold": 0.001,
+  "sequence_length": 16,
+  "qk_bits": 2,
+  "value_bits": 2,
+  "max_suffix_length": 3,
+  "fingerprint_length": 3,
+  "sketch_dim": 32,
+  "sketch_seed": 0,
+  "scale": 1.0,
+  "mismatch_scale": 3.0,
+  "proxy_has_trainable_parameters": false,
+  "proxy_has_auxiliary_loss": false,
+  "state_dimensions": {
+    "local_feature": 4,
+    "single_suffix": 64,
+    "exact_multi_suffix": 84,
+    "sketch_multi_suffix": 96,
+    "sketch_delta_memory_floats_per_head": 192
+  },
+  "fits": [
+    {
+      "estimator": "production",
+      "model_seed": 0,
+      "initial_loss": 2.0304079055786133,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.05051782354712486,
+        "value": 0.18099457025527954
+      },
+      "final_loss": 0.0009403426083736122,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0009403426083736122,
+      "best_step": 500,
+      "first_below_threshold": 483,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 144,
+      "step_ms": 4.12463175800076
+    },
+    {
+      "estimator": "production",
+      "model_seed": 1,
+      "initial_loss": 2.69748854637146,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.11779789626598358,
+        "value": 0.11789758503437042
+      },
+      "final_loss": 0.5077165365219116,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.5077165365219116,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 3.1468942999999854
+    },
+    {
+      "estimator": "production",
+      "model_seed": 2,
+      "initial_loss": 2.163439989089966,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.04200432077050209,
+        "value": 0.040635012090206146
+      },
+      "final_loss": 0.5528421998023987,
+      "final_accuracy": 0.7272727489471436,
+      "best_loss": 0.44232940673828125,
+      "best_step": 236,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 3.1615107279994845
+    },
+    {
+      "estimator": "production",
+      "model_seed": 3,
+      "initial_loss": 2.42063045501709,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.014284742064774036,
+        "value": 0.10798580199480057
+      },
+      "final_loss": 0.0012907165801152587,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0012907165801152587,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 144,
+      "step_ms": 3.475125463999575
+    },
+    {
+      "estimator": "bitflip",
+      "model_seed": 0,
+      "initial_loss": 2.0304079055786133,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 2.473848342895508,
+        "value": 0.7564056515693665
+      },
+      "final_loss": 0.6934553980827332,
+      "final_accuracy": 0.5,
+      "best_loss": 0.6934553980827332,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 144,
+      "step_ms": 10.755776071999207
+    },
+    {
+      "estimator": "bitflip",
+      "model_seed": 1,
+      "initial_loss": 2.69748854637146,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.3769378960132599,
+        "value": 0.8181134462356567
+      },
+      "final_loss": 0.6785349249839783,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.4531930983066559,
+      "best_step": 338,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 10.674363942000127
+    },
+    {
+      "estimator": "bitflip",
+      "model_seed": 2,
+      "initial_loss": 2.163439989089966,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.5107228755950928,
+        "value": 0.4109342694282532
+      },
+      "final_loss": 0.7394704222679138,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.4413614273071289,
+      "best_step": 424,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 9.93322179399911
+    },
+    {
+      "estimator": "bitflip",
+      "model_seed": 3,
+      "initial_loss": 2.42063045501709,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 2.334836959838867,
+        "value": 0.01769115775823593
+      },
+      "final_loss": 0.0008252494735643268,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0008010028395801783,
+      "best_step": 498,
+      "first_below_threshold": 425,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 144,
+      "step_ms": 10.508676957999342
+    },
+    {
+      "estimator": "linear_attention",
+      "model_seed": 0,
+      "initial_loss": 2.0304079055786133,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.02227661944925785,
+        "value": 0.4166210889816284
+      },
+      "final_loss": 1.219749927520752,
+      "final_accuracy": 0.25,
+      "best_loss": 0.6289172768592834,
+      "best_step": 488,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 144,
+      "step_ms": 24.220768725999733
+    },
+    {
+      "estimator": "linear_attention",
+      "model_seed": 1,
+      "initial_loss": 2.69748854637146,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.017427394166588783,
+        "value": 0.18157631158828735
+      },
+      "final_loss": 0.5090723037719727,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.29706642031669617,
+      "best_step": 410,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 24.109137380000902
+    },
+    {
+      "estimator": "linear_attention",
+      "model_seed": 2,
+      "initial_loss": 2.163439989089966,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.015733717009425163,
+        "value": 0.06175772845745087
+      },
+      "final_loss": 0.6407763957977295,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.4395768940448761,
+      "best_step": 275,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 23.90440170799957
+    },
+    {
+      "estimator": "linear_attention",
+      "model_seed": 3,
+      "initial_loss": 2.42063045501709,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.05567273870110512,
+        "value": 0.2298402637243271
+      },
+      "final_loss": 0.001370346755720675,
+      "final_accuracy": 1.0,
+      "best_loss": 0.001370346755720675,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 144,
+      "step_ms": 24.1163818240002
+    },
+    {
+      "estimator": "delta_rule",
+      "model_seed": 0,
+      "initial_loss": 2.0304079055786133,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.16852830350399017,
+        "value": 0.1759023368358612
+      },
+      "final_loss": 0.6937678456306458,
+      "final_accuracy": 0.5,
+      "best_loss": 0.2911895215511322,
+      "best_step": 122,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 144,
+      "step_ms": 21.39322498399997
+    },
+    {
+      "estimator": "delta_rule",
+      "model_seed": 1,
+      "initial_loss": 2.69748854637146,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.08166245371103287,
+        "value": 0.19376398622989655
+      },
+      "final_loss": 0.5103945136070251,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.43532970547676086,
+      "best_step": 450,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 21.848064992000218
+    },
+    {
+      "estimator": "delta_rule",
+      "model_seed": 2,
+      "initial_loss": 2.163439989089966,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.01820458471775055,
+        "value": 0.0600753128528595
+      },
+      "final_loss": 0.37591665983200073,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.37591665983200073,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 21.933990695999455
+    },
+    {
+      "estimator": "delta_rule",
+      "model_seed": 3,
+      "initial_loss": 2.42063045501709,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.11814852058887482,
+        "value": 0.03117196634411812
+      },
+      "final_loss": 0.0013278464321047068,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0013278464321047068,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 144,
+      "step_ms": 21.629320776000895
+    },
+    {
+      "estimator": "single_suffix_delta",
+      "model_seed": 0,
+      "initial_loss": 2.0304079055786133,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.0671660527586937,
+        "value": 0.0346815288066864
+      },
+      "final_loss": 0.6936138272285461,
+      "final_accuracy": 0.5,
+      "best_loss": 0.6936138272285461,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 144,
+      "step_ms": 23.655224128000555
+    },
+    {
+      "estimator": "single_suffix_delta",
+      "model_seed": 1,
+      "initial_loss": 2.69748854637146,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.23304852843284607,
+        "value": 0.14824584126472473
+      },
+      "final_loss": 0.6319465041160583,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.08059566468000412,
+      "best_step": 256,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 23.261294102001557
+    },
+    {
+      "estimator": "single_suffix_delta",
+      "model_seed": 2,
+      "initial_loss": 2.163439989089966,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.03767605870962143,
+        "value": 0.03672117367386818
+      },
+      "final_loss": 0.5717985033988953,
+      "final_accuracy": 0.7272727489471436,
+      "best_loss": 0.5605316758155823,
+      "best_step": 467,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 23.25593445999948
+    },
+    {
+      "estimator": "single_suffix_delta",
+      "model_seed": 3,
+      "initial_loss": 2.42063045501709,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.02342471294105053,
+        "value": 0.004000935237854719
+      },
+      "final_loss": 0.0013162759132683277,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0013162759132683277,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 144,
+      "step_ms": 22.302457448000496
+    },
+    {
+      "estimator": "exact_suffix_delta",
+      "model_seed": 0,
+      "initial_loss": 2.0304079055786133,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.16753694415092468,
+        "value": 0.17999723553657532
+      },
+      "final_loss": 0.0008909834432415664,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0008909834432415664,
+      "best_step": 500,
+      "first_below_threshold": 473,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 144,
+      "step_ms": 21.711150122000618
+    },
+    {
+      "estimator": "exact_suffix_delta",
+      "model_seed": 1,
+      "initial_loss": 2.69748854637146,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.17858301103115082,
+        "value": 0.17306090891361237
+      },
+      "final_loss": 0.25951462984085083,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.2586882412433624,
+      "best_step": 442,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 23.329041005999898
+    },
+    {
+      "estimator": "exact_suffix_delta",
+      "model_seed": 2,
+      "initial_loss": 2.163439989089966,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.03546985983848572,
+        "value": 0.07892866432666779
+      },
+      "final_loss": 0.6420085430145264,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.6400126814842224,
+      "best_step": 490,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 23.033048825998776
+    },
+    {
+      "estimator": "exact_suffix_delta",
+      "model_seed": 3,
+      "initial_loss": 2.42063045501709,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.10940693318843842,
+        "value": 0.026852572336792946
+      },
+      "final_loss": 0.001318142400123179,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0012579049216583371,
+      "best_step": 496,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 144,
+      "step_ms": 22.80997407399991
+    },
+    {
+      "estimator": "sketch_suffix_delta",
+      "model_seed": 0,
+      "initial_loss": 2.0304079055786133,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.20232142508029938,
+        "value": 0.16084767878055573
+      },
+      "final_loss": 0.0014478332595899701,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0014478332595899701,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 144,
+      "step_ms": 29.61076628599949
+    },
+    {
+      "estimator": "sketch_suffix_delta",
+      "model_seed": 1,
+      "initial_loss": 2.69748854637146,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.19106829166412354,
+        "value": 0.17902596294879913
+      },
+      "final_loss": 0.26267796754837036,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.26084548234939575,
+      "best_step": 371,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 29.966151776001425
+    },
+    {
+      "estimator": "sketch_suffix_delta",
+      "model_seed": 2,
+      "initial_loss": 2.163439989089966,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.04260551929473877,
+        "value": 0.08018536865711212
+      },
+      "final_loss": 0.6407651305198669,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.6193726062774658,
+      "best_step": 103,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 144,
+      "step_ms": 29.89260448999994
+    },
+    {
+      "estimator": "sketch_suffix_delta",
+      "model_seed": 3,
+      "initial_loss": 2.42063045501709,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.11769051849842072,
+        "value": 0.039389126002788544
+      },
+      "final_loss": 0.0014770422130823135,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0014770422130823135,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 144,
+      "step_ms": 29.72441470800004
+    }
+  ],
+  "fit_summaries": {
+    "production": {
+      "runs": 4,
+      "ever_successes": 1,
+      "final_successes": 1,
+      "median_best_loss": 0.22181006165919825,
+      "median_final_loss": 0.25450362655101344,
+      "median_final_accuracy": 0.8636363744735718,
+      "median_success_step": 483,
+      "mean_step_ms": 3.477040562499951
+    },
+    "bitflip": {
+      "runs": 4,
+      "ever_successes": 1,
+      "final_successes": 1,
+      "median_best_loss": 0.4472772628068924,
+      "median_final_loss": 0.6859951615333557,
+      "median_final_accuracy": 0.7272727489471436,
+      "median_success_step": 425,
+      "mean_step_ms": 10.468009691499446
+    },
+    "linear_attention": {
+      "runs": 4,
+      "ever_successes": 0,
+      "final_successes": 0,
+      "median_best_loss": 0.36832165718078613,
+      "median_final_loss": 0.5749243497848511,
+      "median_final_accuracy": 0.6363636255264282,
+      "median_success_step": null,
+      "mean_step_ms": 24.0876724095001
+    },
+    "delta_rule": {
+      "runs": 4,
+      "ever_successes": 0,
+      "final_successes": 0,
+      "median_best_loss": 0.33355309069156647,
+      "median_final_loss": 0.44315558671951294,
+      "median_final_accuracy": 0.7272727489471436,
+      "median_success_step": null,
+      "mean_step_ms": 21.701150362000135
+    },
+    "single_suffix_delta": {
+      "runs": 4,
+      "ever_successes": 0,
+      "final_successes": 0,
+      "median_best_loss": 0.3205636702477932,
+      "median_final_loss": 0.6018725037574768,
+      "median_final_accuracy": 0.6818181872367859,
+      "median_success_step": null,
+      "mean_step_ms": 23.118727534500522
+    },
+    "exact_suffix_delta": {
+      "runs": 4,
+      "ever_successes": 1,
+      "final_successes": 1,
+      "median_best_loss": 0.12997307308251038,
+      "median_final_loss": 0.130416386120487,
+      "median_final_accuracy": 0.9090909361839294,
+      "median_success_step": 473,
+      "mean_step_ms": 22.7208035069998
+    },
+    "sketch_suffix_delta": {
+      "runs": 4,
+      "ever_successes": 0,
+      "final_successes": 0,
+      "median_best_loss": 0.13116126228123903,
+      "median_final_loss": 0.13207750488072634,
+      "median_final_accuracy": 0.9090909361839294,
+      "median_success_step": null,
+      "mean_step_ms": 29.798484315000223
+    }
+  },
+  "gradient_cases": [
+    {
+      "seed": 0,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.2189757328861222,
+            "sign_agreement_to_bitflip": 0.7619047619047619,
+            "relative_l2_error_to_bitflip": 0.9920127244060988,
+            "l2_norm": 0.4794653160894031,
+            "norm_ratio_to_bitflip": 0.03997959612159614
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.4753952482058338,
+            "sign_agreement_to_bitflip": 0.8,
+            "relative_l2_error_to_bitflip": 0.9875592084412496,
+            "l2_norm": 0.3053179914465041,
+            "norm_ratio_to_bitflip": 0.02675972554429293
+          },
+          "value": {
+            "cosine_to_bitflip": -0.29064790688209036,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 1.0335310918729408,
+            "l2_norm": 0.36968623646517285,
+            "norm_ratio_to_bitflip": 0.10007286763983517
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 11.992750367740857,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999998,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 11.409608478276025,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 3.694170509789758,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.03599393537187564,
+            "sign_agreement_to_bitflip": 0.5238095238095237,
+            "relative_l2_error_to_bitflip": 1.0001116186137262,
+            "l2_norm": 0.899047177506303,
+            "norm_ratio_to_bitflip": 0.07496588771868698
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.40542459898755434,
+            "sign_agreement_to_bitflip": 0.5333333333333333,
+            "relative_l2_error_to_bitflip": 0.9888906048782039,
+            "l2_norm": 0.3221239743539378,
+            "norm_ratio_to_bitflip": 0.028232693082086393
+          },
+          "value": {
+            "cosine_to_bitflip": -0.35539096967360456,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 1.1014185906243552,
+            "l2_norm": 0.8393580717003166,
+            "norm_ratio_to_bitflip": 0.227211513241192
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5929491184272265,
+            "sign_agreement_to_bitflip": 0.8095238095238095,
+            "relative_l2_error_to_bitflip": 0.9704191628522116,
+            "l2_norm": 0.6161332752721677,
+            "norm_ratio_to_bitflip": 0.05137547738252741
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5798495597413889,
+            "sign_agreement_to_bitflip": 0.7333333333333333,
+            "relative_l2_error_to_bitflip": 0.9724053695721797,
+            "l2_norm": 0.5591088623648656,
+            "norm_ratio_to_bitflip": 0.04900333463934479
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7135513519757157,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9512640890299873,
+            "l2_norm": 0.25887737043371417,
+            "norm_ratio_to_bitflip": 0.0700772662625276
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.548357585775331,
+            "sign_agreement_to_bitflip": 0.4,
+            "relative_l2_error_to_bitflip": 0.985179547065699,
+            "l2_norm": 0.33000605409862743,
+            "norm_ratio_to_bitflip": 0.027517128596815158
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5948694095833331,
+            "sign_agreement_to_bitflip": 0.4,
+            "relative_l2_error_to_bitflip": 0.983586943968546,
+            "l2_norm": 0.31975119669262136,
+            "norm_ratio_to_bitflip": 0.02802472997223611
+          },
+          "value": {
+            "cosine_to_bitflip": 0.0,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 1.0002440978132199,
+            "l2_norm": 0.08162823013751283,
+            "norm_ratio_to_bitflip": 0.022096497690399904
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5972294190215066,
+            "sign_agreement_to_bitflip": 0.7142857142857142,
+            "relative_l2_error_to_bitflip": 0.968675159179918,
+            "l2_norm": 0.6485320425802219,
+            "norm_ratio_to_bitflip": 0.05407700674940252
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5781195836038527,
+            "sign_agreement_to_bitflip": 0.6,
+            "relative_l2_error_to_bitflip": 0.9701863210018649,
+            "l2_norm": 0.6076087077340546,
+            "norm_ratio_to_bitflip": 0.0532541242664852
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7607740579024369,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9541397290164421,
+            "l2_norm": 0.22672774100014084,
+            "norm_ratio_to_bitflip": 0.061374465634247165
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6060049750948091,
+            "sign_agreement_to_bitflip": 0.7142857142857142,
+            "relative_l2_error_to_bitflip": 0.9654580561064715,
+            "l2_norm": 0.7060723198304576,
+            "norm_ratio_to_bitflip": 0.058874928450917505
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5879267244772701,
+            "sign_agreement_to_bitflip": 0.6,
+            "relative_l2_error_to_bitflip": 0.9671249934633231,
+            "l2_norm": 0.6599677979080328,
+            "norm_ratio_to_bitflip": 0.057843159050077496
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7598263340008274,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9494098596353784,
+            "l2_norm": 0.25095941216695966,
+            "norm_ratio_to_bitflip": 0.0679339005879407
+          }
+        }
+      }
+    },
+    {
+      "seed": 1,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6063171448536432,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9582447703934474,
+            "l2_norm": 0.557248318973804,
+            "norm_ratio_to_bitflip": 0.07166443502242542
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.664569780275229,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9617722307671691,
+            "l2_norm": 0.348608346509169,
+            "norm_ratio_to_bitflip": 0.05904619136235867
+          },
+          "value": {
+            "cosine_to_bitflip": 0.5724852967859496,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9534218912561814,
+            "l2_norm": 0.4347388983554078,
+            "norm_ratio_to_bitflip": 0.08591287898710771
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 7.775800071533786,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999998,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 5.903993779544656,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 5.060229659171889,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.375671468236543,
+            "sign_agreement_to_bitflip": 0.9333333333333333,
+            "relative_l2_error_to_bitflip": 0.9493224573421938,
+            "l2_norm": 1.321103086579044,
+            "norm_ratio_to_bitflip": 0.16989931253703838
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.18857690258401147,
+            "sign_agreement_to_bitflip": 0.9166666666666666,
+            "relative_l2_error_to_bitflip": 0.9824285098520548,
+            "l2_norm": 0.9541650899974718,
+            "norm_ratio_to_bitflip": 0.1616134985276122
+          },
+          "value": {
+            "cosine_to_bitflip": 0.6048949374287813,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9023053206501199,
+            "l2_norm": 0.913718964670644,
+            "norm_ratio_to_bitflip": 0.1805686749838494
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6445111770944342,
+            "sign_agreement_to_bitflip": 0.5882352941176471,
+            "relative_l2_error_to_bitflip": 0.9105463823053365,
+            "l2_norm": 1.1667783316404428,
+            "norm_ratio_to_bitflip": 0.1500525117552687
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.3720007042774894,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 0.9581130911306887,
+            "l2_norm": 0.7946014026626874,
+            "norm_ratio_to_bitflip": 0.13458710024656748
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9488449249946573,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.8414837667762188,
+            "l2_norm": 0.854388837750204,
+            "norm_ratio_to_bitflip": 0.1688438856132916
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5173304246333449,
+            "sign_agreement_to_bitflip": 0.5882352941176471,
+            "relative_l2_error_to_bitflip": 0.9855187286670818,
+            "l2_norm": 0.22222476744639172,
+            "norm_ratio_to_bitflip": 0.028579022788912525
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.536589075591601,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 0.9807118286730455,
+            "l2_norm": 0.217654421433374,
+            "norm_ratio_to_bitflip": 0.03686562512776911
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9008894443730907,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9920248893313366,
+            "l2_norm": 0.04483748540123661,
+            "norm_ratio_to_bitflip": 0.008860760957749554
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.7068182409194338,
+            "sign_agreement_to_bitflip": 0.7647058823529411,
+            "relative_l2_error_to_bitflip": 0.9471802469587977,
+            "l2_norm": 0.5982956884659735,
+            "norm_ratio_to_bitflip": 0.07694329624757944
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5659639028525274,
+            "sign_agreement_to_bitflip": 0.7142857142857142,
+            "relative_l2_error_to_bitflip": 0.9579032578733467,
+            "l2_norm": 0.46181235435803186,
+            "norm_ratio_to_bitflip": 0.0782203321348433
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9066706819868907,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9323849153031909,
+            "l2_norm": 0.3803775495468478,
+            "norm_ratio_to_bitflip": 0.0751700170084962
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5263542444424654,
+            "sign_agreement_to_bitflip": 0.8235294117647058,
+            "relative_l2_error_to_bitflip": 0.9547577233703862,
+            "l2_norm": 0.7158436439664388,
+            "norm_ratio_to_bitflip": 0.09206044874881124
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.46199483865688784,
+            "sign_agreement_to_bitflip": 0.7857142857142857,
+            "relative_l2_error_to_bitflip": 0.9669427709010825,
+            "l2_norm": 0.45310112173731565,
+            "norm_ratio_to_bitflip": 0.07674485080034434
+          },
+          "value": {
+            "cosine_to_bitflip": 0.6040390918416029,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9379159227642574,
+            "l2_norm": 0.5541944569260288,
+            "norm_ratio_to_bitflip": 0.10951962544259763
+          }
+        }
+      }
+    },
+    {
+      "seed": 2,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6737992149653524,
+            "sign_agreement_to_bitflip": 0.7241379310344828,
+            "relative_l2_error_to_bitflip": 0.959101961690915,
+            "l2_norm": 0.9173700819613547,
+            "norm_ratio_to_bitflip": 0.06234034062686797
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.7584022615484882,
+            "sign_agreement_to_bitflip": 0.7647058823529411,
+            "relative_l2_error_to_bitflip": 0.9697002184573263,
+            "l2_norm": 0.4954253332179001,
+            "norm_ratio_to_bitflip": 0.040424195032492206
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7141457093960766,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9346642216856673,
+            "l2_norm": 0.7720891182264619,
+            "norm_ratio_to_bitflip": 0.0947901559793825
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 14.715512824226995,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999998,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 12.255663540602022,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 8.145245782635872,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5019426578946008,
+            "sign_agreement_to_bitflip": 0.6296296296296295,
+            "relative_l2_error_to_bitflip": 0.950334736365367,
+            "l2_norm": 1.5912980099828424,
+            "norm_ratio_to_bitflip": 0.10813744848653845
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.3306551506590206,
+            "sign_agreement_to_bitflip": 0.6,
+            "relative_l2_error_to_bitflip": 0.9755550986118412,
+            "l2_norm": 1.0244660346312042,
+            "norm_ratio_to_bitflip": 0.08359123365595271
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7665068535996676,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.8906024608004744,
+            "l2_norm": 1.2176611599547598,
+            "norm_ratio_to_bitflip": 0.14949348275660188
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.498991701030455,
+            "sign_agreement_to_bitflip": 0.7407407407407407,
+            "relative_l2_error_to_bitflip": 0.9411936223145685,
+            "l2_norm": 1.9393361325524991,
+            "norm_ratio_to_bitflip": 0.13178855237444792
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.21636274809118294,
+            "sign_agreement_to_bitflip": 0.5333333333333333,
+            "relative_l2_error_to_bitflip": 0.9822856979090265,
+            "l2_norm": 1.3261278917176618,
+            "norm_ratio_to_bitflip": 0.10820531155447498
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9304082514267302,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.8407758428073564,
+            "l2_norm": 1.4150651751181478,
+            "norm_ratio_to_bitflip": 0.17372897182977584
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6749048114683993,
+            "sign_agreement_to_bitflip": 0.6956521739130435,
+            "relative_l2_error_to_bitflip": 0.9462819615177698,
+            "l2_norm": 1.2139975829093548,
+            "norm_ratio_to_bitflip": 0.08249781012800864
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.8092278509383999,
+            "sign_agreement_to_bitflip": 0.6470588235294118,
+            "relative_l2_error_to_bitflip": 0.9222999389782545,
+            "l2_norm": 1.2041414584320078,
+            "norm_ratio_to_bitflip": 0.0982518371561674
+          },
+          "value": {
+            "cosine_to_bitflip": 0.0911988704599261,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9984498780006339,
+            "l2_norm": 0.154380955415469,
+            "norm_ratio_to_bitflip": 0.018953504846296976
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6866188780658963,
+            "sign_agreement_to_bitflip": 0.6896551724137931,
+            "relative_l2_error_to_bitflip": 0.9336901884524829,
+            "l2_norm": 1.4828326967417313,
+            "norm_ratio_to_bitflip": 0.10076663412643416
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.6113131726532615,
+            "sign_agreement_to_bitflip": 0.5294117647058824,
+            "relative_l2_error_to_bitflip": 0.9446874572532887,
+            "l2_norm": 1.1695254355347948,
+            "norm_ratio_to_bitflip": 0.0954273452155611
+          },
+          "value": {
+            "cosine_to_bitflip": 0.8377366812094984,
+            "sign_agreement_to_bitflip": 0.9166666666666666,
+            "relative_l2_error_to_bitflip": 0.9083011982297329,
+            "l2_norm": 0.9115936935737893,
+            "norm_ratio_to_bitflip": 0.11191727271350549
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6929475217101718,
+            "sign_agreement_to_bitflip": 0.6896551724137931,
+            "relative_l2_error_to_bitflip": 0.9399688575749003,
+            "l2_norm": 1.322297403012615,
+            "norm_ratio_to_bitflip": 0.08985737831954049
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.6131219652954816,
+            "sign_agreement_to_bitflip": 0.5882352941176471,
+            "relative_l2_error_to_bitflip": 0.9538269170113287,
+            "l2_norm": 0.9634029116255935,
+            "norm_ratio_to_bitflip": 0.07860879245207064
+          },
+          "value": {
+            "cosine_to_bitflip": 0.8464282194697865,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9078137505317859,
+            "l2_norm": 0.9057180863189354,
+            "norm_ratio_to_bitflip": 0.11119591851356475
+          }
+        }
+      }
+    },
+    {
+      "seed": 3,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5078857422191054,
+            "sign_agreement_to_bitflip": 0.8571428571428571,
+            "relative_l2_error_to_bitflip": 0.9779721761693353,
+            "l2_norm": 0.6490815511376428,
+            "norm_ratio_to_bitflip": 0.04487655817321939
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.581278067372103,
+            "sign_agreement_to_bitflip": 0.8666666666666667,
+            "relative_l2_error_to_bitflip": 0.9825851050184983,
+            "l2_norm": 0.3253542257996183,
+            "norm_ratio_to_bitflip": 0.03049890998498778
+          },
+          "value": {
+            "cosine_to_bitflip": 0.5014074197396763,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.972440803853214,
+            "l2_norm": 0.5616506812793689,
+            "norm_ratio_to_bitflip": 0.05750369417670615
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 14.463710622197176,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 10.667732911102878,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 9.767210425706612,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.7244270159394178,
+            "sign_agreement_to_bitflip": 0.7142857142857142,
+            "relative_l2_error_to_bitflip": 0.9264360319665309,
+            "l2_norm": 1.525832999645862,
+            "norm_ratio_to_bitflip": 0.10549388324350154
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.7984461369477895,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9356754638595491,
+            "l2_norm": 0.8769153586390638,
+            "norm_ratio_to_bitflip": 0.08220259786654185
+          },
+          "value": {
+            "cosine_to_bitflip": 0.6984475341243874,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9152923541680531,
+            "l2_norm": 1.2486736149175297,
+            "norm_ratio_to_bitflip": 0.12784342309561678
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.7814119664336648,
+            "sign_agreement_to_bitflip": 0.7619047619047619,
+            "relative_l2_error_to_bitflip": 0.8967135249871058,
+            "l2_norm": 1.9878933578781395,
+            "norm_ratio_to_bitflip": 0.13744006706186157
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.7096870819134338,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.8977323439396256,
+            "l2_norm": 1.6352433298303213,
+            "norm_ratio_to_bitflip": 0.15328873936545367
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9136787635266537,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.8954966621878606,
+            "l2_norm": 1.130353597128557,
+            "norm_ratio_to_bitflip": 0.11572941995326995
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.3073335355226923,
+            "sign_agreement_to_bitflip": 0.4666666666666667,
+            "relative_l2_error_to_bitflip": 0.9917025863560814,
+            "l2_norm": 0.4075556185622232,
+            "norm_ratio_to_bitflip": 0.028177805074221792
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5374242958602617,
+            "sign_agreement_to_bitflip": 0.4666666666666667,
+            "relative_l2_error_to_bitflip": 0.9843974070264014,
+            "l2_norm": 0.3160000353243491,
+            "norm_ratio_to_bitflip": 0.02962204227999177
+          },
+          "value": {
+            "cosine_to_bitflip": 0.0,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 1.0003471445215415,
+            "l2_norm": 0.2573821281609245,
+            "norm_ratio_to_bitflip": 0.02635165179645488
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.7871187402653528,
+            "sign_agreement_to_bitflip": 0.8095238095238095,
+            "relative_l2_error_to_bitflip": 0.9352066346096967,
+            "l2_norm": 1.2170974752423709,
+            "norm_ratio_to_bitflip": 0.08414835632666177
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.7412575969738244,
+            "sign_agreement_to_bitflip": 0.7333333333333333,
+            "relative_l2_error_to_bitflip": 0.9436818045872456,
+            "l2_norm": 0.8313792649290034,
+            "norm_ratio_to_bitflip": 0.0779340157704653
+          },
+          "value": {
+            "cosine_to_bitflip": 0.8387528517188382,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9249950637912064,
+            "l2_norm": 0.888895259345815,
+            "norm_ratio_to_bitflip": 0.0910080996111546
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.7334851966309688,
+            "sign_agreement_to_bitflip": 0.7619047619047619,
+            "relative_l2_error_to_bitflip": 0.9397414791442196,
+            "l2_norm": 1.2229324553250835,
+            "norm_ratio_to_bitflip": 0.0845517783969124
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.6359068667438235,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9546278279444556,
+            "l2_norm": 0.789863084700366,
+            "norm_ratio_to_bitflip": 0.07404226289526651
+          },
+          "value": {
+            "cosine_to_bitflip": 0.8351545591387577,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9216691625687449,
+            "l2_norm": 0.9336380978275574,
+            "norm_ratio_to_bitflip": 0.0955890225698719
+          }
+        }
+      }
+    },
+    {
+      "seed": 4,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.47454570985974426,
+            "sign_agreement_to_bitflip": 0.7307692307692308,
+            "relative_l2_error_to_bitflip": 0.9513758909931934,
+            "l2_norm": 1.3144422941181857,
+            "norm_ratio_to_bitflip": 0.11356133802436792
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.3283086094131775,
+            "sign_agreement_to_bitflip": 0.7058823529411764,
+            "relative_l2_error_to_bitflip": 0.965304168120719,
+            "l2_norm": 1.1851156543214965,
+            "norm_ratio_to_bitflip": 0.12931443862908815
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9090468303428215,
+            "sign_agreement_to_bitflip": 0.7777777777777777,
+            "relative_l2_error_to_bitflip": 0.9275010338985791,
+            "l2_norm": 0.568559082636809,
+            "norm_ratio_to_bitflip": 0.08041886337618359
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 11.574734121538208,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 9.164604253673147,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 7.069971630626035,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.7301706736131354,
+            "sign_agreement_to_bitflip": 0.88,
+            "relative_l2_error_to_bitflip": 0.9373571802900641,
+            "l2_norm": 1.0239451050398174,
+            "norm_ratio_to_bitflip": 0.0884638121522347
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.588858417777716,
+            "sign_agreement_to_bitflip": 0.8125,
+            "relative_l2_error_to_bitflip": 0.9665875897489373,
+            "l2_norm": 0.5381536622104415,
+            "norm_ratio_to_bitflip": 0.05872088388265658
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9335690468350827,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.8860719334482741,
+            "l2_norm": 0.8711223874889753,
+            "norm_ratio_to_bitflip": 0.1232144106088639
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6209346860578455,
+            "sign_agreement_to_bitflip": 0.6923076923076923,
+            "relative_l2_error_to_bitflip": 0.9368216437422593,
+            "l2_norm": 1.2490256329855745,
+            "norm_ratio_to_bitflip": 0.10790966080692892
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.34679358289416184,
+            "sign_agreement_to_bitflip": 0.5882352941176471,
+            "relative_l2_error_to_bitflip": 0.9864560932571039,
+            "l2_norm": 0.37797195872802886,
+            "norm_ratio_to_bitflip": 0.04124258377840361
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9238546110311202,
+            "sign_agreement_to_bitflip": 0.8888888888888888,
+            "relative_l2_error_to_bitflip": 0.8468943340270496,
+            "l2_norm": 1.190463031878904,
+            "norm_ratio_to_bitflip": 0.16838299983015495
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.45012657241518034,
+            "sign_agreement_to_bitflip": 0.75,
+            "relative_l2_error_to_bitflip": 0.967356877886909,
+            "l2_norm": 0.9041502380066976,
+            "norm_ratio_to_bitflip": 0.07811412586352712
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.07018190373273818,
+            "sign_agreement_to_bitflip": 0.7058823529411764,
+            "relative_l2_error_to_bitflip": 0.9992823775393005,
+            "l2_norm": 0.10171948145193087,
+            "norm_ratio_to_bitflip": 0.011099167911278001
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7313410632272123,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9111963753346557,
+            "l2_norm": 0.898410151312149,
+            "norm_ratio_to_bitflip": 0.12707408151687252
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5700120596384476,
+            "sign_agreement_to_bitflip": 0.6923076923076923,
+            "relative_l2_error_to_bitflip": 0.9499126067856953,
+            "l2_norm": 1.0800037800660054,
+            "norm_ratio_to_bitflip": 0.09330700547637977
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.14552081545290518,
+            "sign_agreement_to_bitflip": 0.5882352941176471,
+            "relative_l2_error_to_bitflip": 0.9950003228436172,
+            "l2_norm": 0.3636656985725878,
+            "norm_ratio_to_bitflip": 0.03968154963448985
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9236248476766329,
+            "sign_agreement_to_bitflip": 0.8888888888888888,
+            "relative_l2_error_to_bitflip": 0.8688980618942865,
+            "l2_norm": 1.016934326610412,
+            "norm_ratio_to_bitflip": 0.14383853001689684
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5665805286864041,
+            "sign_agreement_to_bitflip": 0.7307692307692308,
+            "relative_l2_error_to_bitflip": 0.9510152614229404,
+            "l2_norm": 1.0622318188908442,
+            "norm_ratio_to_bitflip": 0.09177159559235563
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.16015717448241076,
+            "sign_agreement_to_bitflip": 0.6470588235294118,
+            "relative_l2_error_to_bitflip": 0.9942545933051308,
+            "l2_norm": 0.3759762798030946,
+            "norm_ratio_to_bitflip": 0.04102482435642591
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9132231738233202,
+            "sign_agreement_to_bitflip": 0.8888888888888888,
+            "relative_l2_error_to_bitflip": 0.8735528819709588,
+            "l2_norm": 0.9934678022410068,
+            "norm_ratio_to_bitflip": 0.14051934776335684
+          }
+        }
+      }
+    },
+    {
+      "seed": 5,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.31123595751369204,
+            "sign_agreement_to_bitflip": 0.8461538461538463,
+            "relative_l2_error_to_bitflip": 0.9804874300084981,
+            "l2_norm": 0.629287673316234,
+            "norm_ratio_to_bitflip": 0.06994065782027863
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.3627709823435875,
+            "sign_agreement_to_bitflip": 0.9,
+            "relative_l2_error_to_bitflip": 0.9839943968646572,
+            "l2_norm": 0.3591931854616269,
+            "norm_ratio_to_bitflip": 0.046784022657634684
+          },
+          "value": {
+            "cosine_to_bitflip": 0.3142686575154296,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9710315326901489,
+            "l2_norm": 0.5167042009754599,
+            "norm_ratio_to_bitflip": 0.11014363069331254
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 8.997451452819737,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 7.677689199370507,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 4.6911854795688335,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.36033258489013853,
+            "sign_agreement_to_bitflip": 0.6923076923076923,
+            "relative_l2_error_to_bitflip": 0.9467304350789993,
+            "l2_norm": 1.7874319321624534,
+            "norm_ratio_to_bitflip": 0.19865980289366109
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.40128255405327073,
+            "sign_agreement_to_bitflip": 0.7000000000000001,
+            "relative_l2_error_to_bitflip": 0.9448622231133296,
+            "l2_norm": 1.3002232993836809,
+            "norm_ratio_to_bitflip": 0.1693508639930731
+          },
+          "value": {
+            "cosine_to_bitflip": 0.3109426579355021,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.951716422409826,
+            "l2_norm": 1.2265122436624172,
+            "norm_ratio_to_bitflip": 0.26145038370453555
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.7744181064866366,
+            "sign_agreement_to_bitflip": 0.9230769230769231,
+            "relative_l2_error_to_bitflip": 0.8633026159208582,
+            "l2_norm": 1.6828697608025107,
+            "norm_ratio_to_bitflip": 0.18703849302516784
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.7613773198654541,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.8651524030411732,
+            "l2_norm": 1.447273361931667,
+            "norm_ratio_to_bitflip": 0.188503770385799
+          },
+          "value": {
+            "cosine_to_bitflip": 0.8106321370761146,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.8583282740102338,
+            "l2_norm": 0.8587493508972861,
+            "norm_ratio_to_bitflip": 0.18305593642317755
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5480904982575378,
+            "sign_agreement_to_bitflip": 0.8461538461538463,
+            "relative_l2_error_to_bitflip": 0.9930453552153183,
+            "l2_norm": 0.11511397589226877,
+            "norm_ratio_to_bitflip": 0.012794064685527464
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.607226261732775,
+            "sign_agreement_to_bitflip": 0.9,
+            "relative_l2_error_to_bitflip": 0.9910813500354321,
+            "l2_norm": 0.11364859352469335,
+            "norm_ratio_to_bitflip": 0.014802447790412171
+          },
+          "value": {
+            "cosine_to_bitflip": 0.4404926587545103,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9982869583612033,
+            "l2_norm": 0.018309140765881547,
+            "norm_ratio_to_bitflip": 0.0039028814455582643
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5792542053077758,
+            "sign_agreement_to_bitflip": 0.8461538461538463,
+            "relative_l2_error_to_bitflip": 0.9379860929154155,
+            "l2_norm": 1.0364381651291565,
+            "norm_ratio_to_bitflip": 0.11519241538161834
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5484247214364304,
+            "sign_agreement_to_bitflip": 0.9,
+            "relative_l2_error_to_bitflip": 0.9376079595729933,
+            "l2_norm": 0.9543677082728661,
+            "norm_ratio_to_bitflip": 0.12430402996139966
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7294623880412492,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9389981826788553,
+            "l2_norm": 0.4042107711853936,
+            "norm_ratio_to_bitflip": 0.08616388606799333
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.48819925760552657,
+            "sign_agreement_to_bitflip": 0.8461538461538463,
+            "relative_l2_error_to_bitflip": 0.9418145293345462,
+            "l2_norm": 1.2069795739706803,
+            "norm_ratio_to_bitflip": 0.1341468281657048
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5299804551835713,
+            "sign_agreement_to_bitflip": 0.9,
+            "relative_l2_error_to_bitflip": 0.9342006751891188,
+            "l2_norm": 1.059898111239339,
+            "norm_ratio_to_bitflip": 0.13804910354097688
+          },
+          "value": {
+            "cosine_to_bitflip": 0.36509448281070334,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9619115781425583,
+            "l2_norm": 0.5774215840906248,
+            "norm_ratio_to_bitflip": 0.12308649628232043
+          }
+        }
+      }
+    },
+    {
+      "seed": 6,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.3538902738006723,
+            "sign_agreement_to_bitflip": 0.6956521739130435,
+            "relative_l2_error_to_bitflip": 0.9892166147793012,
+            "l2_norm": 0.40077811513899037,
+            "norm_ratio_to_bitflip": 0.03172907681050835
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.555591251839511,
+            "sign_agreement_to_bitflip": 0.7058823529411764,
+            "relative_l2_error_to_bitflip": 0.9868305647285825,
+            "l2_norm": 0.2870500084843089,
+            "norm_ratio_to_bitflip": 0.024068719294437803
+          },
+          "value": {
+            "cosine_to_bitflip": -0.0949702767643167,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 1.0086059373983933,
+            "l2_norm": 0.27968802298904394,
+            "norm_ratio_to_bitflip": 0.06721878089365982
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 12.631256734398798,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 11.926268488687105,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 4.16086128416269,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5869897309598009,
+            "sign_agreement_to_bitflip": 0.8181818181818182,
+            "relative_l2_error_to_bitflip": 0.9354796428182724,
+            "l2_norm": 1.4941558249558202,
+            "norm_ratio_to_bitflip": 0.11829035355498509
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.684634832184861,
+            "sign_agreement_to_bitflip": 0.9375,
+            "relative_l2_error_to_bitflip": 0.925268551651474,
+            "l2_norm": 1.3677229325344131,
+            "norm_ratio_to_bitflip": 0.11468154803254625
+          },
+          "value": {
+            "cosine_to_bitflip": -0.03569968245486247,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 1.015491013770748,
+            "l2_norm": 0.6015277292601506,
+            "norm_ratio_to_bitflip": 0.14456808054373743
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6049707706024062,
+            "sign_agreement_to_bitflip": 0.7391304347826086,
+            "relative_l2_error_to_bitflip": 0.9122813843153271,
+            "l2_norm": 2.017482641583647,
+            "norm_ratio_to_bitflip": 0.15972145005092178
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.6184458126325109,
+            "sign_agreement_to_bitflip": 0.7058823529411764,
+            "relative_l2_error_to_bitflip": 0.9075587751154505,
+            "l2_norm": 1.9609339431254809,
+            "norm_ratio_to_bitflip": 0.16442141521344777
+          },
+          "value": {
+            "cosine_to_bitflip": 0.48304480434405694,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9501926014326698,
+            "l2_norm": 0.47431453676825436,
+            "norm_ratio_to_bitflip": 0.11399431617045673
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.4735507204729922,
+            "sign_agreement_to_bitflip": 0.5882352941176471,
+            "relative_l2_error_to_bitflip": 0.9621250613389907,
+            "l2_norm": 1.0905374208789211,
+            "norm_ratio_to_bitflip": 0.0863364148009954
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5049682134940245,
+            "sign_agreement_to_bitflip": 0.5882352941176471,
+            "relative_l2_error_to_bitflip": 0.957353660252196,
+            "l2_norm": 1.0831410447692948,
+            "norm_ratio_to_bitflip": 0.09081977701547884
+          },
+          "value": {
+            "cosine_to_bitflip": 0.0,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 1.0004642127117191,
+            "l2_norm": 0.12679646475091333,
+            "norm_ratio_to_bitflip": 0.03047361017141651
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.789227773658999,
+            "sign_agreement_to_bitflip": 0.9130434782608695,
+            "relative_l2_error_to_bitflip": 0.9187787524462513,
+            "l2_norm": 1.3367441122626111,
+            "norm_ratio_to_bitflip": 0.10582827507751036
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.8036249850033429,
+            "sign_agreement_to_bitflip": 0.8823529411764706,
+            "relative_l2_error_to_bitflip": 0.9147143285335094,
+            "l2_norm": 1.299864116607261,
+            "norm_ratio_to_bitflip": 0.10899168653131301
+          },
+          "value": {
+            "cosine_to_bitflip": 0.668757307438316,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9515136845870633,
+            "l2_norm": 0.31183024232037065,
+            "norm_ratio_to_bitflip": 0.0749436765669831
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.7481595541482469,
+            "sign_agreement_to_bitflip": 0.9130434782608695,
+            "relative_l2_error_to_bitflip": 0.905325275488962,
+            "l2_norm": 1.6703607157160647,
+            "norm_ratio_to_bitflip": 0.1322402632484825
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.7760541169222034,
+            "sign_agreement_to_bitflip": 0.9411764705882353,
+            "relative_l2_error_to_bitflip": 0.8983533211918678,
+            "l2_norm": 1.6254259426054452,
+            "norm_ratio_to_bitflip": 0.13628956484983334
+          },
+          "value": {
+            "cosine_to_bitflip": 0.46290597757778584,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9606909947899906,
+            "l2_norm": 0.3848316849126166,
+            "norm_ratio_to_bitflip": 0.0924884678029006
+          }
+        }
+      }
+    },
+    {
+      "seed": 7,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.3250208239605111,
+            "sign_agreement_to_bitflip": 0.9444444444444444,
+            "relative_l2_error_to_bitflip": 0.9799964390696437,
+            "l2_norm": 0.6999381488647509,
+            "norm_ratio_to_bitflip": 0.06805476278286926
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.48408797606082693,
+            "sign_agreement_to_bitflip": 0.9166666666666666,
+            "relative_l2_error_to_bitflip": 0.9789064087891556,
+            "l2_norm": 0.36842694747935945,
+            "norm_ratio_to_bitflip": 0.045227034833256304
+          },
+          "value": {
+            "cosine_to_bitflip": 0.23735727637942483,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9818286894266102,
+            "l2_norm": 0.5951260342206982,
+            "norm_ratio_to_bitflip": 0.09478781249801131
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 10.28492526082156,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999998,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 8.146166310430948,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9999999999999998,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 6.278507948827115,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.27189667249458904,
+            "sign_agreement_to_bitflip": 0.8235294117647058,
+            "relative_l2_error_to_bitflip": 0.972602805126267,
+            "l2_norm": 1.3461524616225575,
+            "norm_ratio_to_bitflip": 0.13088597413055258
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5697107244033915,
+            "sign_agreement_to_bitflip": 0.7272727272727273,
+            "relative_l2_error_to_bitflip": 0.9761147389593636,
+            "l2_norm": 0.3507019375507491,
+            "norm_ratio_to_bitflip": 0.043051163478173116
+          },
+          "value": {
+            "cosine_to_bitflip": 0.2618682842689752,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9666619115596923,
+            "l2_norm": 1.2996671115830476,
+            "norm_ratio_to_bitflip": 0.2070025429888701
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6792009617074436,
+            "sign_agreement_to_bitflip": 0.8888888888888888,
+            "relative_l2_error_to_bitflip": 0.8997093326328152,
+            "l2_norm": 1.63350633693006,
+            "norm_ratio_to_bitflip": 0.15882529969883083
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.6682088578379115,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.8961794240466989,
+            "l2_norm": 1.373185808026176,
+            "norm_ratio_to_bitflip": 0.16856834929429915
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7086325154790301,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9056205912096325,
+            "l2_norm": 0.8847054252270417,
+            "norm_ratio_to_bitflip": 0.14091013859308932
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.15141895726883026,
+            "sign_agreement_to_bitflip": 0.5333333333333333,
+            "relative_l2_error_to_bitflip": 0.9884709190780766,
+            "l2_norm": 1.5734589603904428,
+            "norm_ratio_to_bitflip": 0.15298691244594956
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.16364798400461023,
+            "sign_agreement_to_bitflip": 0.41666666666666663,
+            "relative_l2_error_to_bitflip": 0.9869483732624452,
+            "l2_norm": 1.5702892487218105,
+            "norm_ratio_to_bitflip": 0.1927642020653442
+          },
+          "value": {
+            "cosine_to_bitflip": 0.5696753556746215,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9910287267184764,
+            "l2_norm": 0.0998237215378439,
+            "norm_ratio_to_bitflip": 0.0158992745332897
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.4013554309445843,
+            "sign_agreement_to_bitflip": 0.7222222222222222,
+            "relative_l2_error_to_bitflip": 0.9562512960127675,
+            "l2_norm": 1.3018436504737143,
+            "norm_ratio_to_bitflip": 0.126577842566619
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.3597226258649077,
+            "sign_agreement_to_bitflip": 0.5833333333333333,
+            "relative_l2_error_to_bitflip": 0.9577235786657485,
+            "l2_norm": 1.1711878335939983,
+            "norm_ratio_to_bitflip": 0.14377165760712787
+          },
+          "value": {
+            "cosine_to_bitflip": 0.5441133628564444,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.953767686058267,
+            "l2_norm": 0.568432888492673,
+            "norm_ratio_to_bitflip": 0.09053630147889861
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.42990942188499637,
+            "sign_agreement_to_bitflip": 0.8888888888888888,
+            "relative_l2_error_to_bitflip": 0.950058712142079,
+            "l2_norm": 1.3804177409846088,
+            "norm_ratio_to_bitflip": 0.1342175763049095
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.38262337944834235,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9560660490195955,
+            "l2_norm": 1.113835481399387,
+            "norm_ratio_to_bitflip": 0.13673124743023604
+          },
+          "value": {
+            "cosine_to_bitflip": 0.5140770438516516,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9398590909757712,
+            "l2_norm": 0.8154285131149428,
+            "norm_ratio_to_bitflip": 0.12987616162328386
+          }
+        }
+      }
+    },
+    {
+      "seed": 8,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.39435518531284547,
+            "sign_agreement_to_bitflip": 0.875,
+            "relative_l2_error_to_bitflip": 0.9694660717275683,
+            "l2_norm": 0.5466672025711876,
+            "norm_ratio_to_bitflip": 0.08551788767214415
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.6098977525113601,
+            "sign_agreement_to_bitflip": 0.8461538461538463,
+            "relative_l2_error_to_bitflip": 0.981220998427482,
+            "l2_norm": 0.1742641720552282,
+            "norm_ratio_to_bitflip": 0.031304703578491584
+          },
+          "value": {
+            "cosine_to_bitflip": 0.4829968814073044,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9316157257281488,
+            "l2_norm": 0.5181476900507361,
+            "norm_ratio_to_bitflip": 0.16488707666503138
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 6.392431074385088,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 5.5667089010534285,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 3.142439665561873,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.24545422529191638,
+            "sign_agreement_to_bitflip": 0.7333333333333333,
+            "relative_l2_error_to_bitflip": 0.9694216847576494,
+            "l2_norm": 1.5363417064749194,
+            "norm_ratio_to_bitflip": 0.24033762563841268
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.1712682069608227,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9854276602438712,
+            "l2_norm": 0.8420003661009516,
+            "norm_ratio_to_bitflip": 0.1512564032118895
+          },
+          "value": {
+            "cosine_to_bitflip": 0.3981531485093031,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9173823457040602,
+            "l2_norm": 1.2850607855428982,
+            "norm_ratio_to_bitflip": 0.4089372978663465
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5871048053853148,
+            "sign_agreement_to_bitflip": 0.8125,
+            "relative_l2_error_to_bitflip": 0.927515827974552,
+            "l2_norm": 0.8588884168685259,
+            "norm_ratio_to_bitflip": 0.13436021552272204
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5421491135300934,
+            "sign_agreement_to_bitflip": 0.7692307692307693,
+            "relative_l2_error_to_bitflip": 0.9433864349428329,
+            "l2_norm": 0.6307596210410283,
+            "norm_ratio_to_bitflip": 0.1133092518851965
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7204631367181197,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.8758474850534435,
+            "l2_norm": 0.5829507810228074,
+            "norm_ratio_to_bitflip": 0.18550898125790266
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.24606245644929584,
+            "sign_agreement_to_bitflip": 0.7692307692307693,
+            "relative_l2_error_to_bitflip": 0.99925610437451,
+            "l2_norm": 0.01943851080423094,
+            "norm_ratio_to_bitflip": 0.0030408635741294727
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.31299178336304817,
+            "sign_agreement_to_bitflip": 0.7692307692307693,
+            "relative_l2_error_to_bitflip": 0.9990178041408013,
+            "l2_norm": 0.01754861926139457,
+            "norm_ratio_to_bitflip": 0.0031524226564233885
+          },
+          "value": {
+            "cosine_to_bitflip": 0.0,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 1.0000035393446574,
+            "l2_norm": 0.00836072151819533,
+            "norm_ratio_to_bitflip": 0.002660582989013544
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.4609401600126858,
+            "sign_agreement_to_bitflip": 0.75,
+            "relative_l2_error_to_bitflip": 0.9656355297865824,
+            "l2_norm": 0.5130529642179446,
+            "norm_ratio_to_bitflip": 0.08025944405936314
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.37857570396080914,
+            "sign_agreement_to_bitflip": 0.6923076923076923,
+            "relative_l2_error_to_bitflip": 0.9746461290710574,
+            "l2_norm": 0.40748017515720747,
+            "norm_ratio_to_bitflip": 0.07319947609980056
+          },
+          "value": {
+            "cosine_to_bitflip": 0.6665700101081589,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9367970537892931,
+            "l2_norm": 0.31174228289834377,
+            "norm_ratio_to_bitflip": 0.099203903996866
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.43273853429687353,
+            "sign_agreement_to_bitflip": 0.6875,
+            "relative_l2_error_to_bitflip": 0.9667995147209721,
+            "l2_norm": 0.5338010619571988,
+            "norm_ratio_to_bitflip": 0.08350517287486704
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.36962331309617874,
+            "sign_agreement_to_bitflip": 0.6153846153846154,
+            "relative_l2_error_to_bitflip": 0.9723843993752762,
+            "l2_norm": 0.4620379057922587,
+            "norm_ratio_to_bitflip": 0.08300019167605906
+          },
+          "value": {
+            "cosine_to_bitflip": 0.6260779386218377,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9490603735535587,
+            "l2_norm": 0.2673285382403776,
+            "norm_ratio_to_bitflip": 0.08507038056133334
+          }
+        }
+      }
+    },
+    {
+      "seed": 9,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.3922571475348618,
+            "sign_agreement_to_bitflip": 0.8,
+            "relative_l2_error_to_bitflip": 0.9750869632724962,
+            "l2_norm": 0.6430490583658321,
+            "norm_ratio_to_bitflip": 0.06874477414527336
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.7095921426799383,
+            "sign_agreement_to_bitflip": 0.8571428571428571,
+            "relative_l2_error_to_bitflip": 0.9654580685116183,
+            "l2_norm": 0.4126514740469759,
+            "norm_ratio_to_bitflip": 0.04956919534606668
+          },
+          "value": {
+            "cosine_to_bitflip": -0.03712623980299995,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 1.0109152291205779,
+            "l2_norm": 0.49318440002907776,
+            "norm_ratio_to_bitflip": 0.11560868793070539
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 9.35415188079494,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 8.324756356564901,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 4.265980428085882,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.3346471004031297,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9594873362368278,
+            "l2_norm": 1.4412837727799024,
+            "norm_ratio_to_bitflip": 0.15407957783313417
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.58354155042681,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.937625322449623,
+            "l2_norm": 0.9561851504554895,
+            "norm_ratio_to_bitflip": 0.1148604366903113
+          },
+          "value": {
+            "cosine_to_bitflip": -0.028972078738025618,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 1.038534869392428,
+            "l2_norm": 1.078428890436028,
+            "norm_ratio_to_bitflip": 0.25279743041857133
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.4811989452882397,
+            "sign_agreement_to_bitflip": 0.75,
+            "relative_l2_error_to_bitflip": 0.9531938431056843,
+            "l2_norm": 0.9995686583961171,
+            "norm_ratio_to_bitflip": 0.10685828829103543
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.4299063120455127,
+            "sign_agreement_to_bitflip": 0.6428571428571428,
+            "relative_l2_error_to_bitflip": 0.967699350614648,
+            "l2_norm": 0.6799672238011392,
+            "norm_ratio_to_bitflip": 0.08168013509067051
+          },
+          "value": {
+            "cosine_to_bitflip": 0.6609384618326211,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.895808084351407,
+            "l2_norm": 0.7326541321824268,
+            "norm_ratio_to_bitflip": 0.17174343495784952
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": -0.14429569105652224,
+            "sign_agreement_to_bitflip": 0.7058823529411764,
+            "relative_l2_error_to_bitflip": 1.0157856818089932,
+            "l2_norm": 0.7964341297344426,
+            "norm_ratio_to_bitflip": 0.08514231326194369
+          },
+          "query_key": {
+            "cosine_to_bitflip": -0.18507664736493556,
+            "sign_agreement_to_bitflip": 0.6428571428571428,
+            "relative_l2_error_to_bitflip": 1.0219818503707159,
+            "l2_norm": 0.7946731907075064,
+            "norm_ratio_to_bitflip": 0.09545903287377622
+          },
+          "value": {
+            "cosine_to_bitflip": 0.661485992545149,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9918359116338958,
+            "l2_norm": 0.05293243784873318,
+            "norm_ratio_to_bitflip": 0.01240803579412661
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.17961294459057628,
+            "sign_agreement_to_bitflip": 0.75,
+            "relative_l2_error_to_bitflip": 0.9873708933168251,
+            "l2_norm": 0.8884929621753987,
+            "norm_ratio_to_bitflip": 0.09498380756459261
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.11538470968812423,
+            "sign_agreement_to_bitflip": 0.6428571428571428,
+            "relative_l2_error_to_bitflip": 0.9934482908049916,
+            "l2_norm": 0.8281002015847667,
+            "norm_ratio_to_bitflip": 0.09947440695146917
+          },
+          "value": {
+            "cosine_to_bitflip": 0.5076980548889451,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9638769790727091,
+            "l2_norm": 0.32197794950971914,
+            "norm_ratio_to_bitflip": 0.07547572121754637
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.2345652299220238,
+            "sign_agreement_to_bitflip": 0.75,
+            "relative_l2_error_to_bitflip": 0.9789681658275055,
+            "l2_norm": 1.11135694488924,
+            "norm_ratio_to_bitflip": 0.11880894805342779
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.165541699631489,
+            "sign_agreement_to_bitflip": 0.6428571428571428,
+            "relative_l2_error_to_bitflip": 0.9870368552529845,
+            "l2_norm": 1.0403709504375822,
+            "norm_ratio_to_bitflip": 0.12497314105981563
+          },
+          "value": {
+            "cosine_to_bitflip": 0.6026502374413164,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9476132527766219,
+            "l2_norm": 0.3908229067482447,
+            "norm_ratio_to_bitflip": 0.09161385368183801
+          }
+        }
+      }
+    },
+    {
+      "seed": 10,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5559980929395114,
+            "sign_agreement_to_bitflip": 0.8214285714285714,
+            "relative_l2_error_to_bitflip": 0.9720197868680969,
+            "l2_norm": 0.9976580997437603,
+            "norm_ratio_to_bitflip": 0.0520572775499715
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5660304113112438,
+            "sign_agreement_to_bitflip": 0.7368421052631579,
+            "relative_l2_error_to_bitflip": 0.9773237006774022,
+            "l2_norm": 0.661433237095375,
+            "norm_ratio_to_bitflip": 0.041099899305180126
+          },
+          "value": {
+            "cosine_to_bitflip": 0.5925451199611332,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9592154034304228,
+            "l2_norm": 0.7468786761247533,
+            "norm_ratio_to_bitflip": 0.07177270386371508
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 19.1646230209806,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 16.09330553790456,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 10.406166075935454,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.44663706015282045,
+            "sign_agreement_to_bitflip": 0.8148148148148148,
+            "relative_l2_error_to_bitflip": 0.961075918942636,
+            "l2_norm": 1.8341973581567852,
+            "norm_ratio_to_bitflip": 0.09570745827605298
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.3662341709004001,
+            "sign_agreement_to_bitflip": 0.7222222222222222,
+            "relative_l2_error_to_bitflip": 0.9740457111132282,
+            "l2_norm": 1.260485110343628,
+            "norm_ratio_to_bitflip": 0.07832356798140741
+          },
+          "value": {
+            "cosine_to_bitflip": 0.5964919632637918,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9293220200937019,
+            "l2_norm": 1.3324628457376746,
+            "norm_ratio_to_bitflip": 0.12804551032671213
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5467743279112696,
+            "sign_agreement_to_bitflip": 0.75,
+            "relative_l2_error_to_bitflip": 0.941556577660726,
+            "l2_norm": 2.2247773830468773,
+            "norm_ratio_to_bitflip": 0.11608771957639279
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.4475961620128198,
+            "sign_agreement_to_bitflip": 0.631578947368421,
+            "relative_l2_error_to_bitflip": 0.9580260561045741,
+            "l2_norm": 1.6714109326014341,
+            "norm_ratio_to_bitflip": 0.1038575281296164
+          },
+          "value": {
+            "cosine_to_bitflip": 0.737782195083128,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9009460216734593,
+            "l2_norm": 1.468339163305711,
+            "norm_ratio_to_bitflip": 0.14110279930101113
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": -0.029402098604243077,
+            "sign_agreement_to_bitflip": 0.56,
+            "relative_l2_error_to_bitflip": 1.001371920505449,
+            "l2_norm": 0.5880261354327646,
+            "norm_ratio_to_bitflip": 0.030682896020914112
+          },
+          "query_key": {
+            "cosine_to_bitflip": -0.11783600259322367,
+            "sign_agreement_to_bitflip": 0.42105263157894735,
+            "relative_l2_error_to_bitflip": 1.004781370256036,
+            "l2_norm": 0.5691596212302067,
+            "norm_ratio_to_bitflip": 0.03536623472969336
+          },
+          "value": {
+            "cosine_to_bitflip": 0.4864761111092183,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9931700248009384,
+            "l2_norm": 0.1477567646948175,
+            "norm_ratio_to_bitflip": 0.014198962770401011
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.4586115572341665,
+            "sign_agreement_to_bitflip": 0.7857142857142857,
+            "relative_l2_error_to_bitflip": 0.9629357676299567,
+            "l2_norm": 1.6808803123489007,
+            "norm_ratio_to_bitflip": 0.08770745505970796
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.3394776786062508,
+            "sign_agreement_to_bitflip": 0.6842105263157894,
+            "relative_l2_error_to_bitflip": 0.9741701062543152,
+            "l2_norm": 1.3839748610043234,
+            "norm_ratio_to_bitflip": 0.08599692945272479
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7265618282817574,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9355194246301978,
+            "l2_norm": 0.9539246346280204,
+            "norm_ratio_to_bitflip": 0.09166917264889683
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.4861406435832995,
+            "sign_agreement_to_bitflip": 0.8214285714285714,
+            "relative_l2_error_to_bitflip": 0.9626025218662939,
+            "l2_norm": 1.5808304438417937,
+            "norm_ratio_to_bitflip": 0.0824869052791265
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.36776139466245894,
+            "sign_agreement_to_bitflip": 0.7368421052631579,
+            "relative_l2_error_to_bitflip": 0.9766326677080653,
+            "l2_norm": 1.115788947953497,
+            "norm_ratio_to_bitflip": 0.06933249016651548
+          },
+          "value": {
+            "cosine_to_bitflip": 0.6971742007191984,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9281866666257239,
+            "l2_norm": 1.1198392365879448,
+            "norm_ratio_to_bitflip": 0.10761304676634019
+          }
+        }
+      }
+    },
+    {
+      "seed": 11,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.43213744450982594,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9579700280056974,
+            "l2_norm": 0.9819434681216215,
+            "norm_ratio_to_bitflip": 0.1089512048511433
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5658141546332589,
+            "sign_agreement_to_bitflip": 0.7777777777777777,
+            "relative_l2_error_to_bitflip": 0.9949485415540339,
+            "l2_norm": 0.07326777055480242,
+            "norm_ratio_to_bitflip": 0.008976424298964317
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9315049006448421,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.7670176406199578,
+            "l2_norm": 0.9792062134119894,
+            "norm_ratio_to_bitflip": 0.25621426621581045
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 9.01269030905368,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 8.16224457696991,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 3.8218254895580235,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6080664530150565,
+            "sign_agreement_to_bitflip": 0.8181818181818182,
+            "relative_l2_error_to_bitflip": 0.8583179122938573,
+            "l2_norm": 2.5397118841706994,
+            "norm_ratio_to_bitflip": 0.2817928717265961
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5908429879876359,
+            "sign_agreement_to_bitflip": 0.75,
+            "relative_l2_error_to_bitflip": 0.9094968580927938,
+            "l2_norm": 1.3956287641608596,
+            "norm_ratio_to_bitflip": 0.1709859035710202
+          },
+          "value": {
+            "cosine_to_bitflip": 0.8863565083134533,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.569242544124922,
+            "l2_norm": 2.1218757756392606,
+            "norm_ratio_to_bitflip": 0.5551995457240633
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6900022917290702,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.8726982973020695,
+            "l2_norm": 1.8246353877409058,
+            "norm_ratio_to_bitflip": 0.2024518013126416
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.6287136106720825,
+            "sign_agreement_to_bitflip": 0.7777777777777777,
+            "relative_l2_error_to_bitflip": 0.9006691293149732,
+            "l2_norm": 1.4227335191277377,
+            "norm_ratio_to_bitflip": 0.17430665127850195
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9266646848092919,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.7316802243959428,
+            "l2_norm": 1.142420076743581,
+            "norm_ratio_to_bitflip": 0.2989200003675983
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.4128391874920593,
+            "sign_agreement_to_bitflip": 0.4444444444444444,
+            "relative_l2_error_to_bitflip": 0.9995932152624857,
+            "l2_norm": 0.008889328140222795,
+            "norm_ratio_to_bitflip": 0.0009863123923489348
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.4656349279719094,
+            "sign_agreement_to_bitflip": 0.4444444444444444,
+            "relative_l2_error_to_bitflip": 0.9995039844290262,
+            "l2_norm": 0.008702602496187645,
+            "norm_ratio_to_bitflip": 0.0010662021229726902
+          },
+          "value": {
+            "cosine_to_bitflip": 0.0,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 1.0000001124464488,
+            "l2_norm": 0.0018124195369465153,
+            "norm_ratio_to_bitflip": 0.00047422875322235427
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6961588693147339,
+            "sign_agreement_to_bitflip": 0.5833333333333333,
+            "relative_l2_error_to_bitflip": 0.9224745460783973,
+            "l2_norm": 1.0531508051263485,
+            "norm_ratio_to_bitflip": 0.11685199080549878
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.7020167486523,
+            "sign_agreement_to_bitflip": 0.4444444444444444,
+            "relative_l2_error_to_bitflip": 0.9493207212369743,
+            "l2_norm": 0.6063960595174985,
+            "norm_ratio_to_bitflip": 0.07429280681302648
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9520744862369735,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.7885159223851556,
+            "l2_norm": 0.8610519364939181,
+            "norm_ratio_to_bitflip": 0.22529860111260464
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.6819739506294157,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9154342284946972,
+            "l2_norm": 1.1844588636694113,
+            "norm_ratio_to_bitflip": 0.13142123195773914
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.6403386487257462,
+            "sign_agreement_to_bitflip": 0.5555555555555556,
+            "relative_l2_error_to_bitflip": 0.9420665433688693,
+            "l2_norm": 0.7744500783716575,
+            "norm_ratio_to_bitflip": 0.09488199858122341
+          },
+          "value": {
+            "cosine_to_bitflip": 0.943747826497159,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.7825472343731713,
+            "l2_norm": 0.896197453597792,
+            "norm_ratio_to_bitflip": 0.23449460370348651
+          }
+        }
+      }
+    },
+    {
+      "seed": 12,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.4339081844067926,
+            "sign_agreement_to_bitflip": 0.5238095238095237,
+            "relative_l2_error_to_bitflip": 0.9786212729665092,
+            "l2_norm": 0.3588045682296466,
+            "norm_ratio_to_bitflip": 0.051840247518874734
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.4565696924650941,
+            "sign_agreement_to_bitflip": 0.4666666666666667,
+            "relative_l2_error_to_bitflip": 0.9910185765723973,
+            "l2_norm": 0.1161817680381935,
+            "norm_ratio_to_bitflip": 0.02002221144011909
+          },
+          "value": {
+            "cosine_to_bitflip": 0.6010151027049746,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9486515458154087,
+            "l2_norm": 0.33947387964022,
+            "norm_ratio_to_bitflip": 0.08997801103996116
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 6.921351370843821,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 5.8026441477586586,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 3.7728537863484495,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.30922555385481243,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9647233275853134,
+            "l2_norm": 1.0175578719146277,
+            "norm_ratio_to_bitflip": 0.14701722501780334
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.1731776531347821,
+            "sign_agreement_to_bitflip": 0.6,
+            "relative_l2_error_to_bitflip": 0.9866727332945364,
+            "l2_norm": 0.6609337958337571,
+            "norm_ratio_to_bitflip": 0.1139021761465505
+          },
+          "value": {
+            "cosine_to_bitflip": 0.5185576087987023,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9107000677277394,
+            "l2_norm": 0.7736863319331726,
+            "norm_ratio_to_bitflip": 0.20506660892416498
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5812249336453662,
+            "sign_agreement_to_bitflip": 0.75,
+            "relative_l2_error_to_bitflip": 0.9154928490927959,
+            "l2_norm": 1.119608113232042,
+            "norm_ratio_to_bitflip": 0.1617614903858788
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.4116315018895991,
+            "sign_agreement_to_bitflip": 0.6428571428571428,
+            "relative_l2_error_to_bitflip": 0.9492881701590138,
+            "l2_norm": 0.8468755700109268,
+            "norm_ratio_to_bitflip": 0.14594649412338043
+          },
+          "value": {
+            "cosine_to_bitflip": 0.8980121777356664,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.830093407910153,
+            "l2_norm": 0.7323415160522313,
+            "norm_ratio_to_bitflip": 0.1941081095435259
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.3067569916707736,
+            "sign_agreement_to_bitflip": 0.5555555555555556,
+            "relative_l2_error_to_bitflip": 0.9932066871109294,
+            "l2_norm": 0.15868690695233711,
+            "norm_ratio_to_bitflip": 0.022927156627361153
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.3383252117720905,
+            "sign_agreement_to_bitflip": 0.4666666666666667,
+            "relative_l2_error_to_bitflip": 0.9912610356224436,
+            "l2_norm": 0.15537645799630204,
+            "norm_ratio_to_bitflip": 0.02677683725553256
+          },
+          "value": {
+            "cosine_to_bitflip": 0.2621202891451891,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.997793907717372,
+            "l2_norm": 0.032244235742580264,
+            "norm_ratio_to_bitflip": 0.008546378303673358
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5796244227832247,
+            "sign_agreement_to_bitflip": 0.5238095238095237,
+            "relative_l2_error_to_bitflip": 0.9469498182994013,
+            "l2_norm": 0.6731491578497258,
+            "norm_ratio_to_bitflip": 0.09725689706859347
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.46785350711273876,
+            "sign_agreement_to_bitflip": 0.3333333333333333,
+            "relative_l2_error_to_bitflip": 0.9592723512229957,
+            "l2_norm": 0.5507018178315164,
+            "norm_ratio_to_bitflip": 0.09490532312656665
+          },
+          "value": {
+            "cosine_to_bitflip": 0.8253820087466124,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9171428412519772,
+            "l2_norm": 0.38711406142228727,
+            "norm_ratio_to_bitflip": 0.10260510566908425
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5208476102064065,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9492610183558521,
+            "l2_norm": 0.7313269700596423,
+            "norm_ratio_to_bitflip": 0.10566245388730815
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.38424072927955233,
+            "sign_agreement_to_bitflip": 0.5333333333333333,
+            "relative_l2_error_to_bitflip": 0.9664168611895296,
+            "l2_norm": 0.5720202381802537,
+            "norm_ratio_to_bitflip": 0.09857923794985833
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7916805054397904,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9073897370542114,
+            "l2_norm": 0.45566652746150094,
+            "norm_ratio_to_bitflip": 0.12077502953076723
+          }
+        }
+      }
+    },
+    {
+      "seed": 13,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5957998613314958,
+            "sign_agreement_to_bitflip": 0.9473684210526315,
+            "relative_l2_error_to_bitflip": 0.9687145076611446,
+            "l2_norm": 0.7566865219339446,
+            "norm_ratio_to_bitflip": 0.05414935397845776
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.7047476507803219,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9802470575672222,
+            "l2_norm": 0.3035580778560036,
+            "norm_ratio_to_bitflip": 0.02832060730144131
+          },
+          "value": {
+            "cosine_to_bitflip": 0.6447755922146927,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9519893891476758,
+            "l2_norm": 0.6931284050194872,
+            "norm_ratio_to_bitflip": 0.07730809414491521
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 13.974063702310785,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 10.718628828293337,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9999999999999998,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 8.965793461680835,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5335311213325387,
+            "sign_agreement_to_bitflip": 0.8235294117647058,
+            "relative_l2_error_to_bitflip": 0.9420696405117329,
+            "l2_norm": 1.657613095720977,
+            "norm_ratio_to_bitflip": 0.11862069123435226
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.47270021694337494,
+            "sign_agreement_to_bitflip": 0.7272727272727273,
+            "relative_l2_error_to_bitflip": 0.9900477900289831,
+            "l2_norm": 0.22975587994602137,
+            "norm_ratio_to_bitflip": 0.021435193216090123
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7605732071719018,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.8689112489454949,
+            "l2_norm": 1.6416130514636844,
+            "norm_ratio_to_bitflip": 0.18309735312103964
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.672417152069216,
+            "sign_agreement_to_bitflip": 0.7222222222222222,
+            "relative_l2_error_to_bitflip": 0.8916371690041679,
+            "l2_norm": 2.4491445254194892,
+            "norm_ratio_to_bitflip": 0.17526358671275363
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5055696135787815,
+            "sign_agreement_to_bitflip": 0.5833333333333333,
+            "relative_l2_error_to_bitflip": 0.9615885027736202,
+            "l2_norm": 0.8682881312364703,
+            "norm_ratio_to_bitflip": 0.08100738864513164
+          },
+          "value": {
+            "cosine_to_bitflip": 0.8916655605351971,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.7808573617805833,
+            "l2_norm": 2.290062144909202,
+            "norm_ratio_to_bitflip": 0.25542213912207157
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.16508286113576276,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 0.9932830489947275,
+            "l2_norm": 0.6615211908545886,
+            "norm_ratio_to_bitflip": 0.04733921391421723
+          },
+          "query_key": {
+            "cosine_to_bitflip": -0.4409537237364311,
+            "sign_agreement_to_bitflip": 0.3333333333333333,
+            "relative_l2_error_to_bitflip": 1.0189078577321058,
+            "l2_norm": 0.4431767113089353,
+            "norm_ratio_to_bitflip": 0.041346399656932584
+          },
+          "value": {
+            "cosine_to_bitflip": 0.8222606173381128,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9554671307519267,
+            "l2_norm": 0.4911259395542753,
+            "norm_ratio_to_bitflip": 0.05477774406172892
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5642936842439767,
+            "sign_agreement_to_bitflip": 0.7368421052631579,
+            "relative_l2_error_to_bitflip": 0.9481430824536206,
+            "l2_norm": 1.3698648227138102,
+            "norm_ratio_to_bitflip": 0.0980290953223067
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.3215381134020102,
+            "sign_agreement_to_bitflip": 0.6153846153846154,
+            "relative_l2_error_to_bitflip": 0.9833638074699198,
+            "l2_norm": 0.6026531268852018,
+            "norm_ratio_to_bitflip": 0.05622483402862254
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7910606623516876,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.8954029056204368,
+            "l2_norm": 1.230178377782762,
+            "norm_ratio_to_bitflip": 0.13720797640950094
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5813087745930259,
+            "sign_agreement_to_bitflip": 0.894736842105263,
+            "relative_l2_error_to_bitflip": 0.9395611530491332,
+            "l2_norm": 1.5584833798377429,
+            "norm_ratio_to_bitflip": 0.11152685525399661
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.3867816794279378,
+            "sign_agreement_to_bitflip": 0.8461538461538463,
+            "relative_l2_error_to_bitflip": 0.9769643934942324,
+            "l2_norm": 0.6881267701523894,
+            "norm_ratio_to_bitflip": 0.06419914162303872
+          },
+          "value": {
+            "cosine_to_bitflip": 0.7822411819713279,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.8833584330102254,
+            "l2_norm": 1.3983390123393233,
+            "norm_ratio_to_bitflip": 0.1559637770282937
+          }
+        }
+      }
+    },
+    {
+      "seed": 14,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5542688934905341,
+            "sign_agreement_to_bitflip": 0.8421052631578947,
+            "relative_l2_error_to_bitflip": 0.9770860863250274,
+            "l2_norm": 0.5959941551415249,
+            "norm_ratio_to_bitflip": 0.042496261962450245
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.6886733753076038,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9808247599102928,
+            "l2_norm": 0.3659304987119517,
+            "norm_ratio_to_bitflip": 0.02815219660804734
+          },
+          "value": {
+            "cosine_to_bitflip": 0.5478432312062431,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 0.9539940358353398,
+            "l2_norm": 0.47042948788876143,
+            "norm_ratio_to_bitflip": 0.08932733574797579
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 14.024625405127304,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999998,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 12.99829295051705,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 5.26635529818118,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.4231046448822441,
+            "sign_agreement_to_bitflip": 0.7777777777777777,
+            "relative_l2_error_to_bitflip": 0.9485203864091221,
+            "l2_norm": 1.9992714586976412,
+            "norm_ratio_to_bitflip": 0.1425543571357508
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.4241901559849891,
+            "sign_agreement_to_bitflip": 0.75,
+            "relative_l2_error_to_bitflip": 0.9581940711717475,
+            "l2_norm": 1.4431198780762242,
+            "norm_ratio_to_bitflip": 0.11102380009205896
+          },
+          "value": {
+            "cosine_to_bitflip": 0.5360989569427667,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.887314046586819,
+            "l2_norm": 1.3836514673371536,
+            "norm_ratio_to_bitflip": 0.2627341660398454
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5822926447194805,
+            "sign_agreement_to_bitflip": 0.8421052631578947,
+            "relative_l2_error_to_bitflip": 0.9361110171883258,
+            "l2_norm": 1.657913533124021,
+            "norm_ratio_to_bitflip": 0.11821446100926869
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5072861215236444,
+            "sign_agreement_to_bitflip": 0.7692307692307693,
+            "relative_l2_error_to_bitflip": 0.9503216660504251,
+            "l2_norm": 1.3872222745402925,
+            "norm_ratio_to_bitflip": 0.10672341974606067
+          },
+          "value": {
+            "cosine_to_bitflip": 0.9185907358911504,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.8443907877999015,
+            "l2_norm": 0.9079050855320897,
+            "norm_ratio_to_bitflip": 0.17239723378436872
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.08090998744355901,
+            "sign_agreement_to_bitflip": 0.8125,
+            "relative_l2_error_to_bitflip": 0.9988862461175325,
+            "l2_norm": 0.21292288522676095,
+            "norm_ratio_to_bitflip": 0.01518207289507482
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.07025633090836748,
+            "sign_agreement_to_bitflip": 0.7692307692307693,
+            "relative_l2_error_to_bitflip": 0.9989873214652278,
+            "l2_norm": 0.21183184461050517,
+            "norm_ratio_to_bitflip": 0.016296897247732738
+          },
+          "value": {
+            "cosine_to_bitflip": 0.42482871711912074,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9982702847561735,
+            "l2_norm": 0.021527300392738764,
+            "norm_ratio_to_bitflip": 0.0040877037673803665
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.4514015856059963,
+            "sign_agreement_to_bitflip": 0.8421052631578947,
+            "relative_l2_error_to_bitflip": 0.9722135822379541,
+            "l2_norm": 0.9178387934443749,
+            "norm_ratio_to_bitflip": 0.06544479919647761
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.3629816324315632,
+            "sign_agreement_to_bitflip": 0.7692307692307693,
+            "relative_l2_error_to_bitflip": 0.9800860888054556,
+            "l2_norm": 0.768619169275011,
+            "norm_ratio_to_bitflip": 0.05913231623575899
+          },
+          "value": {
+            "cosine_to_bitflip": 0.8267423404609445,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.922805469868638,
+            "l2_norm": 0.5016499012004468,
+            "norm_ratio_to_bitflip": 0.09525561280943191
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.4215848259810267,
+            "sign_agreement_to_bitflip": 0.8421052631578947,
+            "relative_l2_error_to_bitflip": 0.9712577660695433,
+            "l2_norm": 1.0325756781354223,
+            "norm_ratio_to_bitflip": 0.07362590075011342
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.32239916707842897,
+            "sign_agreement_to_bitflip": 0.7692307692307693,
+            "relative_l2_error_to_bitflip": 0.9800640840059733,
+            "l2_norm": 0.8903307299444088,
+            "norm_ratio_to_bitflip": 0.06849597353543205
+          },
+          "value": {
+            "cosine_to_bitflip": 0.861975930151149,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9157831531256464,
+            "l2_norm": 0.5229949544627399,
+            "norm_ratio_to_bitflip": 0.09930871064536123
+          }
+        }
+      }
+    },
+    {
+      "seed": 15,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.15976257555906923,
+            "sign_agreement_to_bitflip": 0.7777777777777777,
+            "relative_l2_error_to_bitflip": 0.9893165185435343,
+            "l2_norm": 0.520531056237787,
+            "norm_ratio_to_bitflip": 0.09440774090725006
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.4627080006943512,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9866963789879264,
+            "l2_norm": 0.14623324979398233,
+            "norm_ratio_to_bitflip": 0.029500846766291416
+          },
+          "value": {
+            "cosine_to_bitflip": 0.10207760051304504,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 1.0002852349203302,
+            "l2_norm": 0.4995682307380212,
+            "norm_ratio_to_bitflip": 0.20691265059707423
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 5.513648046606448,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 4.956917031990858,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 2.4143919151219126,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "linear_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": -0.1111112093235039,
+            "sign_agreement_to_bitflip": 0.5555555555555556,
+            "relative_l2_error_to_bitflip": 1.0815374215923752,
+            "l2_norm": 1.7400197091180956,
+            "norm_ratio_to_bitflip": 0.31558410954232863
+          },
+          "query_key": {
+            "cosine_to_bitflip": -0.21766787706553392,
+            "sign_agreement_to_bitflip": 0.5833333333333333,
+            "relative_l2_error_to_bitflip": 1.0704228146573391,
+            "l2_norm": 1.0997390872024853,
+            "norm_ratio_to_bitflip": 0.22185949050690376
+          },
+          "value": {
+            "cosine_to_bitflip": 0.03704095997188206,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 1.1271826553265492,
+            "l2_norm": 1.3484222366152474,
+            "norm_ratio_to_bitflip": 0.5584935188731196
+          }
+        },
+        "delta_rule": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.17489307224915834,
+            "sign_agreement_to_bitflip": 0.611111111111111,
+            "relative_l2_error_to_bitflip": 0.9855630576420823,
+            "l2_norm": 0.7225690894981498,
+            "norm_ratio_to_bitflip": 0.13105099988071928
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.1911988516408775,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9850253216768992,
+            "l2_norm": 0.5380417817855806,
+            "norm_ratio_to_bitflip": 0.1085436327284029
+          },
+          "value": {
+            "cosine_to_bitflip": 0.16045035471458424,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 0.9878264505464467,
+            "l2_norm": 0.48230398106503625,
+            "norm_ratio_to_bitflip": 0.19976209249387034
+          }
+        },
+        "single_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5915114493911506,
+            "sign_agreement_to_bitflip": 0.7333333333333333,
+            "relative_l2_error_to_bitflip": 0.9916906430944287,
+            "l2_norm": 0.07806642698624013,
+            "norm_ratio_to_bitflip": 0.014158761372933228
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.6155044462140753,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9905865801548509,
+            "l2_norm": 0.07641024564438352,
+            "norm_ratio_to_bitflip": 0.015414872823419985
+          },
+          "value": {
+            "cosine_to_bitflip": 0.556128728338128,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9963309306384821,
+            "l2_norm": 0.01599504244955072,
+            "norm_ratio_to_bitflip": 0.006624874093294445
+          }
+        },
+        "exact_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5401090316569229,
+            "sign_agreement_to_bitflip": 0.8888888888888888,
+            "relative_l2_error_to_bitflip": 0.9431345300863252,
+            "l2_norm": 0.6308110178693037,
+            "norm_ratio_to_bitflip": 0.1144090106109614
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5591340399892206,
+            "sign_agreement_to_bitflip": 0.9166666666666666,
+            "relative_l2_error_to_bitflip": 0.940986929666376,
+            "l2_norm": 0.5654061408357839,
+            "norm_ratio_to_bitflip": 0.11406407191945647
+          },
+          "value": {
+            "cosine_to_bitflip": 0.4612067388157683,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.952133638236406,
+            "l2_norm": 0.27971134437218087,
+            "norm_ratio_to_bitflip": 0.11585167371555628
+          }
+        },
+        "sketch_suffix_delta": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.5406340236149179,
+            "sign_agreement_to_bitflip": 0.7777777777777777,
+            "relative_l2_error_to_bitflip": 0.9412907734505522,
+            "l2_norm": 0.6526076782939326,
+            "norm_ratio_to_bitflip": 0.11836223001132634
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5650001666079209,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9380993960439934,
+            "l2_norm": 0.5879872108560122,
+            "norm_ratio_to_bitflip": 0.11861953852793408
+          },
+          "value": {
+            "cosine_to_bitflip": 0.4367762745287638,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 0.9546254881643254,
+            "l2_norm": 0.28313922659703017,
+            "norm_ratio_to_bitflip": 0.11727144413616598
+          }
+        }
+      }
+    }
+  ],
+  "gradient_summaries": {
+    "production": {
+      "cases": 16,
+      "hard_forward_equal_cases": 16,
+      "mean_query_key_cosine_to_bitflip": 0.5609023348401205,
+      "mean_query_key_sign_agreement_to_bitflip": 0.8236075317441416,
+      "mean_query_key_norm_ratio_to_bitflip": 0.0399418326239469,
+      "mean_value_cosine_to_bitflip": 0.4205453247101379,
+      "mean_combined_cosine_to_bitflip": 0.4368848740714862,
+      "mean_combined_relative_l2_error_to_bitflip": 0.9735430776800317
+    },
+    "bitflip": {
+      "cases": 16,
+      "hard_forward_equal_cases": 16,
+      "mean_query_key_cosine_to_bitflip": 0.9999999999999999,
+      "mean_query_key_sign_agreement_to_bitflip": 1.0,
+      "mean_query_key_norm_ratio_to_bitflip": 1.0,
+      "mean_value_cosine_to_bitflip": 1.0,
+      "mean_combined_cosine_to_bitflip": 1.0,
+      "mean_combined_relative_l2_error_to_bitflip": 0.0
+    },
+    "linear_attention": {
+      "cases": 16,
+      "hard_forward_equal_cases": 16,
+      "mean_query_key_cosine_to_bitflip": 0.408242273929431,
+      "mean_query_key_sign_agreement_to_bitflip": 0.7100063131313131,
+      "mean_query_key_norm_ratio_to_bitflip": 0.10781821587092962,
+      "mean_value_cosine_to_bitflip": 0.4305899335186065,
+      "mean_combined_cosine_to_bitflip": 0.3985612305630697,
+      "mean_combined_relative_l2_error_to_bitflip": 0.9564705334956835
+    },
+    "delta_rule": {
+      "cases": 16,
+      "hard_forward_equal_cases": 16,
+      "mean_query_key_cosine_to_bitflip": 0.49604855963418404,
+      "mean_query_key_sign_agreement_to_bitflip": 0.6902698039404696,
+      "mean_query_key_norm_ratio_to_bitflip": 0.12019969413154696,
+      "mean_value_cosine_to_bitflip": 0.7717009166983648,
+      "mean_combined_cosine_to_bitflip": 0.5945810413023267,
+      "mean_combined_relative_l2_error_to_bitflip": 0.9221722692525554
+    },
+    "single_suffix_delta": {
+      "cases": 16,
+      "hard_forward_equal_cases": 16,
+      "mean_query_key_cosine_to_bitflip": 0.30518633259204025,
+      "mean_query_key_sign_agreement_to_bitflip": 0.5711245142456443,
+      "mean_query_key_norm_ratio_to_bitflip": 0.04607054554282257,
+      "mean_value_cosine_to_bitflip": 0.37168111550526745,
+      "mean_combined_cosine_to_bitflip": 0.33128614060850897,
+      "mean_combined_relative_l2_error_to_bitflip": 0.9882971615246864
+    },
+    "exact_suffix_delta": {
+      "cases": 16,
+      "hard_forward_equal_cases": 16,
+      "mean_query_key_cosine_to_bitflip": 0.47505684610525434,
+      "mean_query_key_sign_agreement_to_bitflip": 0.6643367232183022,
+      "mean_query_key_norm_ratio_to_bitflip": 0.08617968160931944,
+      "mean_value_cosine_to_bitflip": 0.7479492692950721,
+      "mean_combined_cosine_to_bitflip": 0.5655241877040175,
+      "mean_combined_relative_l2_error_to_bitflip": 0.9497836704531305
+    },
+    "sketch_suffix_delta": {
+      "cases": 16,
+      "hard_forward_equal_cases": 16,
+      "mean_query_key_cosine_to_bitflip": 0.45934076998248147,
+      "mean_query_key_sign_agreement_to_bitflip": 0.7184297234413334,
+      "mean_query_key_norm_ratio_to_bitflip": 0.09133846990594424,
+      "mean_value_cosine_to_bitflip": 0.6901920611178112,
+      "mean_combined_cosine_to_bitflip": 0.5432146433144112,
+      "mean_combined_relative_l2_error_to_bitflip": 0.9483321897761909
+    }
+  }
+}

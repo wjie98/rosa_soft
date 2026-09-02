@@ -1,0 +1,100 @@
+{
+  "settings": {
+    "sequence_lengths": [
+      1048576
+    ],
+    "patterns": [
+      "random",
+      "skewed"
+    ],
+    "chunk_sizes": [
+      1048576
+    ],
+    "batch": 1,
+    "heads": 1,
+    "payload_heads": 1,
+    "bits": 8,
+    "seed": 123,
+    "repeats": 5,
+    "output": "validation/runtime_direct_transition_phase5_1m.json"
+  },
+  "torch": "2.11.0+cu128",
+  "rows": [
+    {
+      "sequence_length": 1048576,
+      "pattern": "random",
+      "chunk_size": 1048576,
+      "latency_ms": 626.376767992042,
+      "tokens_per_second": 1674033.9897365447,
+      "logical_bytes_per_update": 44.798845291137695,
+      "checksum": 480342726124392625,
+      "memory": {
+        "states": 1145741,
+        "edges": 2194197,
+        "payload_symbols": 1048576,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 46974994
+      },
+      "complexity": {
+        "updates": 1048576,
+        "transition_probes": 15819766,
+        "query_suffix_link_steps": 1047928,
+        "extension_suffix_link_steps": 3339540,
+        "latest_end_updates": 4160280,
+        "clones": 97164,
+        "copied_edges": 97409,
+        "max_query_suffix_link_steps": 3,
+        "max_latest_end_chain": 6,
+        "latest_path_updates": 0,
+        "latest_tree_rotations": 0,
+        "latest_tree_activations": 0,
+        "compressed_run_symbols": 1,
+        "compressed_materializations": 1,
+        "max_compressed_run_length": 1,
+        "root_table_lookups": 196994,
+        "root_table_activations": 1,
+        "transition_index_lookups": 2309529,
+        "transition_index_activations": 32029
+      }
+    },
+    {
+      "sequence_length": 1048576,
+      "pattern": "skewed",
+      "chunk_size": 1048576,
+      "latency_ms": 511.8085739959497,
+      "tokens_per_second": 2048765.9904038617,
+      "logical_bytes_per_update": 44.14540767669678,
+      "checksum": 508194001333257890,
+      "memory": {
+        "states": 1298206,
+        "edges": 2250666,
+        "payload_symbols": 1048576,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 46289815
+      },
+      "complexity": {
+        "updates": 1048576,
+        "transition_probes": 17206679,
+        "query_suffix_link_steps": 830999,
+        "extension_suffix_link_steps": 3476766,
+        "latest_end_updates": 19879484,
+        "clones": 249629,
+        "copied_edges": 371794,
+        "max_query_suffix_link_steps": 72,
+        "max_latest_end_chain": 107,
+        "latest_path_updates": 0,
+        "latest_tree_rotations": 0,
+        "latest_tree_activations": 0,
+        "compressed_run_symbols": 7,
+        "compressed_materializations": 1,
+        "max_compressed_run_length": 7,
+        "root_table_lookups": 22350,
+        "root_table_activations": 1,
+        "transition_index_lookups": 722038,
+        "transition_index_activations": 15253
+      }
+    }
+  ]
+}

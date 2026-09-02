@@ -1,6 +1,6 @@
 # RosaSoft CUDA Optimization Record
 
-This document records the 2026-07-30 through 2026-08-04 CUDA optimization
+This document records the 2026-07-30 through 2026-08-06 CUDA optimization
 passes.
 It distinguishes production changes from rejected experiments so old branches
 and benchmark artifacts do not become accidental design requirements.
@@ -35,6 +35,17 @@ per sample; the tables below report medians of those rounds.
 | 10 | Multi-stage factorized diagonal CUDA VJP | Archived | Parity passed, but cross-GPU mean latency was `1.30x` production and scratch was quadratic; removed from the frozen build. |
 | 11 | Exact hard diagonal run-length index | Archived | Bit-exact and up to `12x` faster on collapsed all-match codes, but random codes regressed; removed from the frozen build. |
 | 12 | Offline cross-GPU promotion gate | Keep | Rejects candidates with any material regression, parity failure, or excessive workspace. |
+| 13 | Exact tiled-streaming dense VJP | Keep for fixed `T >= 4096` | Preserves every candidate without quadratic state and cuts long SM75 QKV latency by about `2.8x..2.9x`. |
+| 14 | Local-gate adjoint aggregation | Keep | Contracts each shared gate with Q/K bits once; gives about `2x` over the first streaming kernel. |
+| 15 | Shared-workspace lifetime reuse and 32-row `D=32` | Keep | Lowers shared storage to `40.50 KiB` and removes the production 16-row branch. |
+| 16 | Exact rolling diagonal suffix recurrence | Reject | Exact, but serial diagonal dependence and low active-thread count regress common shapes. |
+| 17 | First-sweep online value carrier | Reject | Small wide-value wins do not clear the mean gate and narrow values regress. |
+| 18 | Coarse gradient-mask template classes | Reject | A small Q/K-only win costs about 81% binary growth and no useful QKV gain. |
+| 19 | Row-log hoist and mismatch-gate LUT | Reject | Compiler already removes the row invariant; LUT gains are sub-threshold and shape-dependent. |
+| 20 | Sparse-tail warp suffix ownership | Keep as research primitive | Wins when only 1-2 queries survive and no recurrence state exists; full-VJP integration is neutral and raises registers. |
+| 21 | `32 x 32` block-diagonal tiles | Reject | Higher residency loses to doubled halo, synchronization, reverse, and atomic boundary work. |
+| 22 | Sequential TF32 high/low fragments | Reject | NVCC already reuses the registers; aggregate change is noise with a 2.1% worst regression. |
+| 23 | Named-barrier warp-specialized double buffer | Keep for research | Exact first-sweep overlap gives a 3.9% integrated mean win on sm_86, but does not clear the 5% production gate. |
 
 ## 3. Rejected Local Changes
 
@@ -397,11 +408,10 @@ cross-GPU calibration through `T=1024` observed at most `2.67e-5`.
 It was not promoted. It materialized `O(BHT^2)` FP32 local-gate scratch, and on
 the RTX 2080 Ti random QKV at `T=128/256/512` was `1.25x/1.27x/1.47x` the
 production latency. Across the common 2080 Ti/3070 matrix its mean ratio was
-`1.30x` and worst ratio `1.59x`. A future version must replace the dense gate
-matrix with block-local diagonal rings and beat the row kernel before the
-extra launches are justified. Its raw operation, benchmark, and default tests
-were removed when `rosa-soft-dense-reference-v1` was frozen; the measurements
-remain here as historical evidence.
+`1.30x` and worst ratio `1.59x`. Its raw operation, benchmark, and default
+tests were removed when `rosa-soft-dense-reference-v1` was frozen. The later
+single-kernel tiled-streaming schedule removed the quadratic gate matrix and
+extra launches without reviving this architecture.
 
 ## 8. Exact Hard Suffix Index
 
@@ -447,7 +457,189 @@ The common `T=128/256/512/1024`, random/all-match, QKV matrix produced:
 | Hard diagonal index | 16 | `1.366` | `1.817` | `0` | research only |
 | Factorized diagonal VJP | 16 | `1.305` | `1.592` | `2.67e-5` | research only |
 
-The production hard forward and row-owned surrogate VJP therefore remain the
-defaults. Existing cache/recompute selection remains occupancy-aware on the
-active GPU and uses the portable 48 KiB shared-memory bound; no startup timing,
-device-name allowlist, or hidden environment override was added.
+These results retained the row-owned VJP at that checkpoint. They remain the
+negative-control evidence for the later tiled-streaming promotion.
+
+## 10. First Tiled-Streaming VJP Promotion
+
+The first promoted fixed-length kernel tiled 16 or 32 adjacent query rows, 32 route
+positions, 32 suffix offsets, and 32 or 64 value features. Its first complete
+route sweep computes online `(maximum, normalizer, expected utility)` row
+statistics. Its second complete sweep recomputes exact scores and fuses
+dropout, utility, value accumulation, and dense Q/K credit. It stores no
+quadratic state and never prunes candidates.
+
+That checkpoint dispatched at `T >= 4096`, with 32 query rows for `D <= 16`
+and 16 rows otherwise. On sm_75, those kernels used 64 and 108 registers
+respectively, zero stack/spill, and at most `45.37 KiB` shared memory. All
+masks, dropout, suffix boundaries, wide values, and `D=32` passed the `3e-4`
+parity gate; Compute Sanitizer reported no synchronization or race errors.
+
+Idle RTX 2080 Ti random FP32 QKV at
+`B=1,H=4,Hv=2,D=8,Dv=64,W=32` measured:
+
+| `T` | Frozen row VJP | Streaming production | Ratio |
+| ---: | ---: | ---: | ---: |
+| 4096 | `100.82 ms` | `35.56 ms` | `0.353` |
+| 8192 | `391.72 ms` | `134.84 ms` | `0.344` |
+| 16384 | `1553.83 ms` | `529.14 ms` | `0.341` |
+
+These numbers are retained as the independent pre-aggregation baseline. The
+public hard forward was unchanged, and short fixed-length and packed-varlen
+backward retained the previous row schedules.
+
+## 11. Post-Promotion Exact VJP Refinement
+
+### 11.1 Retained local-gate aggregation
+
+The first streaming kernel expanded every route-suffix credit through every
+Q/K bit even when many suffixes referred to the same local `(Q,K)` match gate.
+The exact derivative is linear: all scalar credits reaching one local gate can
+be summed first, then that gate's Q/K sign contractions can be evaluated once.
+The retained kernel accumulates by `(diagonal, query_coordinate)` in shared
+memory and performs the unique contractions afterward. It still visits every
+route and every suffix term.
+
+Clearing and filling the aggregate is not worthwhile for tiny suffix tails.
+An exact direct microtile is used when `suffix_count == 1`, or when
+`suffix_count <= 4` and `suffix_count * D <= 16`. Partial aggregate chunks
+restrict contraction to their reachable gate band; full 32-suffix chunks keep
+the fully unrolled loop. This recovered the initial `W=1..4` regressions and
+also improved tail chunks at `W=33/65`.
+
+Shared-memory lifetimes were then shortened: the route-probability buffer is
+reused for gate credit after value consumption, and the unused dedicated K
+workspace was removed. The 32-row layout now uses `40.50 KiB`, independent of
+`D`, so production uses it throughout `D=1..32`. On sm_75 it uses 64 registers,
+one barrier, and zero stack or register spill. The 16-row benchmark control
+uses 96 registers and is no longer selected by production.
+
+Same-process alternating A/B against the independently compiled first
+streaming source, on the idle RTX 2080 Ti with FP32
+`B=1,H=4,Hv=2,D=8,Dv=64,W=32,QKV`, gave:
+
+| `T` | First streaming | Current | Ratio | Speedup | Max VJP difference |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 4096 | `35.44 ms` | `17.56 ms` | `0.496` | `2.02x` | `2.98e-7` |
+| 8192 | `134.30 ms` | `67.17 ms` | `0.500` | `2.00x` | `2.38e-7` |
+| 16384 | `528.01 ms` | `265.46 ms` | `0.503` | `1.99x` | `4.77e-7` |
+
+For `D=32`, the 32-row layout improved Q, K, and QKV by about `12%..20%`
+relative to the 16-row control. Value-only was about `4%..5%` slower, within
+the worst-case promotion bound; the complete mask matrix has a clear mean win
+and removes one production branch.
+
+### 11.2 Rejected refinements
+
+Each candidate below passed focused parity before timing and was then removed:
+
+- An exact rolling diagonal suffix recurrence reduced arithmetic but exposed
+  only 63 serially dependent diagonal workers. For `W <= 32`, QKV regressed
+  `15%..32%` and value-only regressed `66%..82%`.
+- A first-pass online value carrier avoided repeated `grad_output` reads. It
+  gained only `2%..5%` at `Dv=128`, was neutral at `Dv=32/64`, and regressed
+  `Dv=8` by `6%..9%`.
+- V-only, QK-only, and QK+V template classes gained `2%..4%` on Q/K-only,
+  changed QKV by at most `1%`, and grew the CUDA extension from about
+  `907 KiB` to `1.64 MiB`.
+- Hoisting the row candidate correction had no measurable effect because NVCC
+  already commoned it. A shared mismatch-gate LUT produced only
+  `0.4%..1.5%` paired median gains and regressed some `D=32` cases.
+
+The final focused 28-test matrix and full suite (`1204 passed, 2 skipped`) pass.
+Compute Sanitizer reports zero memcheck errors, zero race hazards or warnings,
+and zero synccheck errors over direct and aggregate suffix paths, `D=32`,
+dropout, and `W=1/4/33/65`. There is no startup timing, device allowlist,
+model-visible switch, or candidate-dependent dispatch. See
+[STREAMING_VJP.md](STREAMING_VJP.md) for the current schedule. Raw paired
+timings and the six decisions are stored in
+`validation/streaming_vjp_gate_aggregation_sm75.json`; the `D=32` tile control
+is in `validation/streaming_vjp_optimized_sm75_d32.json`.
+
+## 12. Tensor-Core Research Follow-Up
+
+An sm_86 research extension tested B1/INT8/FP16 local gates, Tensor-Core
+utility and value contractions, an exact coordinate-transformed gate-adjoint
+GEMM, and a warp-cooperative suffix scan. Local gates, utility, dV, and the
+integrated suffix scan did not pass end-to-end promotion gates. The only
+retained research candidate maps the aggregated gate adjoint to FP16 hi/lo
+HMMA for `D=32,W=31..32`; all other shapes return the frozen streaming
+baseline. It adds no global scratch and averaged about 7% faster on GPU0 over
+`T=512..8192`, but has not completed the required sm_75 cross-GPU matrix and
+is not production dispatch. See [TENSOR_CORE_VJP.md](TENSOR_CORE_VJP.md).
+
+## 13. Block-Diagonal Tensor-Core VJP
+
+The next research prototype changes suffix ownership from independent route
+candidates to `64 x 64` query/route blocks. Exact finite-window diagonal
+recurrences remove duplicated suffix work, while TF32 WMMA handles utility,
+value, and Q/K sign contractions. It still performs two complete causal-route
+sweeps, stores no `T^2` state, and leaves the exact hard forward unchanged.
+
+On the idle RTX 3070 at `W=32,Dv=64,T=4096/8192`, all seven gradient masks
+improved. QKV speedups were `17%/23%` for `D=8` and `31%/34%` for `D=32`.
+FP32/FP16/BF16, dropout, and random/all-match cases passed; Compute Sanitizer
+reported zero memory, race, and synchronization errors after adding the
+required zero-padded physical gate row.
+
+Nsight Compute measured only `3.1%..3.9%` Tensor-pipe activity and about
+`16.7%` active warps at `T=4096,QKV`. The retained gain therefore comes from
+both suffix-work reuse and cheaper contractions; the kernel is still limited
+by scalar recurrence/score work and one-CTA-per-SM residency, not by Tensor
+Core throughput.
+
+A warp-per-candidate suffix scan was rejected. Despite reducing one route's
+loop depth, it replaced 32-way route parallelism with one route per warp and
+was about `5x..16x` slower in the isolated matrix. See
+[BLOCK_DIAGONAL_TENSOR_CORE_VJP.md](BLOCK_DIAGONAL_TENSOR_CORE_VJP.md) for the
+recurrence, complete pipeline, shape limits, raw report names, and promotion
+gate. This path remains outside production.
+
+The sparse-tail follow-up confirms a narrow exception. When only one or two
+queries remain active and no prior diagonal recurrence state exists, a warp
+can scan their complete `W=32` histories in parallel and cut isolated score
+latency roughly in half. Once the normal block sweep has already produced the
+previous score and rolling mismatch count, one thread advances each endpoint
+in constant work while the warp path recomputes 32 gates. The full-VJP tail
+integration was neutral (`0.9996` mean ratio) and raised registers from 160 to
+168, so it was removed; the exact primitive remains for future genuinely
+sparse schedules.
+
+Three occupancy/scheduling follow-ups were then tested. A `32 x 32,Dv=64`
+physical tile lost all 28 long-sequence mask cases by about `4%..25%` despite
+some two-CTA configurations. Explicitly sequencing the TF32 high/low fragments
+did not lower registers. The surviving research plan instead gives producer
+warps and consumer warps separate jobs in the first route sweep and exchanges
+two exact `64 x 64` score tiles through CUDA named barriers. This
+`block_tf32_pipeline` plan averaged a `0.961` latency ratio over
+`T=4096/8192,D=8/32` and all masks, with a `1.041` worst case. A 36-case
+dtype/dropout/pattern matrix averaged `0.965`; all memory, race, and
+synchronization sanitizer checks passed. Its 85.1 KiB shared layout and
+sub-5% mean gain keep it outside production.
+
+## 14. Unlimited Hard Index: Parallel Build And Restart Batching
+
+The unlimited hard path had two independent long-sequence bottlenecks. One
+CTA per series built each stable occurrence list serially, and periodic
+candidate trajectories repeatedly restarted at the same route delta. The
+promoted implementation addresses both without bounding suffix length or
+removing a candidate:
+
+- at `T >= 8192`, contiguous chunks use count, prefix, and scatter kernels to
+  reproduce the exact serial occurrence order in parallel;
+- a device-side selector nominates at most one frequent restart delta, an
+  exact diagonal mismatch-prefix index reconstructs its suffix length, and
+  the original occurrence scan remains the fallback;
+- descending routes stop only at the proof `route <= best_length`, where no
+  remaining route can beat the score or latest-route tie.
+
+On the RTX 3070 with `B=1,H=4,Hv=2,D=8,Dv=64,FP16,T=65536`, random latency
+fell from `2.166 ms` to `1.273 ms`; `periodic64` fell from `9.045 ms` to
+`1.076 ms`. The final `periodic16..512` sweep measured `0.942..1.094 ms`
+against a `1.255 ms` random run. Focused CPU parity passed all 32 cases and
+Compute Sanitizer reported zero memory errors, synchronization errors, or
+race hazards.
+
+The detailed algorithm, stability and exactness proofs, workspace accounting,
+negative controls, and raw evidence are in
+[EXACT_HARD_RESTART_AND_OCCURRENCE_INDEX.md](EXACT_HARD_RESTART_AND_OCCURRENCE_INDEX.md).

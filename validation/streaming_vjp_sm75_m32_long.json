@@ -1,0 +1,49 @@
+{
+  "bits": 8,
+  "capability": [
+    7,
+    5
+  ],
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "dropout_p": 0.0,
+  "dtype": "float32",
+  "heads": 4,
+  "rows": [
+    {
+      "gradient_mask": 7,
+      "latency_ratio": 0.35046457283956,
+      "max_abs_errors": [
+        2.384185791015625e-07,
+        4.291534423828125e-06,
+        4.231929779052734e-06
+      ],
+      "pattern": "random",
+      "production_extra_mib": 7.0,
+      "production_ms": 391.7231750488281,
+      "query_tile_size": 32,
+      "seq_len": 8192,
+      "streaming_extra_mib": 7.0,
+      "streaming_ms": 137.28509521484375,
+      "window": 32
+    },
+    {
+      "gradient_mask": 7,
+      "latency_ratio": 0.3458183403395129,
+      "max_abs_errors": [
+        2.384185791015625e-07,
+        2.9206275939941406e-06,
+        1.1205673217773438e-05
+      ],
+      "pattern": "random",
+      "production_extra_mib": 14.0,
+      "production_ms": 1553.8331298828125,
+      "query_tile_size": 32,
+      "seq_len": 16384,
+      "streaming_extra_mib": 14.0,
+      "streaming_ms": 537.343994140625,
+      "window": 32
+    }
+  ],
+  "value_dim": 64,
+  "value_heads": 2
+}

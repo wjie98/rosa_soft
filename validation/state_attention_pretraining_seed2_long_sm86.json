@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "objective": "uniform full-sequence next-token cross entropy",
+  "operator": "cuda",
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 3070",
+  "estimators": [
+    "state_quadratic_attention"
+  ],
+  "seeds": [
+    2
+  ],
+  "associations": 4,
+  "heads": 2,
+  "context_depth": 2,
+  "qk_bits": 8,
+  "value_bits": 4,
+  "steps": 5000,
+  "train_pairs": 32,
+  "validation_pairs": 16,
+  "training_data": "fresh complementary mappings each optimizer step",
+  "runs": [
+    {
+      "seed": 2,
+      "candidates": {
+        "state_quadratic_attention": {
+          "training": {
+            "training_loss": 0.9132457375526428,
+            "first_train_recall_exact_step": null,
+            "mean_qk_gradient_norm": 0.009390269365813584,
+            "qk_zero_gradient_fraction": 0.0,
+            "step_ms": 53.768402262798915
+          },
+          "train": {
+            "loss": 0.9319413900375366,
+            "overall_accuracy": 0.6743420958518982,
+            "recall_loss": 1.5873943567276,
+            "recall_token_accuracy": 0.421875,
+            "recall_episode_exact_accuracy": 0.046875,
+            "payload_route_any_head_accuracy": 0.64453125,
+            "historical_route_any_head_accuracy": 0.90625,
+            "zero_route_recall_token_accuracy": 0.04296875,
+            "current_value_recall_token_accuracy": 0.05859375,
+            "paired_query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.9035935401916504,
+            "overall_accuracy": 0.6940789818763733,
+            "recall_loss": 1.4931004047393799,
+            "recall_token_accuracy": 0.484375,
+            "recall_episode_exact_accuracy": 0.0625,
+            "payload_route_any_head_accuracy": 0.671875,
+            "historical_route_any_head_accuracy": 0.8984375,
+            "zero_route_recall_token_accuracy": 0.09375,
+            "current_value_recall_token_accuracy": 0.0859375,
+            "paired_query_residual_max_difference": 0.0
+          },
+          "passed": false
+        }
+      },
+      "train_targets_are_complements": true,
+      "validation_targets_are_complements": true
+    }
+  ],
+  "summary": {
+    "state_quadratic_attention": {
+      "passed_runs": 0,
+      "run_count": 1,
+      "mean_validation_loss": 0.9035935401916504,
+      "mean_validation_recall_token_accuracy": 0.484375,
+      "minimum_validation_recall_token_accuracy": 0.484375,
+      "mean_validation_recall_episode_exact_accuracy": 0.0625,
+      "mean_payload_route_any_head_accuracy": 0.671875,
+      "median_first_train_recall_exact_step": null,
+      "mean_training_step_ms": 53.768402262798915
+    }
+  },
+  "shortcut_checks_passed": true
+}

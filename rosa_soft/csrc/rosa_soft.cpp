@@ -1,4 +1,5 @@
 #include <ATen/Context.h>
+#include <ATen/cuda/CUDAContext.h>
 #include <torch/extension.h>
 
 #include <algorithm>
@@ -11,16 +12,14 @@
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> hard_forward_cuda(
     torch::Tensor query,
     torch::Tensor key,
-    torch::Tensor value,
-    int64_t max_suffix_length);
+    torch::Tensor value);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
 hard_forward_varlen_cuda(
     torch::Tensor query,
     torch::Tensor key,
     torch::Tensor value,
-    torch::Tensor cu_seqlens,
-    int64_t max_suffix_length);
+    torch::Tensor cu_seqlens);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
     torch::Tensor query,
@@ -34,6 +33,37 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
     float scale,
     float dropout_p,
     float inverse_keep_probability,
+    float mismatch_scale,
+    int gradient_mask);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+rosa_soft_streaming_vjp_cuda(
+    const torch::Tensor& query,
+    const torch::Tensor& key,
+    const torch::Tensor& value,
+    const torch::Tensor& grad_output,
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
+    const torch::Tensor& dropout_seed,
+    int64_t max_suffix_length,
+    float scale,
+    float dropout_p,
+    float mismatch_scale,
+    int gradient_mask,
+    int query_tile_size);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+rosa_soft_block_diagonal_vjp_cuda(
+    const torch::Tensor& query,
+    const torch::Tensor& key,
+    const torch::Tensor& value,
+    const torch::Tensor& grad_output,
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
+    const torch::Tensor& dropout_seed,
+    int64_t max_suffix_length,
+    float scale,
+    float dropout_p,
     float mismatch_scale,
     int gradient_mask);
 
@@ -58,6 +88,35 @@ surrogate_vjp_varlen_cuda(
 namespace {
 
 constexpr int64_t kKernelIndexSafetyMargin = 128;
+constexpr int64_t kLegacyStreamingVjpMinSequenceLength = 4096;
+constexpr int64_t kAmpereStreamingVjpMinSequenceLength = 512;
+constexpr int64_t kAmpereValueOnlyStreamingVjpMinSequenceLength = 2048;
+constexpr int64_t kBlockDiagonalVjpMinSequenceLength = 4096;
+
+bool should_use_streaming_vjp(
+    const torch::Tensor& query,
+    int64_t gradient_mask,
+    int device_major) {
+  int64_t minimum_sequence_length =
+      kLegacyStreamingVjpMinSequenceLength;
+  if (device_major >= 8) {
+    minimum_sequence_length = gradient_mask == 4
+        ? kAmpereValueOnlyStreamingVjpMinSequenceLength
+        : kAmpereStreamingVjpMinSequenceLength;
+  }
+  return query.size(1) >= minimum_sequence_length;
+}
+
+bool should_use_block_diagonal_vjp(
+    const torch::Tensor& query,
+    const torch::Tensor& value,
+    int64_t max_suffix_length,
+    int device_major) {
+  return device_major >= 8 &&
+      query.size(1) >= kBlockDiagonalVjpMinSequenceLength &&
+      max_suffix_length == 32 &&
+      value.size(3) == 64;
+}
 
 bool is_supported_logit_dtype(c10::ScalarType dtype) {
   return dtype == torch::kFloat32 ||
@@ -131,8 +190,7 @@ SurrogateScalars check_surrogate_scalars(
 void check_common_inputs(
     const torch::Tensor& query,
     const torch::Tensor& key,
-    const torch::Tensor& value,
-    int64_t max_suffix_length) {
+    const torch::Tensor& value) {
   TORCH_CHECK(query.is_cuda(), "query must be a CUDA tensor");
   TORCH_CHECK(key.is_cuda(), "key must be a CUDA tensor");
   TORCH_CHECK(value.is_cuda(), "value must be a CUDA tensor");
@@ -189,6 +247,9 @@ void check_common_inputs(
           std::numeric_limits<int>::max() -
               kKernelIndexSafetyMargin,
       "value dimension is too large for the CUDA kernel index stride");
+}
+
+void check_max_suffix_length(int64_t max_suffix_length) {
   TORCH_CHECK(max_suffix_length >= 1, "max_suffix_length must be >= 1");
 }
 
@@ -249,7 +310,8 @@ void check_surrogate_vjp_inputs(
     const torch::Tensor& packed_query_symbols,
     const torch::Tensor& packed_key_symbols,
     int64_t max_suffix_length) {
-  check_common_inputs(query, key, value, max_suffix_length);
+  check_common_inputs(query, key, value);
+  check_max_suffix_length(max_suffix_length);
   TORCH_CHECK(grad_output.is_cuda(), "grad_output must be a CUDA tensor");
   TORCH_CHECK(
       grad_output.device() == query.device(),
@@ -286,8 +348,7 @@ void check_varlen_inputs(
     const torch::Tensor& query,
     const torch::Tensor& key,
     const torch::Tensor& value,
-    const torch::Tensor& cu_seqlens,
-    int64_t max_suffix_length) {
+    const torch::Tensor& cu_seqlens) {
   TORCH_CHECK(query.is_cuda(), "query must be a CUDA tensor");
   TORCH_CHECK(key.is_cuda(), "key must be a CUDA tensor");
   TORCH_CHECK(value.is_cuda(), "value must be a CUDA tensor");
@@ -346,7 +407,6 @@ void check_varlen_inputs(
           std::numeric_limits<int>::max() -
               kKernelIndexSafetyMargin,
       "number of packed sequences is too large for CUDA indexing");
-  TORCH_CHECK(max_suffix_length >= 1, "max_suffix_length must be >= 1");
 }
 
 void check_varlen_packed_symbols(
@@ -379,16 +439,12 @@ void check_varlen_packed_symbols(
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> hard_forward_op(
     torch::Tensor query,
     torch::Tensor key,
-    torch::Tensor value,
-    int64_t max_suffix_length) {
-  check_common_inputs(query, key, value, max_suffix_length);
-  const int64_t effective_max_suffix_length =
-      std::min<int64_t>(max_suffix_length, query.size(1));
+    torch::Tensor value) {
+  check_common_inputs(query, key, value);
   return hard_forward_cuda(
       query.contiguous(),
       key.contiguous(),
-      value.contiguous(),
-      effective_max_suffix_length);
+      value.contiguous());
 }
 
 
@@ -397,22 +453,17 @@ hard_forward_varlen_op(
     torch::Tensor query,
     torch::Tensor key,
     torch::Tensor value,
-    torch::Tensor cu_seqlens,
-    int64_t max_suffix_length) {
+    torch::Tensor cu_seqlens) {
   check_varlen_inputs(
       query,
       key,
       value,
-      cu_seqlens,
-      max_suffix_length);
-  const int64_t effective_max_suffix_length =
-      std::min<int64_t>(max_suffix_length, query.size(0));
+      cu_seqlens);
   return hard_forward_varlen_cuda(
       query.contiguous(),
       key.contiguous(),
       value.contiguous(),
-      cu_seqlens.contiguous(),
-      effective_max_suffix_length);
+      cu_seqlens.contiguous());
 }
 
 
@@ -449,14 +500,58 @@ surrogate_vjp_masked_op(
   check_gradient_mask(gradient_mask);
   at::globalContext().alertNotDeterministic(
       "rosa_soft::surrogate_vjp_masked");
+  query = query.contiguous();
+  key = key.contiguous();
+  value = value.contiguous();
+  grad_output = grad_output.contiguous();
+  packed_query_symbols = packed_query_symbols.contiguous();
+  packed_key_symbols = packed_key_symbols.contiguous();
+  dropout_seed = dropout_seed.contiguous();
+  const int device_major =
+      at::cuda::getDeviceProperties(query.get_device())->major;
+  if (should_use_block_diagonal_vjp(
+          query,
+          value,
+          effective_max_suffix_length,
+          device_major)) {
+    return rosa_soft_block_diagonal_vjp_cuda(
+        query,
+        key,
+        value,
+        grad_output,
+        packed_query_symbols,
+        packed_key_symbols,
+        dropout_seed,
+        effective_max_suffix_length,
+        surrogate_scalars.scale,
+        surrogate_scalars.dropout_p,
+        surrogate_scalars.mismatch_scale,
+        static_cast<int>(gradient_mask));
+  }
+  if (should_use_streaming_vjp(query, gradient_mask, device_major)) {
+    return rosa_soft_streaming_vjp_cuda(
+        query,
+        key,
+        value,
+        grad_output,
+        packed_query_symbols,
+        packed_key_symbols,
+        dropout_seed,
+        effective_max_suffix_length,
+        surrogate_scalars.scale,
+        surrogate_scalars.dropout_p,
+        surrogate_scalars.mismatch_scale,
+        static_cast<int>(gradient_mask),
+        32);
+  }
   return surrogate_vjp_cuda(
-      query.contiguous(),
-      key.contiguous(),
-      value.contiguous(),
-      grad_output.contiguous(),
-      packed_query_symbols.contiguous(),
-      packed_key_symbols.contiguous(),
-      dropout_seed.contiguous(),
+      query,
+      key,
+      value,
+      grad_output,
+      packed_query_symbols,
+      packed_key_symbols,
+      dropout_seed,
       effective_max_suffix_length,
       surrogate_scalars.scale,
       surrogate_scalars.dropout_p,
@@ -485,8 +580,8 @@ surrogate_vjp_varlen_masked_op(
       query,
       key,
       value,
-      cu_seqlens,
-      max_suffix_length);
+      cu_seqlens);
+  check_max_suffix_length(max_suffix_length);
   TORCH_CHECK(grad_output.is_cuda(), "grad_output must be a CUDA tensor");
   TORCH_CHECK(
       grad_output.device() == query.device(),

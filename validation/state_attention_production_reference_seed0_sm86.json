@@ -1,0 +1,113 @@
+{
+  "schema_version": 2,
+  "objective": "uniform full-sequence next-token cross entropy",
+  "operator": "reference",
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 3070",
+  "estimators": [
+    "production"
+  ],
+  "seed_pairs": [
+    [
+      0,
+      0
+    ]
+  ],
+  "associations": 4,
+  "heads": 2,
+  "context_depth": 2,
+  "qk_bits": 8,
+  "payload_bits": 4,
+  "value_dim": 8,
+  "bitflip_gradient_scale": 1.0,
+  "initialization": {
+    "controlled_module_reset": true,
+    "qk_init": "partial_shared_orthogonal",
+    "qk_shared_bits": 4,
+    "qk_correlation": 0.97,
+    "qk_logit_median": 0.6,
+    "value_init": "orthogonal",
+    "value_logit_median": 0.6
+  },
+  "steps": 1000,
+  "train_pairs": 32,
+  "validation_pairs": 64,
+  "training_data": "fresh complementary mappings each optimizer step",
+  "theoretical_full_sequence_limits": {
+    "loss_floor": 0.5623497689694098,
+    "top1_accuracy_ceiling": 0.8040799113167534
+  },
+  "runs": [
+    {
+      "model_seed": 0,
+      "data_seed": 0,
+      "initialization": {
+        "query_key_weight_cosine_mean": 0.48500001430511475,
+        "query_logit_abs_median": 0.6083917021751404,
+        "key_logit_abs_median": 0.6112423539161682,
+        "value_logit_abs_median": 0.5943819284439087,
+        "positive_qk_hamming_mean": 2.21484375,
+        "positive_qk_exact_any_head_accuracy": 0.0,
+        "payload_route_any_head_accuracy": 0.0,
+        "historical_route_any_head_accuracy": 0.2265625,
+        "null_route_head_fraction": 0.88671875,
+        "storage_value_unique_code_fraction": 1.0,
+        "storage_value_bit_balance_error": 0.06982421875,
+        "storage_value_rms": 1.0,
+        "storage_value_max_abs": 1.0
+      },
+      "candidates": {
+        "production": {
+          "training": {
+            "training_loss": 0.6750126481056213,
+            "first_train_recall_exact_step": null,
+            "mean_qk_gradient_norm": 0.002705356573977042,
+            "qk_zero_gradient_fraction": 0.0,
+            "step_ms": 33.342360799000744
+          },
+          "train": {
+            "loss": 0.6871257424354553,
+            "overall_accuracy": 0.7639802694320679,
+            "recall_loss": 0.395394504070282,
+            "recall_token_accuracy": 0.83203125,
+            "recall_episode_exact_accuracy": 0.4375,
+            "payload_route_any_head_accuracy": 0.890625,
+            "historical_route_any_head_accuracy": 1.0,
+            "zero_route_recall_token_accuracy": 0.0390625,
+            "current_value_recall_token_accuracy": 0.05859375,
+            "paired_query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.7012179493904114,
+            "overall_accuracy": 0.765625,
+            "recall_loss": 0.5009148716926575,
+            "recall_token_accuracy": 0.82421875,
+            "recall_episode_exact_accuracy": 0.4296875,
+            "payload_route_any_head_accuracy": 0.8671875,
+            "historical_route_any_head_accuracy": 1.0,
+            "zero_route_recall_token_accuracy": 0.056640625,
+            "current_value_recall_token_accuracy": 0.05078125,
+            "paired_query_residual_max_difference": 0.0
+          },
+          "passed": false
+        }
+      },
+      "train_targets_are_complements": true,
+      "validation_targets_are_complements": true
+    }
+  ],
+  "summary": {
+    "production": {
+      "passed_runs": 0,
+      "run_count": 1,
+      "mean_validation_loss": 0.7012179493904114,
+      "mean_validation_recall_token_accuracy": 0.82421875,
+      "minimum_validation_recall_token_accuracy": 0.82421875,
+      "mean_validation_recall_episode_exact_accuracy": 0.4296875,
+      "mean_payload_route_any_head_accuracy": 0.8671875,
+      "median_first_train_recall_exact_step": null,
+      "mean_training_step_ms": 33.342360799000744
+    }
+  },
+  "shortcut_checks_passed": true
+}

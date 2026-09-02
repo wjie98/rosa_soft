@@ -341,7 +341,6 @@ def _evaluate_assignments(
         query_states,
         key_states,
         value_states,
-        int(max_suffix_length),
     )
     return outputs, routes, query_states, key_states, symbols
 
@@ -860,7 +859,6 @@ def exact_bitflip_vjp(
             query.detach(),
             key.detach(),
             value.detach(),
-            int(max_suffix_length),
         )
         flipped_outputs, _, _, _, _ = _evaluate_assignments(
             query,
@@ -1041,7 +1039,6 @@ def sampled_bitflip_residual_vjp(
         query.detach(),
         key.detach(),
         value.detach(),
-        int(max_suffix_length),
     )
     flipped_outputs, _, _, _, _ = _evaluate_assignments(
         query,
@@ -1112,7 +1109,6 @@ def exact_margin_edit_oracle(
         query.detach(),
         key.detach(),
         value.detach(),
-        int(max_suffix_length),
     )
     state_costs = (
         (table.outputs - base_output)
@@ -1399,7 +1395,6 @@ def _run_case(seed: int, repeated_keys: bool, args) -> dict[str, object]:
                     query,
                     key,
                     value,
-                    args.max_suffix_length,
                 )[2]).sum()
             ),
         },

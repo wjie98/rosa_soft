@@ -78,7 +78,6 @@ def _hard_output(
         query,
         key,
         value,
-        max_suffix_length,
     )
     return output
 

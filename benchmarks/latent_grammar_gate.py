@@ -278,8 +278,8 @@ def grammar_loss(output: Tensor, target: Tensor) -> Tensor:
     return F.mse_loss(output.float(), target.float())
 
 
-def oracle_route_accuracy(batch: GrammarBatch, window: int) -> float:
-    """Route with explicit binary trajectories to verify the gate itself."""
+def oracle_route_accuracy(batch: GrammarBatch) -> float:
+    """Route with complete explicit binary trajectories to verify the gate."""
 
     batch_size, sequence_length, _ = batch.inputs.shape
     candidate_count = batch.candidate_routes.numel()
@@ -318,7 +318,7 @@ def oracle_route_accuracy(batch: GrammarBatch, window: int) -> float:
         ] = trajectories[cue]
     query = torch.cat((query_content, batch.query_phase), dim=-1)
     key = torch.cat((key_content, batch.key_phase), dim=-1)
-    _, _, routes, _ = _hard_route_forward(query, key, batch.value, window)
+    _, _, routes, _ = _hard_route_forward(query, key, batch.value)
     expected = batch.candidate_routes[batch.query_cues]
     return float((routes[:, 0, batch.query_position] == expected).float().mean())
 
@@ -474,7 +474,7 @@ def run_condition(
         "theoretical_capacity": theoretical_capacity,
         "theoretical_route_ceiling": theoretical_route_ceiling,
         "capacity_sufficient": theoretical_capacity >= candidate_count,
-        "oracle_route_accuracy": oracle_route_accuracy(batch, window),
+        "oracle_route_accuracy": oracle_route_accuracy(batch),
         "initial": initial,
         "training": training,
         "final": final,

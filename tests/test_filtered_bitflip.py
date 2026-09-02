@@ -84,7 +84,6 @@ def test_unlimited_diagonal_matches_frozen_hard_forward(
         query,
         key,
         value,
-        sequence_length,
     )
 
     torch.testing.assert_close(result.routes, routes[0, 0])

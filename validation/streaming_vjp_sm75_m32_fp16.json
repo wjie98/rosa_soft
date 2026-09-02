@@ -1,0 +1,253 @@
+{
+  "bits": 8,
+  "capability": [
+    7,
+    5
+  ],
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "dropout_p": 0.0,
+  "dtype": "float16",
+  "heads": 4,
+  "rows": [
+    {
+      "gradient_mask": 1,
+      "latency_ratio": 0.2825340646355771,
+      "max_abs_errors": [
+        1.1920928955078125e-07,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "production_extra_mib": 0.5,
+      "production_ms": 78.41014099121094,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 0.5,
+      "streaming_ms": 22.153535842895508,
+      "window": 32
+    },
+    {
+      "gradient_mask": 2,
+      "latency_ratio": 0.4652051837528096,
+      "max_abs_errors": [
+        0.0,
+        3.5762786865234375e-06,
+        0.0
+      ],
+      "pattern": "random",
+      "production_extra_mib": 1.0,
+      "production_ms": 48.20582580566406,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 1.0,
+      "streaming_ms": 22.425600051879883,
+      "window": 32
+    },
+    {
+      "gradient_mask": 3,
+      "latency_ratio": 0.36764714526817943,
+      "max_abs_errors": [
+        1.043081283569336e-07,
+        3.814697265625e-06,
+        0.0
+      ],
+      "pattern": "random",
+      "production_extra_mib": 1.5,
+      "production_ms": 90.85337829589844,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 1.5,
+      "streaming_ms": 33.40198516845703,
+      "window": 32
+    },
+    {
+      "gradient_mask": 4,
+      "latency_ratio": 0.5035895751833926,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        2.86102294921875e-06
+      ],
+      "pattern": "random",
+      "production_extra_mib": 2.0,
+      "production_ms": 13.042176246643066,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 2.0,
+      "streaming_ms": 6.567903995513916,
+      "window": 32
+    },
+    {
+      "gradient_mask": 5,
+      "latency_ratio": 0.3063385227968002,
+      "max_abs_errors": [
+        8.940696716308594e-08,
+        0.0,
+        3.5762786865234375e-06
+      ],
+      "pattern": "random",
+      "production_extra_mib": 2.5,
+      "production_ms": 79.8924789428711,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 2.5,
+      "streaming_ms": 24.474143981933594,
+      "window": 32
+    },
+    {
+      "gradient_mask": 6,
+      "latency_ratio": 0.4136007945586701,
+      "max_abs_errors": [
+        0.0,
+        3.814697265625e-06,
+        3.5762786865234375e-06
+      ],
+      "pattern": "random",
+      "production_extra_mib": 3.0,
+      "production_ms": 59.8553581237793,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 3.0,
+      "streaming_ms": 24.756223678588867,
+      "window": 32
+    },
+    {
+      "gradient_mask": 7,
+      "latency_ratio": 0.3514203268181006,
+      "max_abs_errors": [
+        1.1920928955078125e-07,
+        3.6954879760742188e-06,
+        3.3974647521972656e-06
+      ],
+      "pattern": "random",
+      "production_extra_mib": 3.5,
+      "production_ms": 102.13811492919922,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 3.5,
+      "streaming_ms": 35.893409729003906,
+      "window": 32
+    },
+    {
+      "gradient_mask": 1,
+      "latency_ratio": 0.2787681084794636,
+      "max_abs_errors": [
+        1.8775463104248047e-06,
+        0.0,
+        0.0
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 0.5,
+      "production_ms": 78.82508850097656,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 0.5,
+      "streaming_ms": 21.973920822143555,
+      "window": 32
+    },
+    {
+      "gradient_mask": 2,
+      "latency_ratio": 0.46773698458428037,
+      "max_abs_errors": [
+        0.0,
+        3.528594970703125e-05,
+        0.0
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 1.0,
+      "production_ms": 48.18147277832031,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 1.0,
+      "streaming_ms": 22.536256790161133,
+      "window": 32
+    },
+    {
+      "gradient_mask": 3,
+      "latency_ratio": 0.3656481355922001,
+      "max_abs_errors": [
+        1.7583370208740234e-06,
+        3.24249267578125e-05,
+        0.0
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 1.5,
+      "production_ms": 91.25730895996094,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 1.5,
+      "streaming_ms": 33.368064880371094,
+      "window": 32
+    },
+    {
+      "gradient_mask": 4,
+      "latency_ratio": 0.5021269387277867,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        8.940696716308594e-06
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 2.0,
+      "production_ms": 13.066656112670898,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 2.0,
+      "streaming_ms": 6.56112003326416,
+      "window": 32
+    },
+    {
+      "gradient_mask": 5,
+      "latency_ratio": 0.30570945165263574,
+      "max_abs_errors": [
+        1.7583370208740234e-06,
+        0.0,
+        8.106231689453125e-06
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 2.5,
+      "production_ms": 80.1957778930664,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 2.5,
+      "streaming_ms": 24.5166072845459,
+      "window": 32
+    },
+    {
+      "gradient_mask": 6,
+      "latency_ratio": 0.41629435654015834,
+      "max_abs_errors": [
+        0.0,
+        3.8623809814453125e-05,
+        8.225440979003906e-06
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 3.0,
+      "production_ms": 59.86579132080078,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 3.0,
+      "streaming_ms": 24.921791076660156,
+      "window": 32
+    },
+    {
+      "gradient_mask": 7,
+      "latency_ratio": 0.3497832224076734,
+      "max_abs_errors": [
+        1.996755599975586e-06,
+        3.2901763916015625e-05,
+        7.987022399902344e-06
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 3.5,
+      "production_ms": 102.07657623291016,
+      "query_tile_size": 32,
+      "seq_len": 4096,
+      "streaming_extra_mib": 3.5,
+      "streaming_ms": 35.704673767089844,
+      "window": 32
+    }
+  ],
+  "value_dim": 64,
+  "value_heads": 2
+}

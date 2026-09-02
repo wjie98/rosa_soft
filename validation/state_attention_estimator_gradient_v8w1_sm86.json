@@ -1,0 +1,1345 @@
+{
+  "schema_version": 1,
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 3070",
+  "baselines": [
+    "production",
+    "bitflip"
+  ],
+  "estimators": [
+    "production",
+    "bitflip",
+    "state_quadratic_attention"
+  ],
+  "model_seeds": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "gradient_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "steps": 500,
+  "success_threshold": 0.001,
+  "sequence_length": 16,
+  "qk_bits": 2,
+  "value_bits": 2,
+  "max_suffix_length": 3,
+  "fingerprint_length": 3,
+  "sketch_dim": 32,
+  "sketch_seed": 0,
+  "scale": 1.0,
+  "mismatch_scale": 3.0,
+  "proxy_has_trainable_parameters": false,
+  "proxy_has_auxiliary_loss": false,
+  "proxy_uses_attention_scale": false,
+  "state_dimensions": {
+    "local_feature": 4,
+    "state_linear": 3,
+    "state_quadratic": 4,
+    "state_cubic": 4,
+    "single_suffix": 64,
+    "single_suffix_sketch": 32,
+    "exact_multi_suffix": 84,
+    "sketch_multi_suffix": 96,
+    "exact_single_delta_memory_floats_per_head": 128,
+    "single_sketch_delta_memory_floats_per_head": 64,
+    "multi_sketch_delta_memory_floats_per_head": 192,
+    "state_linear_delta_memory_floats_per_head": 6,
+    "state_quadratic_delta_memory_floats_per_head": 8,
+    "state_cubic_delta_memory_floats_per_head": 8,
+    "state_full_delta_memory_floats_per_head": 8,
+    "state_linear_attention_memory_floats_per_head": 6,
+    "state_quadratic_attention_memory_floats_per_head": 8,
+    "state_cubic_attention_memory_floats_per_head": 8,
+    "state_full_linear_attention_memory_floats_per_head": 8,
+    "state_linear_attention_total_floats_per_head": 9,
+    "state_quadratic_attention_total_floats_per_head": 12,
+    "state_cubic_attention_total_floats_per_head": 12,
+    "state_full_linear_attention_total_floats_per_head": 12
+  },
+  "fits": [],
+  "fit_summaries": {},
+  "gradient_cases": [
+    {
+      "seed": 0,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.0033693791784877775,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 1.296402122853807,
+            "l2_norm": 0.8213656933322565,
+            "norm_ratio_to_bitflip": 0.8283965404622274
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.015454728594894237,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 1.0134275273069455,
+            "l2_norm": 0.17907091981881687,
+            "norm_ratio_to_bitflip": 0.18060375747309187
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.8016078890944258,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.9915127034136962,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.9915127034136962,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.03524193647946062,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 2.259750770337851,
+            "l2_norm": 2.044491193394768,
+            "norm_ratio_to_bitflip": 2.061991930467208
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.08484442888983404,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.2602545982374866,
+            "l2_norm": 0.8492228625168838,
+            "norm_ratio_to_bitflip": 0.8564921655497502
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.8597754621586424,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 1,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.024666857349884476,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.0043872496878632,
+            "l2_norm": 0.6008424218991287,
+            "norm_ratio_to_bitflip": 0.12163180558928566
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.13646917763813463,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9972375801569753,
+            "l2_norm": 0.10860250327033111,
+            "norm_ratio_to_bitflip": 0.021984996536253774
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.5909459469672572,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 4.939846276129407,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 4.939846276129407,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.011908947835603588,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 1.043807117835858,
+            "l2_norm": 1.5381050930024651,
+            "norm_ratio_to_bitflip": 0.31136699545388286
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.030137863644429847,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 1.00385349600302,
+            "l2_norm": 0.60778074830888,
+            "norm_ratio_to_bitflip": 0.12303636881289831
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.412929523757367,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 2,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.006667166144837642,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.0157992929345534,
+            "l2_norm": 0.6077925977512397,
+            "norm_ratio_to_bitflip": 0.18525231286970295
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.043500678375343355,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9991676224031314,
+            "l2_norm": 0.09315381695534315,
+            "norm_ratio_to_bitflip": 0.028392843393399276
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.6006115285838682,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 3.28089073942483,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 3.28089073942483,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.024894741954474577,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.0978929079687962,
+            "l2_norm": 1.5707408642043732,
+            "norm_ratio_to_bitflip": 0.4787543959722774
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.045222266334068124,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.0225572290464897,
+            "l2_norm": 0.8646888283495411,
+            "norm_ratio_to_bitflip": 0.26355307049972926
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.3113123550889771,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 3,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.03702093754578862,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.000256732813431,
+            "l2_norm": 0.8525557665865384,
+            "norm_ratio_to_bitflip": 0.08042694352847557
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.19918705887671712,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.997130124860758,
+            "l2_norm": 0.1584561465342842,
+            "norm_ratio_to_bitflip": 0.014948164153622124
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.837701011558101,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 10.600375063173782,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 10.600375063173782,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.049281054096067464,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.0127782990760257,
+            "l2_norm": 2.300877312669581,
+            "norm_ratio_to_bitflip": 0.21705621725243862
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.12201346159356129,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9931224895130217,
+            "l2_norm": 0.9293208948681084,
+            "norm_ratio_to_bitflip": 0.08766868052590085
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 2.10485132071582,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 4,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.028327062442566765,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.033750298498524,
+            "l2_norm": 0.7343608434361577,
+            "norm_ratio_to_bitflip": 0.29184575648990146
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.11647532080347654,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.994235156662494,
+            "l2_norm": 0.17859822427525893,
+            "norm_ratio_to_bitflip": 0.07097755052880539
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.7123120963861201,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 2.516263564248769,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 2.516263564248769,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.038332435985586555,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.3036739029462308,
+            "l2_norm": 2.2032674954397797,
+            "norm_ratio_to_bitflip": 0.8756107773223533
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.06548360445158907,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.093430127478799,
+            "l2_norm": 1.289736735406896,
+            "norm_ratio_to_bitflip": 0.5125602714006421
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.7863277442293288,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 5,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.08234653231779608,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9968147263952034,
+            "l2_norm": 0.5434425358132974,
+            "norm_ratio_to_bitflip": 0.06183921306075888
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.2106653310047356,
+            "sign_agreement_to_bitflip": 0.8333333333333333,
+            "relative_l2_error_to_bitflip": 0.9951883267979518,
+            "l2_norm": 0.2124251205681716,
+            "norm_ratio_to_bitflip": 0.02417220115207465
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.5002053157282365,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 8.787992422855524,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 8.787992422855524,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": -0.006101438993226885,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 1.0171610481604159,
+            "l2_norm": 1.582312668084085,
+            "norm_ratio_to_bitflip": 0.18005394087150758
+          },
+          "query_key": {
+            "cosine_to_bitflip": -0.009674052900899984,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 1.0075182941193461,
+            "l2_norm": 0.9979668616063648,
+            "norm_ratio_to_bitflip": 0.1135602778867771
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.2279151121779222,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 6,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": -0.08956216699169132,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 1.0634638541750807,
+            "l2_norm": 0.38481865856117825,
+            "norm_ratio_to_bitflip": 0.2832336898698959
+          },
+          "query_key": {
+            "cosine_to_bitflip": -0.228581073802735,
+            "sign_agreement_to_bitflip": 0.5,
+            "relative_l2_error_to_bitflip": 1.031043029235609,
+            "l2_norm": 0.1507788566489905,
+            "norm_ratio_to_bitflip": 0.11097604280086731
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.35404962415521335,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 1.3586613186374321,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.9999999999999999,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 1.3586613186374321,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": -0.180892715484739,
+            "sign_agreement_to_bitflip": 0.0,
+            "relative_l2_error_to_bitflip": 1.3913973663446648,
+            "l2_norm": 1.091463372067939,
+            "norm_ratio_to_bitflip": 0.8033373417611834
+          },
+          "query_key": {
+            "cosine_to_bitflip": -0.2681945775643374,
+            "sign_agreement_to_bitflip": 0.0,
+            "relative_l2_error_to_bitflip": 1.2586594446784716,
+            "l2_norm": 0.7361736207292857,
+            "norm_ratio_to_bitflip": 0.5418374768095819
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.8058167860675589,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 7,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.7300616877836167,
+            "norm_ratio_to_bitflip": null
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.13248265710034987,
+            "norm_ratio_to_bitflip": null
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.7179403969251863,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.853524177848167,
+            "norm_ratio_to_bitflip": null
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.7865658119945371,
+            "norm_ratio_to_bitflip": null
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.6783521982197591,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 8,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.659230169277042,
+            "norm_ratio_to_bitflip": null
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.17580602429775385,
+            "norm_ratio_to_bitflip": null
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.6353555366136782,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.6562500339536372,
+            "norm_ratio_to_bitflip": null
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.747206100706245,
+            "norm_ratio_to_bitflip": null
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.4781228697367461,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 9,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.002793166108704092,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.0587052520003606,
+            "l2_norm": 0.6684927640220555,
+            "norm_ratio_to_bitflip": 0.35044904825376055
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.01717209410235992,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.0006456052569321,
+            "l2_norm": 0.10873521431050863,
+            "norm_ratio_to_bitflip": 0.057003088765713555
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.6595901975611033,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 1.907531971774679,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 1.907531971774679,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": -0.00961953897448734,
+            "sign_agreement_to_bitflip": 0.0,
+            "relative_l2_error_to_bitflip": 1.4131802051243303,
+            "l2_norm": 1.88648211406335,
+            "norm_ratio_to_bitflip": 0.9889648729233381
+          },
+          "query_key": {
+            "cosine_to_bitflip": -0.019176913248348866,
+            "sign_agreement_to_bitflip": 0.0,
+            "relative_l2_error_to_bitflip": 1.124778853121451,
+            "l2_norm": 0.9462987075080049,
+            "norm_ratio_to_bitflip": 0.4960853718365793
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.6319722800493903,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 10,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.04404298282442878,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 2.141605644620521,
+            "l2_norm": 0.5711817136024533,
+            "norm_ratio_to_bitflip": 1.9383540769709393
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.18130828526553322,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.0251671787215029,
+            "l2_norm": 0.1387501203542788,
+            "norm_ratio_to_bitflip": 0.47086041983499816
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.5540730584097264,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.2946735688739786,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.2946735688739786,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.108306432125302,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 5.012738919148312,
+            "l2_norm": 1.4796976499447583,
+            "norm_ratio_to_bitflip": 5.021480737478604
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.19872057954890582,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 2.720728190734813,
+            "l2_norm": 0.806462891027701,
+            "norm_ratio_to_bitflip": 2.7368009085762166
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.240613856382107,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 11,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.2559439771332985,
+            "sign_agreement_to_bitflip": 0.9583333333333333,
+            "relative_l2_error_to_bitflip": 0.9867925058743026,
+            "l2_norm": 0.9301028943946539,
+            "norm_ratio_to_bitflip": 0.05778553274978033
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.5683296681861849,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9933847096355748,
+            "l2_norm": 0.1775059952910365,
+            "norm_ratio_to_bitflip": 0.011722272369012592
+          },
+          "value": {
+            "cosine_to_bitflip": 0.4624800307426411,
+            "sign_agreement_to_bitflip": 0.875,
+            "relative_l2_error_to_bitflip": 0.9344683978069575,
+            "l2_norm": 0.9130076756506768,
+            "norm_ratio_to_bitflip": 0.16732081042991526
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 16.09577432507429,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 15.142626762390137,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 5.456629532840466,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.1908366734670352,
+            "sign_agreement_to_bitflip": 0.7083333333333333,
+            "relative_l2_error_to_bitflip": 0.9823249902329619,
+            "l2_norm": 2.47351110248999,
+            "norm_ratio_to_bitflip": 0.1536745640522997
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.18415637051090963,
+            "sign_agreement_to_bitflip": 0.625,
+            "relative_l2_error_to_bitflip": 0.9916958911074579,
+            "l2_norm": 0.7926366711708375,
+            "norm_ratio_to_bitflip": 0.05234472747750182
+          },
+          "value": {
+            "cosine_to_bitflip": 0.4213785204267459,
+            "sign_agreement_to_bitflip": 0.875,
+            "relative_l2_error_to_bitflip": 0.9069203225475773,
+            "l2_norm": 2.343071548556821,
+            "norm_ratio_to_bitflip": 0.4293990520073162
+          }
+        }
+      }
+    },
+    {
+      "seed": 12,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.13854499049837973,
+            "sign_agreement_to_bitflip": 0.9166666666666666,
+            "relative_l2_error_to_bitflip": 0.990551714605644,
+            "l2_norm": 0.9832244001995933,
+            "norm_ratio_to_bitflip": 0.11886216294802184
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.312667951560475,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9913728888878569,
+            "l2_norm": 0.18231094248376914,
+            "norm_ratio_to_bitflip": 0.02879922705057335
+          },
+          "value": {
+            "cosine_to_bitflip": 0.14888992333311368,
+            "sign_agreement_to_bitflip": 0.75,
+            "relative_l2_error_to_bitflip": 0.9893898398874656,
+            "l2_norm": 0.9661743845696438,
+            "norm_ratio_to_bitflip": 0.18145469790143118
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 8.27197129695137,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 6.330410957336426,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": 1.0000000000000002,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 5.324603858393811,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.10343002794550481,
+            "sign_agreement_to_bitflip": 0.6666666666666666,
+            "relative_l2_error_to_bitflip": 1.0112870336216206,
+            "l2_norm": 2.3673108295364225,
+            "norm_ratio_to_bitflip": 0.28618460395394424
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.07034347220974632,
+            "sign_agreement_to_bitflip": 0.625,
+            "relative_l2_error_to_bitflip": 1.0003660659323594,
+            "l2_norm": 0.9224191499609641,
+            "norm_ratio_to_bitflip": 0.1457123646754649
+          },
+          "value": {
+            "cosine_to_bitflip": 0.1390887035842329,
+            "sign_agreement_to_bitflip": 0.75,
+            "relative_l2_error_to_bitflip": 1.0265254277866833,
+            "l2_norm": 2.1802072092867038,
+            "norm_ratio_to_bitflip": 0.4094590447042895
+          }
+        }
+      }
+    },
+    {
+      "seed": 13,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.9097510750371764,
+            "norm_ratio_to_bitflip": null
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.10426131754245271,
+            "norm_ratio_to_bitflip": null
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.9037569342448278,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 2.4940557686080913,
+            "norm_ratio_to_bitflip": null
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.2156821430233908,
+            "norm_ratio_to_bitflip": null
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 2.177712355675412,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 14,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.9233017199827817,
+            "norm_ratio_to_bitflip": null
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.14738145888458593,
+            "norm_ratio_to_bitflip": null
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.9114629842732036,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 2.2540582007154764,
+            "norm_ratio_to_bitflip": null
+          },
+          "query_key": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.7357955508302648,
+            "norm_ratio_to_bitflip": null
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 2.1305828497364465,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    },
+    {
+      "seed": 15,
+      "estimators": {
+        "production": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.07257407224686958,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9976225279562292,
+            "l2_norm": 0.8621477827767111,
+            "norm_ratio_to_bitflip": 0.09532718738021785
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.29120579822891945,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9933417578971261,
+            "l2_norm": 0.2148637693866554,
+            "norm_ratio_to_bitflip": 0.023757364125642447
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 0.8349445250744251,
+            "norm_ratio_to_bitflip": null
+          }
+        },
+        "bitflip": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 9.04409126577905,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "query_key": {
+            "cosine_to_bitflip": 1.0,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 9.04409126577905,
+            "norm_ratio_to_bitflip": 1.0
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": 0.0,
+            "l2_norm": 0.0,
+            "norm_ratio_to_bitflip": 1.0
+          }
+        },
+        "state_quadratic_attention": {
+          "hard_forward_equal": true,
+          "combined": {
+            "cosine_to_bitflip": 0.09977455510781051,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 1.0092607306764318,
+            "l2_norm": 2.430853295959353,
+            "norm_ratio_to_bitflip": 0.26877805901375557
+          },
+          "query_key": {
+            "cosine_to_bitflip": 0.1620055434545108,
+            "sign_agreement_to_bitflip": 1.0,
+            "relative_l2_error_to_bitflip": 0.9867961514717657,
+            "l2_norm": 1.4970926362455053,
+            "norm_ratio_to_bitflip": 0.16553267677762062
+          },
+          "value": {
+            "cosine_to_bitflip": null,
+            "sign_agreement_to_bitflip": null,
+            "relative_l2_error_to_bitflip": null,
+            "l2_norm": 1.9151400431759378,
+            "norm_ratio_to_bitflip": null
+          }
+        }
+      }
+    }
+  ],
+  "gradient_summaries": {
+    "production": {
+      "cases": 16,
+      "hard_forward_equal_cases": 16,
+      "mean_query_key_cosine_to_bitflip": 0.15532125156950324,
+      "mean_query_key_sign_agreement_to_bitflip": 0.9027777777777778,
+      "mean_query_key_norm_ratio_to_bitflip": 0.08701649401533787,
+      "mean_value_cosine_to_bitflip": 0.3056849770378774,
+      "mean_combined_cosine_to_bitflip": 0.05056124639994589,
+      "mean_combined_relative_l2_error_to_bitflip": 1.13217932686796
+    },
+    "bitflip": {
+      "cases": 16,
+      "hard_forward_equal_cases": 16,
+      "mean_query_key_cosine_to_bitflip": 1.0,
+      "mean_query_key_sign_agreement_to_bitflip": 1.0,
+      "mean_query_key_norm_ratio_to_bitflip": 1.0,
+      "mean_value_cosine_to_bitflip": 1.0,
+      "mean_combined_cosine_to_bitflip": 1.0,
+      "mean_combined_relative_l2_error_to_bitflip": 0.0
+    },
+    "state_quadratic_attention": {
+      "cases": 16,
+      "hard_forward_equal_cases": 16,
+      "mean_query_key_cosine_to_bitflip": 0.05549017057699739,
+      "mean_query_key_sign_agreement_to_bitflip": 0.6875,
+      "mean_query_key_norm_ratio_to_bitflip": 0.5079320300690553,
+      "mean_value_cosine_to_bitflip": 0.2802336120054894,
+      "mean_combined_cosine_to_bitflip": 0.03878275929536601,
+      "mean_combined_relative_l2_error_to_bitflip": 1.5462711076227915
+    }
+  }
+}

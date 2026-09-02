@@ -1,0 +1,1841 @@
+{
+  "schema_version": 1,
+  "objective": "repair the oldest decisive suffix bit at 8K and preserve exact latest-longest routing under 64K/1M many-distractor extrapolation",
+  "scope": "controlled final-query-row estimator gate; not a language-model quality or throughput benchmark",
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 3070",
+  "estimators": [
+    "suffix_sketch_quadratic_attention"
+  ],
+  "windows": [
+    1,
+    2,
+    4,
+    8,
+    32
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "probes": 8,
+  "bits": 8,
+  "value_bits": 8,
+  "value_mode": "balanced_binary",
+  "train_context_length": 1024,
+  "eval_context_lengths": [
+    1024
+  ],
+  "steps": 50,
+  "learning_rate": 0.05,
+  "initial_fault_logit": -0.25,
+  "logit_margin": 1.0,
+  "scale": 1.0,
+  "mismatch_scale": 3.0,
+  "temporal_state_dim": 64,
+  "suffix_sketch_dim": 128,
+  "suffix_sketch_count": 2,
+  "suffix_sketch_seed": 0,
+  "records": [
+    {
+      "seed": 0,
+      "window": 1,
+      "phase_bits": 0,
+      "content_bits": 8,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010890380945056677,
+        "initial_gradient": -0.0016885537188500166,
+        "max_abs_gradient": 0.0023956485092639923,
+        "initial_target_proxy_weight": 0.0014931029872968793,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 0.0,
+        "initial_exact_distractor_mean": 127.875,
+        "final_target_suffix_mean": 1.0,
+        "final_max_distractor_suffix_mean": 0.0,
+        "train_ms": 337.68724199035205,
+        "ms_per_executed_step": 67.53744839807041,
+        "context_build_ms": 202.87268699030392
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 1023,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 1.0,
+          "max_suffix_mean": 1.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 1023.0,
+          "scan_ms": 2.0290510001359507,
+          "million_candidates_per_second": 4.037355393950728
+        }
+      ]
+    },
+    {
+      "seed": 1,
+      "window": 1,
+      "phase_bits": 0,
+      "content_bits": 8,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010894869919866323,
+        "initial_gradient": -0.002464279066771269,
+        "max_abs_gradient": 0.0034962177742272615,
+        "initial_target_proxy_weight": 0.001483479281887412,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 0.0,
+        "initial_exact_distractor_mean": 127.875,
+        "final_target_suffix_mean": 1.0,
+        "final_max_distractor_suffix_mean": 0.0,
+        "train_ms": 59.380168007919565,
+        "ms_per_executed_step": 11.876033601583913,
+        "context_build_ms": 24.431466008536518
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 1023,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 1.0,
+          "max_suffix_mean": 1.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 1023.0,
+          "scan_ms": 1.4264880010159686,
+          "million_candidates_per_second": 5.742775259354106
+        }
+      ]
+    },
+    {
+      "seed": 2,
+      "window": 1,
+      "phase_bits": 0,
+      "content_bits": 8,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010890086414292455,
+        "initial_gradient": -0.0016735873650759459,
+        "max_abs_gradient": 0.0023744148202240467,
+        "initial_target_proxy_weight": 0.0013274864759296179,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 0.0,
+        "initial_exact_distractor_mean": 127.875,
+        "final_target_suffix_mean": 1.0,
+        "final_max_distractor_suffix_mean": 0.0,
+        "train_ms": 57.53812899638433,
+        "ms_per_executed_step": 11.507625799276866,
+        "context_build_ms": 24.87367400317453
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 1023,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 1.0,
+          "max_suffix_mean": 1.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 1023.0,
+          "scan_ms": 1.8334260093979537,
+          "million_candidates_per_second": 4.468137769404736
+        }
+      ]
+    },
+    {
+      "seed": 3,
+      "window": 1,
+      "phase_bits": 0,
+      "content_bits": 8,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010889157420024276,
+        "initial_gradient": -0.001550816697999835,
+        "max_abs_gradient": 0.0022002325858920813,
+        "initial_target_proxy_weight": 0.0014631396625190973,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 0.0,
+        "initial_exact_distractor_mean": 127.875,
+        "final_target_suffix_mean": 1.0,
+        "final_max_distractor_suffix_mean": 0.0,
+        "train_ms": 59.179107993259095,
+        "ms_per_executed_step": 11.835821598651819,
+        "context_build_ms": 23.461129996576346
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 1023,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 1.0,
+          "max_suffix_mean": 1.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 1023.0,
+          "scan_ms": 1.4913890045136213,
+          "million_candidates_per_second": 5.492866029726169
+        }
+      ]
+    },
+    {
+      "seed": 4,
+      "window": 1,
+      "phase_bits": 0,
+      "content_bits": 8,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.000989321037195623,
+        "initial_gradient": -2.27662967517972e-05,
+        "max_abs_gradient": 3.229419235140085e-05,
+        "initial_target_proxy_weight": 0.00146758696064353,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 0.0,
+        "initial_exact_distractor_mean": 127.875,
+        "final_target_suffix_mean": 1.0,
+        "final_max_distractor_suffix_mean": 0.0,
+        "train_ms": 59.14310998923611,
+        "ms_per_executed_step": 11.828621997847222,
+        "context_build_ms": 24.009455999475904
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 1023,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 1.0,
+          "max_suffix_mean": 1.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 1023.0,
+          "scan_ms": 1.440787993487902,
+          "million_candidates_per_second": 5.685777530786168
+        }
+      ]
+    },
+    {
+      "seed": 5,
+      "window": 1,
+      "phase_bits": 0,
+      "content_bits": 8,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010869906982406974,
+        "initial_gradient": -0.0006763249402865767,
+        "max_abs_gradient": 0.0009595375740900636,
+        "initial_target_proxy_weight": 0.0014442820101976395,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 0.0,
+        "initial_exact_distractor_mean": 127.875,
+        "final_target_suffix_mean": 1.0,
+        "final_max_distractor_suffix_mean": 0.0,
+        "train_ms": 58.51609400997404,
+        "ms_per_executed_step": 11.703218801994808,
+        "context_build_ms": 23.98463900317438
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 1023,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 1.0,
+          "max_suffix_mean": 1.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 1023.0,
+          "scan_ms": 1.499335005064495,
+          "million_candidates_per_second": 5.46375557985963
+        }
+      ]
+    },
+    {
+      "seed": 6,
+      "window": 1,
+      "phase_bits": 0,
+      "content_bits": 8,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010901137720793486,
+        "initial_gradient": -0.007631893269717693,
+        "max_abs_gradient": 0.010827825404703617,
+        "initial_target_proxy_weight": 0.001465757959522307,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 0.0,
+        "initial_exact_distractor_mean": 127.875,
+        "final_target_suffix_mean": 1.0,
+        "final_max_distractor_suffix_mean": 0.0,
+        "train_ms": 58.017989998916164,
+        "ms_per_executed_step": 11.603597999783233,
+        "context_build_ms": 23.594502999912947
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 1023,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 1.0,
+          "max_suffix_mean": 1.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 1023.0,
+          "scan_ms": 1.4382250083144754,
+          "million_candidates_per_second": 5.695909855997147
+        }
+      ]
+    },
+    {
+      "seed": 7,
+      "window": 1,
+      "phase_bits": 0,
+      "content_bits": 8,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": -2.0772879123687744,
+        "initial_gradient": 0.0014705355279147625,
+        "max_abs_gradient": 0.0014705355279147625,
+        "initial_target_proxy_weight": 0.0012927412753924727,
+        "first_exact_step": null,
+        "executed_steps": 50,
+        "stalled": false,
+        "train_success": false,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 0.0,
+        "initial_target_suffix_mean": 0.0,
+        "initial_exact_distractor_mean": 127.875,
+        "final_target_suffix_mean": 0.0,
+        "final_max_distractor_suffix_mean": 1.0,
+        "train_ms": 539.4815159961581,
+        "ms_per_executed_step": 10.789630319923162,
+        "context_build_ms": 23.194626002805308
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 1023,
+          "route_accuracy": 0.0,
+          "all_routes_correct": false,
+          "target_suffix_mean": 0.0,
+          "max_suffix_mean": 1.0,
+          "exact_distractor_mean": 127.875,
+          "strict_distractor_mean": 895.125,
+          "scan_ms": 1.4622169983340427,
+          "million_candidates_per_second": 5.602451626081112
+        }
+      ]
+    },
+    {
+      "seed": 0,
+      "window": 2,
+      "phase_bits": 1,
+      "content_bits": 7,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010896538151428103,
+        "initial_gradient": -0.003083178773522377,
+        "max_abs_gradient": 0.004374287556856871,
+        "initial_target_proxy_weight": 0.002236428204923868,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 1.0,
+        "initial_exact_distractor_mean": 73.875,
+        "final_target_suffix_mean": 2.0,
+        "final_max_distractor_suffix_mean": 1.0,
+        "train_ms": 73.56337299279403,
+        "ms_per_executed_step": 14.712674598558806,
+        "context_build_ms": 25.279114008299075
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 511,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 2.0,
+          "max_suffix_mean": 2.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 511.0,
+          "scan_ms": 1.9371489906916395,
+          "million_candidates_per_second": 4.228895164679681
+        }
+      ]
+    },
+    {
+      "seed": 1,
+      "window": 2,
+      "phase_bits": 1,
+      "content_bits": 7,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010898468317463994,
+        "initial_gradient": -0.004050903022289276,
+        "max_abs_gradient": 0.005747256334871054,
+        "initial_target_proxy_weight": 0.0020237774588167667,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 1.0,
+        "initial_exact_distractor_mean": 73.75,
+        "final_target_suffix_mean": 2.0,
+        "final_max_distractor_suffix_mean": 1.0,
+        "train_ms": 69.77694500528742,
+        "ms_per_executed_step": 13.955389001057483,
+        "context_build_ms": 24.315307004144415
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 511,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 2.0,
+          "max_suffix_mean": 2.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 511.0,
+          "scan_ms": 1.9682159909280017,
+          "million_candidates_per_second": 4.162144824429316
+        }
+      ]
+    },
+    {
+      "seed": 2,
+      "window": 2,
+      "phase_bits": 1,
+      "content_bits": 7,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010846761288121343,
+        "initial_gradient": -0.00040285420254804194,
+        "max_abs_gradient": 0.0005715485312975943,
+        "initial_target_proxy_weight": 0.0021509232465177774,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 1.0,
+        "initial_exact_distractor_mean": 73.75,
+        "final_target_suffix_mean": 2.0,
+        "final_max_distractor_suffix_mean": 1.0,
+        "train_ms": 69.90890500310343,
+        "ms_per_executed_step": 13.981781000620686,
+        "context_build_ms": 24.676119996001944
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 511,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 2.0,
+          "max_suffix_mean": 2.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 511.0,
+          "scan_ms": 1.9963099912274629,
+          "million_candidates_per_second": 4.10357110669121
+        }
+      ]
+    },
+    {
+      "seed": 3,
+      "window": 2,
+      "phase_bits": 1,
+      "content_bits": 7,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010892977006733418,
+        "initial_gradient": -0.002064066706225276,
+        "max_abs_gradient": 0.002928411588072777,
+        "initial_target_proxy_weight": 0.0021320655941963196,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 1.0,
+        "initial_exact_distractor_mean": 74.0,
+        "final_target_suffix_mean": 2.0,
+        "final_max_distractor_suffix_mean": 1.0,
+        "train_ms": 69.33636299800128,
+        "ms_per_executed_step": 13.867272599600255,
+        "context_build_ms": 24.591120003606193
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 511,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 2.0,
+          "max_suffix_mean": 2.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 511.0,
+          "scan_ms": 1.9059789919992909,
+          "million_candidates_per_second": 4.298053669210142
+        }
+      ]
+    },
+    {
+      "seed": 4,
+      "window": 2,
+      "phase_bits": 1,
+      "content_bits": 7,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010894350707530975,
+        "initial_gradient": -0.0023914966732263565,
+        "max_abs_gradient": 0.003392955753952265,
+        "initial_target_proxy_weight": 0.002164322417229414,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 1.0,
+        "initial_exact_distractor_mean": 73.875,
+        "final_target_suffix_mean": 2.0,
+        "final_max_distractor_suffix_mean": 1.0,
+        "train_ms": 70.29463299841154,
+        "ms_per_executed_step": 14.058926599682309,
+        "context_build_ms": 24.72779600066133
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 511,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 2.0,
+          "max_suffix_mean": 2.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 511.0,
+          "scan_ms": 2.0427569979801774,
+          "million_candidates_per_second": 4.010266521225984
+        }
+      ]
+    },
+    {
+      "seed": 5,
+      "window": 2,
+      "phase_bits": 1,
+      "content_bits": 7,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.001078645116649568,
+        "initial_gradient": -0.00019561569206416607,
+        "max_abs_gradient": 0.0002775270550046116,
+        "initial_target_proxy_weight": 0.002224249765276909,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 1.0,
+        "initial_exact_distractor_mean": 73.75,
+        "final_target_suffix_mean": 2.0,
+        "final_max_distractor_suffix_mean": 1.0,
+        "train_ms": 70.93207800062373,
+        "ms_per_executed_step": 14.186415600124747,
+        "context_build_ms": 24.090247999993153
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 511,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 2.0,
+          "max_suffix_mean": 2.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 511.0,
+          "scan_ms": 2.028094997513108,
+          "million_candidates_per_second": 4.039258520949561
+        }
+      ]
+    },
+    {
+      "seed": 6,
+      "window": 2,
+      "phase_bits": 1,
+      "content_bits": 7,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010885485680773854,
+        "initial_gradient": -0.001239708042703569,
+        "max_abs_gradient": 0.0017588440096005797,
+        "initial_target_proxy_weight": 0.002137501025572419,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 1.0,
+        "initial_exact_distractor_mean": 73.875,
+        "final_target_suffix_mean": 2.0,
+        "final_max_distractor_suffix_mean": 1.0,
+        "train_ms": 70.73531798960175,
+        "ms_per_executed_step": 14.14706359792035,
+        "context_build_ms": 24.009554996155202
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 511,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 2.0,
+          "max_suffix_mean": 2.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 511.0,
+          "scan_ms": 2.020507992710918,
+          "million_candidates_per_second": 4.054425931277205
+        }
+      ]
+    },
+    {
+      "seed": 7,
+      "window": 2,
+      "phase_bits": 1,
+      "content_bits": 7,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010893980506807566,
+        "initial_gradient": -0.0023105351720005274,
+        "max_abs_gradient": 0.003278090851381421,
+        "initial_target_proxy_weight": 0.00217176484875381,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 1.0,
+        "initial_exact_distractor_mean": 74.0,
+        "final_target_suffix_mean": 2.0,
+        "final_max_distractor_suffix_mean": 1.0,
+        "train_ms": 69.97729399881791,
+        "ms_per_executed_step": 13.995458799763583,
+        "context_build_ms": 24.076304005575366
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 511,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 2.0,
+          "max_suffix_mean": 2.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 511.0,
+          "scan_ms": 2.681535988813266,
+          "million_candidates_per_second": 3.0549655250479897
+        }
+      ]
+    },
+    {
+      "seed": 0,
+      "window": 4,
+      "phase_bits": 2,
+      "content_bits": 6,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010879588080570102,
+        "initial_gradient": -0.0009397214744240046,
+        "max_abs_gradient": 0.0013332345988601446,
+        "initial_target_proxy_weight": 0.0038892128504812717,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 3.0,
+        "initial_exact_distractor_mean": 42.75,
+        "final_target_suffix_mean": 4.0,
+        "final_max_distractor_suffix_mean": 3.0,
+        "train_ms": 91.89087699633092,
+        "ms_per_executed_step": 18.378175399266183,
+        "context_build_ms": 26.97121001256164
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 255,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 4.0,
+          "max_suffix_mean": 4.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 255.0,
+          "scan_ms": 2.9093630000716075,
+          "million_candidates_per_second": 2.8157366405630277
+        }
+      ]
+    },
+    {
+      "seed": 1,
+      "window": 4,
+      "phase_bits": 2,
+      "content_bits": 6,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010871872073039412,
+        "initial_gradient": -0.000716808601282537,
+        "max_abs_gradient": 0.0010169749148190022,
+        "initial_target_proxy_weight": 0.00391508499160409,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 3.0,
+        "initial_exact_distractor_mean": 42.75,
+        "final_target_suffix_mean": 4.0,
+        "final_max_distractor_suffix_mean": 3.0,
+        "train_ms": 92.71411100053228,
+        "ms_per_executed_step": 18.542822200106457,
+        "context_build_ms": 26.481410997803323
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 255,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 4.0,
+          "max_suffix_mean": 4.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 255.0,
+          "scan_ms": 2.906492998590693,
+          "million_candidates_per_second": 2.818517025147542
+        }
+      ]
+    },
+    {
+      "seed": 2,
+      "window": 4,
+      "phase_bits": 2,
+      "content_bits": 6,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010876287706196308,
+        "initial_gradient": -0.0008326837560161948,
+        "max_abs_gradient": 0.0011813740711659193,
+        "initial_target_proxy_weight": 0.003999468870460987,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 3.0,
+        "initial_exact_distractor_mean": 42.875,
+        "final_target_suffix_mean": 4.0,
+        "final_max_distractor_suffix_mean": 3.0,
+        "train_ms": 92.76978600246366,
+        "ms_per_executed_step": 18.553957200492732,
+        "context_build_ms": 26.867446998949163
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 255,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 4.0,
+          "max_suffix_mean": 4.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 255.0,
+          "scan_ms": 3.1433430121978745,
+          "million_candidates_per_second": 2.606142558483309
+        }
+      ]
+    },
+    {
+      "seed": 3,
+      "window": 4,
+      "phase_bits": 2,
+      "content_bits": 6,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010883817449212074,
+        "initial_gradient": -0.0011426534038037062,
+        "max_abs_gradient": 0.0016211465699598193,
+        "initial_target_proxy_weight": 0.003966419491916895,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 3.0,
+        "initial_exact_distractor_mean": 43.0,
+        "final_target_suffix_mean": 4.0,
+        "final_max_distractor_suffix_mean": 3.0,
+        "train_ms": 93.3877509960439,
+        "ms_per_executed_step": 18.67755019920878,
+        "context_build_ms": 28.080510994186625
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 255,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 4.0,
+          "max_suffix_mean": 4.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 255.0,
+          "scan_ms": 2.916746001574211,
+          "million_candidates_per_second": 2.8086093185963596
+        }
+      ]
+    },
+    {
+      "seed": 4,
+      "window": 4,
+      "phase_bits": 2,
+      "content_bits": 6,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010874433210119605,
+        "initial_gradient": -0.0007771775126457214,
+        "max_abs_gradient": 0.0011026239953935146,
+        "initial_target_proxy_weight": 0.003814440220594406,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 3.0,
+        "initial_exact_distractor_mean": 42.75,
+        "final_target_suffix_mean": 4.0,
+        "final_max_distractor_suffix_mean": 3.0,
+        "train_ms": 91.77009300037753,
+        "ms_per_executed_step": 18.354018600075506,
+        "context_build_ms": 28.115883993450552
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 255,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 4.0,
+          "max_suffix_mean": 4.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 255.0,
+          "scan_ms": 2.9327410011319444,
+          "million_candidates_per_second": 2.7932913260455488
+        }
+      ]
+    },
+    {
+      "seed": 5,
+      "window": 4,
+      "phase_bits": 2,
+      "content_bits": 6,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": -2.0772323608398438,
+        "initial_gradient": 0.000339162303134799,
+        "max_abs_gradient": 0.000339162303134799,
+        "initial_target_proxy_weight": 0.003984535578638315,
+        "first_exact_step": null,
+        "executed_steps": 50,
+        "stalled": false,
+        "train_success": false,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 0.0,
+        "initial_target_suffix_mean": 3.0,
+        "initial_exact_distractor_mean": 42.75,
+        "final_target_suffix_mean": 3.0,
+        "final_max_distractor_suffix_mean": 4.0,
+        "train_ms": 856.6695079935016,
+        "ms_per_executed_step": 17.133390159870032,
+        "context_build_ms": 26.748509000753984
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 255,
+          "route_accuracy": 0.0,
+          "all_routes_correct": false,
+          "target_suffix_mean": 3.0,
+          "max_suffix_mean": 4.0,
+          "exact_distractor_mean": 42.75,
+          "strict_distractor_mean": 212.25,
+          "scan_ms": 3.0685969977639616,
+          "million_candidates_per_second": 2.669623937574527
+        }
+      ]
+    },
+    {
+      "seed": 6,
+      "window": 4,
+      "phase_bits": 2,
+      "content_bits": 6,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.001086041098460555,
+        "initial_gradient": -0.000528370903339237,
+        "max_abs_gradient": 0.000749626662582159,
+        "initial_target_proxy_weight": 0.0038965914864093065,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 3.0,
+        "initial_exact_distractor_mean": 42.875,
+        "final_target_suffix_mean": 4.0,
+        "final_max_distractor_suffix_mean": 3.0,
+        "train_ms": 93.66633101308253,
+        "ms_per_executed_step": 18.733266202616505,
+        "context_build_ms": 27.698678997694515
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 255,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 4.0,
+          "max_suffix_mean": 4.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 255.0,
+          "scan_ms": 2.9347910021897405,
+          "million_candidates_per_second": 2.7913401649002227
+        }
+      ]
+    },
+    {
+      "seed": 7,
+      "window": 4,
+      "phase_bits": 2,
+      "content_bits": 6,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.00108789571095258,
+        "initial_gradient": -0.0009189526317641139,
+        "max_abs_gradient": 0.0013037684839218855,
+        "initial_target_proxy_weight": 0.003952802624553442,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 3.0,
+        "initial_exact_distractor_mean": 42.75,
+        "final_target_suffix_mean": 4.0,
+        "final_max_distractor_suffix_mean": 3.0,
+        "train_ms": 94.14936300890986,
+        "ms_per_executed_step": 18.82987260178197,
+        "context_build_ms": 27.514940011315048
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 255,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 4.0,
+          "max_suffix_mean": 4.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 255.0,
+          "scan_ms": 2.956323995022103,
+          "million_candidates_per_second": 2.7710088656702703
+        }
+      ]
+    },
+    {
+      "seed": 0,
+      "window": 8,
+      "phase_bits": 3,
+      "content_bits": 5,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.001088963937945664,
+        "initial_gradient": -0.0016013860004022717,
+        "max_abs_gradient": 0.0022719791159033775,
+        "initial_target_proxy_weight": 0.0072920965030789375,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 7.0,
+        "initial_exact_distractor_mean": 25.625,
+        "final_target_suffix_mean": 8.0,
+        "final_max_distractor_suffix_mean": 7.0,
+        "train_ms": 138.7084070011042,
+        "ms_per_executed_step": 27.74168140022084,
+        "context_build_ms": 32.75548599776812
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 127,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 8.0,
+          "max_suffix_mean": 8.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 127.0,
+          "scan_ms": 4.915619996609166,
+          "million_candidates_per_second": 1.666524264619907
+        }
+      ]
+    },
+    {
+      "seed": 1,
+      "window": 8,
+      "phase_bits": 3,
+      "content_bits": 5,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010893645230680704,
+        "initial_gradient": -0.00223713181912899,
+        "max_abs_gradient": 0.0031739491969347,
+        "initial_target_proxy_weight": 0.007145275361835957,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 7.0,
+        "initial_exact_distractor_mean": 25.875,
+        "final_target_suffix_mean": 8.0,
+        "final_max_distractor_suffix_mean": 7.0,
+        "train_ms": 138.66216500173323,
+        "ms_per_executed_step": 27.732433000346646,
+        "context_build_ms": 31.896981003228575
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 127,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 8.0,
+          "max_suffix_mean": 8.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 127.0,
+          "scan_ms": 4.9290510069113225,
+          "million_candidates_per_second": 1.661983207013581
+        }
+      ]
+    },
+    {
+      "seed": 2,
+      "window": 8,
+      "phase_bits": 3,
+      "content_bits": 5,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010888008400797844,
+        "initial_gradient": -0.0014445038978010416,
+        "max_abs_gradient": 0.002049400005489588,
+        "initial_target_proxy_weight": 0.007423262111842632,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 7.0,
+        "initial_exact_distractor_mean": 25.75,
+        "final_target_suffix_mean": 8.0,
+        "final_max_distractor_suffix_mean": 7.0,
+        "train_ms": 139.85051700728945,
+        "ms_per_executed_step": 27.97010340145789,
+        "context_build_ms": 32.66884600452613
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 127,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 8.0,
+          "max_suffix_mean": 8.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 127.0,
+          "scan_ms": 4.980318000889383,
+          "million_candidates_per_second": 1.6448748852055382
+        }
+      ]
+    },
+    {
+      "seed": 3,
+      "window": 8,
+      "phase_bits": 3,
+      "content_bits": 5,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.001084850518964231,
+        "initial_gradient": -0.0004162488621659577,
+        "max_abs_gradient": 0.0005905519938096404,
+        "initial_target_proxy_weight": 0.007353033870458603,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 7.0,
+        "initial_exact_distractor_mean": 25.875,
+        "final_target_suffix_mean": 8.0,
+        "final_max_distractor_suffix_mean": 7.0,
+        "train_ms": 139.63796698953956,
+        "ms_per_executed_step": 27.927593397907913,
+        "context_build_ms": 32.632242000545375
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 127,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 8.0,
+          "max_suffix_mean": 8.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 127.0,
+          "scan_ms": 4.997133000870235,
+          "million_candidates_per_second": 1.6393399972691118
+        }
+      ]
+    },
+    {
+      "seed": 4,
+      "window": 8,
+      "phase_bits": 3,
+      "content_bits": 5,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.001086567877791822,
+        "initial_gradient": -0.0005996138206683099,
+        "max_abs_gradient": 0.0008507036836817861,
+        "initial_target_proxy_weight": 0.007326249964535236,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 7.0,
+        "initial_exact_distractor_mean": 25.75,
+        "final_target_suffix_mean": 8.0,
+        "final_max_distractor_suffix_mean": 7.0,
+        "train_ms": 139.6411449968582,
+        "ms_per_executed_step": 27.92822899937164,
+        "context_build_ms": 32.11260600073729
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 127,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 8.0,
+          "max_suffix_mean": 8.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 127.0,
+          "scan_ms": 5.02697000047192,
+          "million_candidates_per_second": 1.6296098841311872
+        }
+      ]
+    },
+    {
+      "seed": 5,
+      "window": 8,
+      "phase_bits": 3,
+      "content_bits": 5,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010873283026739955,
+        "initial_gradient": -0.0007471601129509509,
+        "max_abs_gradient": 0.0010600365931168199,
+        "initial_target_proxy_weight": 0.007428472395986319,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 7.0,
+        "initial_exact_distractor_mean": 25.75,
+        "final_target_suffix_mean": 8.0,
+        "final_max_distractor_suffix_mean": 7.0,
+        "train_ms": 139.22732399078086,
+        "ms_per_executed_step": 27.845464798156172,
+        "context_build_ms": 32.590920993243344
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 127,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 8.0,
+          "max_suffix_mean": 8.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 127.0,
+          "scan_ms": 4.872453006100841,
+          "million_candidates_per_second": 1.681288662967652
+        }
+      ]
+    },
+    {
+      "seed": 6,
+      "window": 8,
+      "phase_bits": 3,
+      "content_bits": 5,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010891568381339312,
+        "initial_gradient": -0.001855609007179737,
+        "max_abs_gradient": 0.002632660325616598,
+        "initial_target_proxy_weight": 0.00740389246493578,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 7.0,
+        "initial_exact_distractor_mean": 25.75,
+        "final_target_suffix_mean": 8.0,
+        "final_max_distractor_suffix_mean": 7.0,
+        "train_ms": 137.6228939916473,
+        "ms_per_executed_step": 27.524578798329458,
+        "context_build_ms": 32.960448996163905
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 127,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 8.0,
+          "max_suffix_mean": 8.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 127.0,
+          "scan_ms": 5.074237997177988,
+          "million_candidates_per_second": 1.6144295960410093
+        }
+      ]
+    },
+    {
+      "seed": 7,
+      "window": 8,
+      "phase_bits": 3,
+      "content_bits": 5,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010874728905037045,
+        "initial_gradient": -0.0007881905767135322,
+        "max_abs_gradient": 0.0011182487942278385,
+        "initial_target_proxy_weight": 0.007083735894411802,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 7.0,
+        "initial_exact_distractor_mean": 25.75,
+        "final_target_suffix_mean": 8.0,
+        "final_max_distractor_suffix_mean": 7.0,
+        "train_ms": 138.9272109954618,
+        "ms_per_executed_step": 27.78544219909236,
+        "context_build_ms": 33.466549997683614
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 127,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 8.0,
+          "max_suffix_mean": 8.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 127.0,
+          "scan_ms": 4.738648000056855,
+          "million_candidates_per_second": 1.7287631408582598
+        }
+      ]
+    },
+    {
+      "seed": 0,
+      "window": 32,
+      "phase_bits": 5,
+      "content_bits": 3,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010370430536568165,
+        "initial_gradient": -4.313304816605523e-05,
+        "max_abs_gradient": 6.11904906691052e-05,
+        "initial_target_proxy_weight": 0.02471579611301422,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 31.0,
+        "initial_exact_distractor_mean": 10.625,
+        "final_target_suffix_mean": 32.0,
+        "final_max_distractor_suffix_mean": 31.0,
+        "train_ms": 419.2309319914784,
+        "ms_per_executed_step": 83.84618639829569,
+        "context_build_ms": 60.53608900401741
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 31,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 32.0,
+          "max_suffix_mean": 32.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 31.0,
+          "scan_ms": 16.62351400591433,
+          "million_candidates_per_second": 0.49279592732832794
+        }
+      ]
+    },
+    {
+      "seed": 1,
+      "window": 32,
+      "phase_bits": 5,
+      "content_bits": 3,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010503442026674747,
+        "initial_gradient": -5.7430454035056755e-05,
+        "max_abs_gradient": 8.14749946584925e-05,
+        "initial_target_proxy_weight": 0.024966835975646973,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 31.0,
+        "initial_exact_distractor_mean": 10.625,
+        "final_target_suffix_mean": 32.0,
+        "final_max_distractor_suffix_mean": 31.0,
+        "train_ms": 407.12890301074367,
+        "ms_per_executed_step": 81.42578060214873,
+        "context_build_ms": 61.63339299382642
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 31,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 32.0,
+          "max_suffix_mean": 32.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 31.0,
+          "scan_ms": 16.546717000892386,
+          "million_candidates_per_second": 0.4950831031653104
+        }
+      ]
+    },
+    {
+      "seed": 2,
+      "window": 32,
+      "phase_bits": 5,
+      "content_bits": 3,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0009473590762354434,
+        "initial_gradient": -1.6085090464912355e-05,
+        "max_abs_gradient": 2.2815787815488875e-05,
+        "initial_target_proxy_weight": 0.025822097435593605,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 31.0,
+        "initial_exact_distractor_mean": 10.625,
+        "final_target_suffix_mean": 32.0,
+        "final_max_distractor_suffix_mean": 31.0,
+        "train_ms": 409.3371479975758,
+        "ms_per_executed_step": 81.86742959951516,
+        "context_build_ms": 61.57351398724131
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 31,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 32.0,
+          "max_suffix_mean": 32.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 31.0,
+          "scan_ms": 16.96412700403016,
+          "million_candidates_per_second": 0.4829013599140015
+        }
+      ]
+    },
+    {
+      "seed": 3,
+      "window": 32,
+      "phase_bits": 5,
+      "content_bits": 3,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": -2.077012777328491,
+        "initial_gradient": 8.293599967146292e-05,
+        "max_abs_gradient": 8.293599967146292e-05,
+        "initial_target_proxy_weight": 0.021372254937887192,
+        "first_exact_step": null,
+        "executed_steps": 50,
+        "stalled": false,
+        "train_success": false,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 0.0,
+        "initial_target_suffix_mean": 31.0,
+        "initial_exact_distractor_mean": 10.625,
+        "final_target_suffix_mean": 31.0,
+        "final_max_distractor_suffix_mean": 32.0,
+        "train_ms": 3774.476357997628,
+        "ms_per_executed_step": 75.48952715995256,
+        "context_build_ms": 61.97041799896397
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 31,
+          "route_accuracy": 0.0,
+          "all_routes_correct": false,
+          "target_suffix_mean": 31.0,
+          "max_suffix_mean": 32.0,
+          "exact_distractor_mean": 10.625,
+          "strict_distractor_mean": 20.375,
+          "scan_ms": 16.82847000483889,
+          "million_candidates_per_second": 0.48679410532534784
+        }
+      ]
+    },
+    {
+      "seed": 4,
+      "window": 32,
+      "phase_bits": 5,
+      "content_bits": 3,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": -2.077113389968872,
+        "initial_gradient": 0.00012678650091402233,
+        "max_abs_gradient": 0.00012678650091402233,
+        "initial_target_proxy_weight": 0.02362631820142269,
+        "first_exact_step": null,
+        "executed_steps": 50,
+        "stalled": false,
+        "train_success": false,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 0.0,
+        "initial_target_suffix_mean": 31.0,
+        "initial_exact_distractor_mean": 10.625,
+        "final_target_suffix_mean": 31.0,
+        "final_max_distractor_suffix_mean": 32.0,
+        "train_ms": 3760.098451995873,
+        "ms_per_executed_step": 75.20196903991746,
+        "context_build_ms": 61.27266499970574
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 31,
+          "route_accuracy": 0.0,
+          "all_routes_correct": false,
+          "target_suffix_mean": 31.0,
+          "max_suffix_mean": 32.0,
+          "exact_distractor_mean": 10.625,
+          "strict_distractor_mean": 20.375,
+          "scan_ms": 16.589553008088842,
+          "million_candidates_per_second": 0.49380474543260394
+        }
+      ]
+    },
+    {
+      "seed": 5,
+      "window": 32,
+      "phase_bits": 5,
+      "content_bits": 3,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": 0.0010354702826589346,
+        "initial_gradient": -4.190212712273933e-05,
+        "max_abs_gradient": 5.9443962527439e-05,
+        "initial_target_proxy_weight": 0.01981194317340851,
+        "first_exact_step": 5,
+        "executed_steps": 5,
+        "stalled": false,
+        "train_success": true,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 1.0,
+        "initial_target_suffix_mean": 31.0,
+        "initial_exact_distractor_mean": 10.625,
+        "final_target_suffix_mean": 32.0,
+        "final_max_distractor_suffix_mean": 31.0,
+        "train_ms": 408.01429099519737,
+        "ms_per_executed_step": 81.60285819903947,
+        "context_build_ms": 61.272459992324
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 31,
+          "route_accuracy": 1.0,
+          "all_routes_correct": true,
+          "target_suffix_mean": 32.0,
+          "max_suffix_mean": 32.0,
+          "exact_distractor_mean": 0.0,
+          "strict_distractor_mean": 31.0,
+          "scan_ms": 16.730339004425332,
+          "million_candidates_per_second": 0.48964937278516224
+        }
+      ]
+    },
+    {
+      "seed": 6,
+      "window": 32,
+      "phase_bits": 5,
+      "content_bits": 3,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": -2.077259063720703,
+        "initial_gradient": 0.0005319815827533603,
+        "max_abs_gradient": 0.0005319815827533603,
+        "initial_target_proxy_weight": 0.02371067926287651,
+        "first_exact_step": null,
+        "executed_steps": 50,
+        "stalled": false,
+        "train_success": false,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 0.0,
+        "initial_target_suffix_mean": 31.0,
+        "initial_exact_distractor_mean": 10.625,
+        "final_target_suffix_mean": 31.0,
+        "final_max_distractor_suffix_mean": 32.0,
+        "train_ms": 3755.952090010396,
+        "ms_per_executed_step": 75.11904180020792,
+        "context_build_ms": 60.554477997357026
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 31,
+          "route_accuracy": 0.0,
+          "all_routes_correct": false,
+          "target_suffix_mean": 31.0,
+          "max_suffix_mean": 32.0,
+          "exact_distractor_mean": 10.625,
+          "strict_distractor_mean": 20.375,
+          "scan_ms": 16.472357005113736,
+          "million_candidates_per_second": 0.49731802178989
+        }
+      ]
+    },
+    {
+      "seed": 7,
+      "window": 32,
+      "phase_bits": 5,
+      "content_bits": 3,
+      "estimator": "suffix_sketch_quadratic_attention",
+      "training": {
+        "estimator": "suffix_sketch_quadratic_attention",
+        "initial_fault_logit": -0.25,
+        "final_fault_logit": -2.0770461559295654,
+        "initial_gradient": 9.377366222906858e-05,
+        "max_abs_gradient": 9.377366222906858e-05,
+        "initial_target_proxy_weight": 0.023865850642323494,
+        "first_exact_step": null,
+        "executed_steps": 50,
+        "stalled": false,
+        "train_success": false,
+        "initial_route_accuracy": 0.0,
+        "final_route_accuracy": 0.0,
+        "initial_target_suffix_mean": 31.0,
+        "initial_exact_distractor_mean": 10.625,
+        "final_target_suffix_mean": 31.0,
+        "final_max_distractor_suffix_mean": 32.0,
+        "train_ms": 3757.12547400326,
+        "ms_per_executed_step": 75.1425094800652,
+        "context_build_ms": 61.23815001046751
+      },
+      "evaluations": [
+        {
+          "context_length": 1024,
+          "candidate_count": 1024,
+          "constructed_aligned_distractors": 31,
+          "route_accuracy": 0.0,
+          "all_routes_correct": false,
+          "target_suffix_mean": 31.0,
+          "max_suffix_mean": 32.0,
+          "exact_distractor_mean": 10.625,
+          "strict_distractor_mean": 20.375,
+          "scan_ms": 17.136034002760425,
+          "million_candidates_per_second": 0.4780569412199089
+        }
+      ]
+    }
+  ],
+  "summaries": {
+    "suffix_sketch_quadratic_attention": {
+      "1": {
+        "runs": 8,
+        "train_success_fraction": 0.875,
+        "mean_initial_gradient": -0.0017797107284422964,
+        "mean_first_exact_step_on_success": 5.0,
+        "extrapolation": {
+          "1024": {
+            "all_correct_fraction": 0.875,
+            "mean_route_accuracy": 0.875,
+            "mean_exact_distractors": 15.984375,
+            "mean_scan_ms": 1.5776148775330512
+          }
+        }
+      },
+      "2": {
+        "runs": 8,
+        "train_success_fraction": 1.0,
+        "mean_initial_gradient": -0.0019672947855724487,
+        "mean_first_exact_step_on_success": 5.0,
+        "extrapolation": {
+          "1024": {
+            "all_correct_fraction": 1.0,
+            "mean_route_accuracy": 1.0,
+            "mean_exact_distractors": 0.0,
+            "mean_scan_ms": 2.072568742732983
+          }
+        }
+      },
+      "4": {
+        "runs": 8,
+        "train_success_fraction": 0.875,
+        "mean_initial_gradient": -0.0006896507475175895,
+        "mean_first_exact_step_on_success": 5.0,
+        "extrapolation": {
+          "1024": {
+            "all_correct_fraction": 0.875,
+            "mean_route_accuracy": 0.875,
+            "mean_exact_distractors": 5.34375,
+            "mean_scan_ms": 2.971049751067767
+          }
+        }
+      },
+      "8": {
+        "runs": 8,
+        "train_success_fraction": 1.0,
+        "mean_initial_gradient": -0.001211230512126349,
+        "mean_first_exact_step_on_success": 5.0,
+        "extrapolation": {
+          "1024": {
+            "all_correct_fraction": 1.0,
+            "mean_route_accuracy": 1.0,
+            "mean_exact_distractors": 0.0,
+            "mean_scan_ms": 4.941803876135964
+          }
+        }
+      },
+      "32": {
+        "runs": 8,
+        "train_success_fraction": 0.5,
+        "mean_initial_gradient": 8.46158782223938e-05,
+        "mean_first_exact_step_on_success": 5.0,
+        "extrapolation": {
+          "1024": {
+            "all_correct_fraction": 0.5,
+            "mean_route_accuracy": 0.5,
+            "mean_exact_distractors": 5.3125,
+            "mean_scan_ms": 16.736388879508013
+          }
+        }
+      }
+    }
+  }
+}

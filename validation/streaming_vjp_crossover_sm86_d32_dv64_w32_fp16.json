@@ -1,0 +1,219 @@
+{
+  "bits": 32,
+  "capability": [
+    8,
+    6
+  ],
+  "device": "NVIDIA GeForce RTX 3070",
+  "dropout_p": 0.0,
+  "dtype": "float16",
+  "heads": 4,
+  "rows": [
+    {
+      "gradient_mask": 4,
+      "latency_ratio": 1.148854991934795,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        1.7285346984863281e-06
+      ],
+      "pattern": "random",
+      "production_extra_mib": 0.25,
+      "production_ms": 0.2682879865169525,
+      "query_tile_size": 32,
+      "seq_len": 512,
+      "streaming_extra_mib": 0.25,
+      "streaming_ms": 0.30822399258613586,
+      "window": 32
+    },
+    {
+      "gradient_mask": 7,
+      "latency_ratio": 0.1531557921859857,
+      "max_abs_errors": [
+        2.2351741790771484e-08,
+        3.725290298461914e-07,
+        1.8477439880371094e-06
+      ],
+      "pattern": "random",
+      "production_extra_mib": 1.0,
+      "production_ms": 6.211296081542969,
+      "query_tile_size": 32,
+      "seq_len": 512,
+      "streaming_extra_mib": 1.0,
+      "streaming_ms": 0.9512959718704224,
+      "window": 32
+    },
+    {
+      "gradient_mask": 4,
+      "latency_ratio": 0.9067245569857117,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        1.6689300537109375e-06
+      ],
+      "pattern": "random",
+      "production_extra_mib": 0.5,
+      "production_ms": 0.9441279768943787,
+      "query_tile_size": 32,
+      "seq_len": 1024,
+      "streaming_extra_mib": 0.5,
+      "streaming_ms": 0.8560640215873718,
+      "window": 32
+    },
+    {
+      "gradient_mask": 7,
+      "latency_ratio": 0.12676883515272352,
+      "max_abs_errors": [
+        2.2351741790771484e-08,
+        5.587935447692871e-07,
+        1.5497207641601562e-06
+      ],
+      "pattern": "random",
+      "production_extra_mib": 2.0,
+      "production_ms": 20.967424392700195,
+      "query_tile_size": 32,
+      "seq_len": 1024,
+      "streaming_extra_mib": 2.0,
+      "streaming_ms": 2.6580159664154053,
+      "window": 32
+    },
+    {
+      "gradient_mask": 4,
+      "latency_ratio": 0.7619614208085653,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        2.5033950805664062e-06
+      ],
+      "pattern": "random",
+      "production_extra_mib": 1.0,
+      "production_ms": 3.3862080574035645,
+      "query_tile_size": 32,
+      "seq_len": 2048,
+      "streaming_extra_mib": 1.0,
+      "streaming_ms": 2.580159902572632,
+      "window": 32
+    },
+    {
+      "gradient_mask": 7,
+      "latency_ratio": 0.10899537886669868,
+      "max_abs_errors": [
+        2.2351741790771484e-08,
+        8.791685104370117e-07,
+        2.6226043701171875e-06
+      ],
+      "pattern": "random",
+      "production_extra_mib": 4.0,
+      "production_ms": 80.28876495361328,
+      "query_tile_size": 32,
+      "seq_len": 2048,
+      "streaming_extra_mib": 4.0,
+      "streaming_ms": 8.751104354858398,
+      "window": 32
+    },
+    {
+      "gradient_mask": 4,
+      "latency_ratio": 1.1493853072045341,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        2.5033950805664062e-06
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 0.25,
+      "production_ms": 0.23948800563812256,
+      "query_tile_size": 32,
+      "seq_len": 512,
+      "streaming_extra_mib": 0.25,
+      "streaming_ms": 0.2752639949321747,
+      "window": 32
+    },
+    {
+      "gradient_mask": 7,
+      "latency_ratio": 0.15268127314928887,
+      "max_abs_errors": [
+        7.115304470062256e-07,
+        1.0967254638671875e-05,
+        2.384185791015625e-06
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 1.0,
+      "production_ms": 5.747712135314941,
+      "query_tile_size": 32,
+      "seq_len": 512,
+      "streaming_extra_mib": 1.0,
+      "streaming_ms": 0.8775680065155029,
+      "window": 32
+    },
+    {
+      "gradient_mask": 4,
+      "latency_ratio": 0.9152171422667863,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        3.337860107421875e-06
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 0.5,
+      "production_ms": 0.8480960130691528,
+      "query_tile_size": 32,
+      "seq_len": 1024,
+      "streaming_extra_mib": 0.5,
+      "streaming_ms": 0.7761920094490051,
+      "window": 32
+    },
+    {
+      "gradient_mask": 7,
+      "latency_ratio": 0.12566235872963807,
+      "max_abs_errors": [
+        4.4424086809158325e-07,
+        2.1576881408691406e-05,
+        3.337860107421875e-06
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 2.0,
+      "production_ms": 21.154848098754883,
+      "query_tile_size": 32,
+      "seq_len": 1024,
+      "streaming_extra_mib": 2.0,
+      "streaming_ms": 2.6583681106567383,
+      "window": 32
+    },
+    {
+      "gradient_mask": 4,
+      "latency_ratio": 0.763888853739336,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        7.033348083496094e-06
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 1.0,
+      "production_ms": 3.3914880752563477,
+      "query_tile_size": 32,
+      "seq_len": 2048,
+      "streaming_extra_mib": 1.0,
+      "streaming_ms": 2.5907199382781982,
+      "window": 32
+    },
+    {
+      "gradient_mask": 7,
+      "latency_ratio": 0.10771313626534268,
+      "max_abs_errors": [
+        4.1350722312927246e-07,
+        1.811981201171875e-05,
+        7.3909759521484375e-06
+      ],
+      "pattern": "all_match",
+      "production_extra_mib": 4.0,
+      "production_ms": 80.60313415527344,
+      "query_tile_size": 32,
+      "seq_len": 2048,
+      "streaming_extra_mib": 4.0,
+      "streaming_ms": 8.682016372680664,
+      "window": 32
+    }
+  ],
+  "value_dim": 64,
+  "value_heads": 2
+}

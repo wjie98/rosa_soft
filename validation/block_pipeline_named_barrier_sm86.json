@@ -1,0 +1,131 @@
+{
+  "device": "NVIDIA GeForce RTX 3070",
+  "compute_capability": [
+    8,
+    6
+  ],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "rows": [
+    {
+      "bits": 8,
+      "series": 128,
+      "seq_len": 2048,
+      "route_tiles": 32,
+      "baseline_ms": 1.8851840496063232,
+      "latency_ms": 1.4734400510787964,
+      "latency_ratio": 0.7815894959362137,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "series": 128,
+      "seq_len": 4096,
+      "route_tiles": 64,
+      "baseline_ms": 4.330463886260986,
+      "latency_ms": 2.9169600009918213,
+      "latency_ratio": 0.673590653935781,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "series": 128,
+      "seq_len": 8192,
+      "route_tiles": 128,
+      "baseline_ms": 8.005632400512695,
+      "latency_ms": 6.760447978973389,
+      "latency_ratio": 0.8444614542307035,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "series": 256,
+      "seq_len": 2048,
+      "route_tiles": 32,
+      "baseline_ms": 3.751807928085327,
+      "latency_ms": 2.9614078998565674,
+      "latency_ratio": 0.7893282269830568,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "series": 256,
+      "seq_len": 4096,
+      "route_tiles": 64,
+      "baseline_ms": 7.889920234680176,
+      "latency_ms": 6.3023362159729,
+      "latency_ratio": 0.7987832612389358,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 8,
+      "series": 256,
+      "seq_len": 8192,
+      "route_tiles": 128,
+      "baseline_ms": 16.62156867980957,
+      "latency_ms": 13.058048248291016,
+      "latency_ratio": 0.7856086570308368,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 32,
+      "series": 128,
+      "seq_len": 2048,
+      "route_tiles": 32,
+      "baseline_ms": 2.4072320461273193,
+      "latency_ms": 1.5683519840240479,
+      "latency_ratio": 0.6515167437003692,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 32,
+      "series": 128,
+      "seq_len": 4096,
+      "route_tiles": 64,
+      "baseline_ms": 4.384768009185791,
+      "latency_ms": 3.3320319652557373,
+      "latency_ratio": 0.7599106630670897,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 32,
+      "series": 128,
+      "seq_len": 8192,
+      "route_tiles": 128,
+      "baseline_ms": 8.577024459838867,
+      "latency_ms": 6.442944049835205,
+      "latency_ratio": 0.751186391038489,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 32,
+      "series": 256,
+      "seq_len": 2048,
+      "route_tiles": 32,
+      "baseline_ms": 4.2259840965271,
+      "latency_ms": 3.5543360710144043,
+      "latency_ratio": 0.8410670721490283,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 32,
+      "series": 256,
+      "seq_len": 4096,
+      "route_tiles": 64,
+      "baseline_ms": 9.41055965423584,
+      "latency_ms": 7.04204797744751,
+      "latency_ratio": 0.7483134092112974,
+      "max_abs_error": 0.0
+    },
+    {
+      "bits": 32,
+      "series": 256,
+      "seq_len": 8192,
+      "route_tiles": 128,
+      "baseline_ms": 16.256000518798828,
+      "latency_ms": 12.566368103027344,
+      "latency_ratio": 0.7730295092261651,
+      "max_abs_error": 0.0
+    }
+  ]
+}

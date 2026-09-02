@@ -1,0 +1,32 @@
+{
+  "device": "NVIDIA GeForce RTX 3070",
+  "compute_capability": [
+    8,
+    6
+  ],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "heads": 4,
+  "value_heads": 2,
+  "rows": [
+    {
+      "seq_len": 512,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 7,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 1.087488055229187,
+      "baseline_plan": "block64",
+      "latency_ms": 0.9879040122032166,
+      "latency_ratio": 0.9084274603779595,
+      "max_abs_errors": [
+        3.32072377204895e-05,
+        3.951229155063629e-05,
+        0.0006271600723266602
+      ]
+    }
+  ]
+}

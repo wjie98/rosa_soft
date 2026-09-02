@@ -193,7 +193,7 @@ def test_fixed_bit_oracles_reduce_to_one_hard_state():
     query, key, value, grad_output = _base_inputs()
     query_mask = torch.zeros_like(query, dtype=torch.bool)
     key_mask = torch.zeros_like(key, dtype=torch.bool)
-    hard_output, _, hard_routes, _ = _hard_route_forward(query, key, value, 2)
+    hard_output, _, hard_routes, _ = _hard_route_forward(query, key, value)
     exact = exact_shared_bit_oracle(
         query,
         key,
@@ -454,7 +454,6 @@ def test_margin_edit_finds_coordinated_winner_change():
         query,
         key,
         value,
-        2,
     )
     result = exact_margin_edit_oracle(
         query,
@@ -468,7 +467,6 @@ def test_margin_edit_finds_coordinated_winner_change():
         result.target_query_symbols,
         result.target_key_symbols,
         value,
-        2,
     )
 
     assert base_routes[0, 0, 2].item() == 2

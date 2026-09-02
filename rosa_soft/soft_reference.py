@@ -296,8 +296,9 @@ def _hard_route_forward(
     query: Tensor,
     key: Tensor,
     value: Tensor,
-    max_suffix_length: int,
 ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    """Evaluate exact latest-longest routing over the full causal suffix."""
+
     causal_route_mask = _causal_route_mask(
         query.size(1),
         query.device,
@@ -309,7 +310,7 @@ def _hard_route_forward(
     )
     exact_suffix_lengths = _suffix_prefix_product_scores(
         exact_local.to(query.dtype),
-        max_suffix_length,
+        query.size(1),
     )
     selected_route_indices = _select_latest_longest_routes(
         exact_suffix_lengths,
@@ -466,7 +467,6 @@ class _HardForwardSoftVjpReference(torch.autograd.Function):
             query.to(reference_compute_dtype),
             key.to(reference_compute_dtype),
             value.to(reference_compute_dtype),
-            int(max_suffix_length),
         )
         ctx.max_suffix_length = int(max_suffix_length)
         ctx.scale = float(scale)
@@ -576,7 +576,6 @@ def _rosa_soft_reference_with_seed(
             query.to(reference_compute_dtype),
             key.to(reference_compute_dtype),
             value.to(reference_compute_dtype),
-            max_suffix_length,
         )
         return hard_output.to(query.dtype)
 
@@ -603,7 +602,10 @@ def rosa_soft_reference(
     dropout_p: float = ROSA_SOFT_DEFAULT_DROPOUT_P,
     mismatch_scale: float = ROSA_SOFT_DEFAULT_MISMATCH_SCALE,
 ) -> Tensor:
-    """Return exact hard ROSA values with a dense attention-style VJP."""
+    """Return unlimited hard ROSA values with a finite-window dense VJP.
+
+    ``max_suffix_length`` affects only the surrogate backward distribution.
+    """
 
     max_suffix_length = _validate_reference_call(
         query,

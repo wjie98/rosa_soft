@@ -22,13 +22,11 @@ def test_shared_projection_couples_three_key_logits_through_two_parameters():
         task.route_task.query,
         initial_key,
         task.route_task.value,
-        2,
     )
     _, _, target_routes, _ = _hard_route_forward(
         task.route_task.query,
         target_key,
         task.route_task.value,
-        2,
     )
 
     assert torch.linalg.matrix_rank(task.features) == 2
@@ -51,7 +49,6 @@ def test_shared_projection_preserves_joint_signal_after_aggregation():
         task.route_task.query,
         key,
         task.route_task.value,
-        2,
     )
     _, grad_output = _loss_and_upstream(
         output,

@@ -70,9 +70,9 @@ def _require_complete_cuda_registration(
 
 
 _has_compiled_extension = _C is not None
-_has_rosa_runtime = _has_compiled_extension and _has_custom_class(
+_has_rosa_sam = _has_compiled_extension and _has_custom_class(
     "rosa_soft",
-    "RosaRuntime",
+    "RosaSam",
 )
 _required_cuda_operators = (
     "hard_forward",
@@ -88,16 +88,16 @@ _has_rosa_soft_cuda = _require_complete_cuda_registration(
     *_cuda_operator_flags,
 )
 
-if _has_compiled_extension and not _has_rosa_runtime:
+if _has_compiled_extension and not _has_rosa_sam:
     raise RuntimeError(
-        "rosa_soft._C loaded without the required RosaRuntime registration; "
+        "rosa_soft._C loaded without the required RosaSam registration; "
         "the extension is stale or incompatible with this package"
     )
 
 if _has_rosa_soft_cuda:
     _build_variant = "cuda"
-elif _has_rosa_runtime:
-    _build_variant = "cpu-runtime"
+elif _has_rosa_sam:
+    _build_variant = "cpu"
 else:
     _build_variant = "reference"
 
@@ -106,14 +106,14 @@ else:
 class BuildCapabilities:
     variant: str
     compiled_extension: bool
-    rosa_runtime: bool
+    rosa_sam: bool
     rosa_soft_cuda: bool
 
 
 BUILD_CAPABILITIES = BuildCapabilities(
     variant=_build_variant,
     compiled_extension=_has_compiled_extension,
-    rosa_runtime=_has_rosa_runtime,
+    rosa_sam=_has_rosa_sam,
     rosa_soft_cuda=_has_rosa_soft_cuda,
 )
 
@@ -179,22 +179,42 @@ else:
         )
 
 
-if _has_rosa_runtime:
-    from .runtime import RosaRuntime
+if _has_rosa_sam:
+    from .sam import (
+        RosaSam,
+        rosa_hard_reference,
+        rosa_hard_varlen_reference,
+    )
 else:
-    class RosaRuntime:
+    class RosaSam:
         def __init__(self, *args, **kwargs):
             del args, kwargs
             _raise_unavailable(
-                "RosaRuntime",
+                "RosaSam",
                 "Build with ROSA_BUILD_EXTENSION=1.",
             )
+
+    def rosa_hard_reference(*args, **kwargs):
+        del args, kwargs
+        _raise_unavailable(
+            "rosa_hard_reference",
+            "Build with ROSA_BUILD_EXTENSION=1.",
+        )
+
+    def rosa_hard_varlen_reference(*args, **kwargs):
+        del args, kwargs
+        _raise_unavailable(
+            "rosa_hard_varlen_reference",
+            "Build with ROSA_BUILD_EXTENSION=1.",
+        )
 
 
 __all__ = [
     "__version__",
     "BUILD_CAPABILITIES",
-    "RosaRuntime",
+    "RosaSam",
+    "rosa_hard_reference",
+    "rosa_hard_varlen_reference",
     "rosa_soft",
     "rosa_soft_reference",
     "rosa_soft_varlen",

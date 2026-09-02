@@ -250,7 +250,6 @@ def test_varlen_cuda_rejects_sequence_count_that_cannot_fit_kernel_index():
             key,
             value,
             excessive_offsets,
-            1,
         )
 
 
@@ -282,8 +281,7 @@ def test_varlen_public_and_dispatch_signatures_are_minimal():
         torch.ops.rosa_soft.hard_forward_varlen.default._schema
     ) == (
         "rosa_soft::hard_forward_varlen(Tensor query, "
-        "Tensor key, Tensor value, Tensor cu_seqlens, "
-        "int max_suffix_length) -> "
+        "Tensor key, Tensor value, Tensor cu_seqlens) -> "
         "(Tensor output, Tensor packed_query_symbols, "
         "Tensor packed_key_symbols)"
     )
@@ -299,6 +297,45 @@ def test_varlen_public_and_dispatch_signatures_are_minimal():
         "float mismatch_scale, int gradient_mask) -> "
         "(Tensor grad_query, Tensor grad_key, Tensor grad_value)"
     )
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available()
+    or not rosa_soft.BUILD_CAPABILITIES.rosa_soft_cuda,
+    reason="RosaSoft CUDA extension is unavailable",
+)
+def test_varlen_hard_forward_matches_beyond_surrogate_horizon():
+    query = torch.tensor(
+        [-1.0, -1.0, -1.0, -1.0, 1.0],
+        device="cuda",
+    ).view(5, 1, 1)
+    key = torch.tensor(
+        [-1.0, 1.0, 1.0, 1.0, -1.0],
+        device="cuda",
+    ).view(5, 1, 1)
+    value = torch.tensor(
+        [1.0, -1.0, 1.0, -1.0, -1.0],
+        device="cuda",
+    ).view(5, 1, 1)
+    offsets = torch.tensor([0, 5], dtype=torch.int32, device="cuda")
+
+    short = rosa_soft.rosa_soft_varlen(
+        query,
+        key,
+        value,
+        offsets,
+        max_suffix_length=1,
+    )
+    long = rosa_soft.rosa_soft_varlen(
+        query,
+        key,
+        value,
+        offsets,
+        max_suffix_length=5,
+    )
+
+    assert torch.equal(short, long)
+    assert short[4, 0, 0].item() == 1
 
 
 @pytest.mark.skipif(
@@ -978,7 +1015,6 @@ def test_varlen_cuda_masked_vjp_matches_enabled_full_vjp(
             key,
             value,
             cu_seqlens,
-            5,
         )
     )
     grad_output = _nonzero_randn(

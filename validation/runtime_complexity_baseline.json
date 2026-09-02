@@ -1,0 +1,926 @@
+{
+  "settings": {
+    "sequence_lengths": [
+      1024,
+      2048,
+      4096,
+      8192
+    ],
+    "patterns": [
+      "random",
+      "all_match",
+      "periodic64",
+      "skewed"
+    ],
+    "chunk_sizes": [
+      256,
+      8192
+    ],
+    "batch": 1,
+    "heads": 1,
+    "payload_heads": 1,
+    "bits": 8,
+    "seed": 123,
+    "repeats": 1,
+    "output": "validation/runtime_complexity_baseline.json"
+  },
+  "torch": "2.11.0+cu128",
+  "rows": [
+    {
+      "sequence_length": 1024,
+      "pattern": "random",
+      "chunk_size": 256,
+      "latency_ms": 2.3930449970066547,
+      "tokens_per_second": 427906.705173063,
+      "logical_bytes_per_update": 47.71875,
+      "checksum": 331293097566,
+      "memory": {
+        "states": 1271,
+        "edges": 2292,
+        "payload_symbols": 1024,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 48864
+      },
+      "complexity": {
+        "updates": 1024,
+        "transition_probes": 259211,
+        "query_suffix_link_steps": 797,
+        "extension_suffix_link_steps": 3069,
+        "latest_end_updates": 2825,
+        "clones": 246,
+        "copied_edges": 249,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 4
+      }
+    },
+    {
+      "sequence_length": 1024,
+      "pattern": "random",
+      "chunk_size": 1024,
+      "latency_ms": 0.9295449999626726,
+      "tokens_per_second": 1101614.2306624427,
+      "logical_bytes_per_update": 47.71875,
+      "checksum": 331293097566,
+      "memory": {
+        "states": 1271,
+        "edges": 2292,
+        "payload_symbols": 1024,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 48864
+      },
+      "complexity": {
+        "updates": 1024,
+        "transition_probes": 259211,
+        "query_suffix_link_steps": 797,
+        "extension_suffix_link_steps": 3069,
+        "latest_end_updates": 2825,
+        "clones": 246,
+        "copied_edges": 249,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 4
+      }
+    },
+    {
+      "sequence_length": 1024,
+      "pattern": "all_match",
+      "chunk_size": 256,
+      "latency_ms": 2.173778979340568,
+      "tokens_per_second": 471069.05059438833,
+      "logical_bytes_per_update": 29.015625,
+      "checksum": 522753698139,
+      "memory": {
+        "states": 1025,
+        "edges": 1024,
+        "payload_symbols": 1024,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 29712
+      },
+      "complexity": {
+        "updates": 1024,
+        "transition_probes": 2046,
+        "query_suffix_link_steps": 0,
+        "extension_suffix_link_steps": 2047,
+        "latest_end_updates": 525824,
+        "clones": 0,
+        "copied_edges": 0,
+        "max_query_suffix_link_steps": 0,
+        "max_latest_end_chain": 1025
+      }
+    },
+    {
+      "sequence_length": 1024,
+      "pattern": "all_match",
+      "chunk_size": 1024,
+      "latency_ms": 1.3074000016786158,
+      "tokens_per_second": 783233.898336585,
+      "logical_bytes_per_update": 29.015625,
+      "checksum": 522753698139,
+      "memory": {
+        "states": 1025,
+        "edges": 1024,
+        "payload_symbols": 1024,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 29712
+      },
+      "complexity": {
+        "updates": 1024,
+        "transition_probes": 2046,
+        "query_suffix_link_steps": 0,
+        "extension_suffix_link_steps": 2047,
+        "latest_end_updates": 525824,
+        "clones": 0,
+        "copied_edges": 0,
+        "max_query_suffix_link_steps": 0,
+        "max_latest_end_chain": 1025
+      }
+    },
+    {
+      "sequence_length": 1024,
+      "pattern": "periodic64",
+      "chunk_size": 256,
+      "latency_ms": 1.2690229923464358,
+      "tokens_per_second": 806919.9740082046,
+      "logical_bytes_per_update": 29.890625,
+      "checksum": 460349503342,
+      "memory": {
+        "states": 1030,
+        "edges": 1092,
+        "payload_symbols": 1024,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 30608
+      },
+      "complexity": {
+        "updates": 1024,
+        "transition_probes": 5788,
+        "query_suffix_link_steps": 10,
+        "extension_suffix_link_steps": 2057,
+        "latest_end_updates": 9883,
+        "clones": 5,
+        "copied_edges": 5,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 18
+      }
+    },
+    {
+      "sequence_length": 1024,
+      "pattern": "periodic64",
+      "chunk_size": 1024,
+      "latency_ms": 0.38625599700026214,
+      "tokens_per_second": 2651091.5246690786,
+      "logical_bytes_per_update": 29.890625,
+      "checksum": 460349503342,
+      "memory": {
+        "states": 1030,
+        "edges": 1092,
+        "payload_symbols": 1024,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 30608
+      },
+      "complexity": {
+        "updates": 1024,
+        "transition_probes": 5788,
+        "query_suffix_link_steps": 10,
+        "extension_suffix_link_steps": 2057,
+        "latest_end_updates": 9883,
+        "clones": 5,
+        "copied_edges": 5,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 18
+      }
+    },
+    {
+      "sequence_length": 1024,
+      "pattern": "skewed",
+      "chunk_size": 256,
+      "latency_ms": 1.5382820274680853,
+      "tokens_per_second": 665677.6726992248,
+      "logical_bytes_per_update": 42.3984375,
+      "checksum": 423517393066,
+      "memory": {
+        "states": 1118,
+        "edges": 2042,
+        "payload_symbols": 1024,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 43416
+      },
+      "complexity": {
+        "updates": 1024,
+        "transition_probes": 76306,
+        "query_suffix_link_steps": 872,
+        "extension_suffix_link_steps": 3150,
+        "latest_end_updates": 12329,
+        "clones": 93,
+        "copied_edges": 94,
+        "max_query_suffix_link_steps": 47,
+        "max_latest_end_chain": 52
+      }
+    },
+    {
+      "sequence_length": 1024,
+      "pattern": "skewed",
+      "chunk_size": 1024,
+      "latency_ms": 0.6894310063216835,
+      "tokens_per_second": 1485282.7775520862,
+      "logical_bytes_per_update": 42.3984375,
+      "checksum": 423517393066,
+      "memory": {
+        "states": 1118,
+        "edges": 2042,
+        "payload_symbols": 1024,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 43416
+      },
+      "complexity": {
+        "updates": 1024,
+        "transition_probes": 76306,
+        "query_suffix_link_steps": 872,
+        "extension_suffix_link_steps": 3150,
+        "latest_end_updates": 12329,
+        "clones": 93,
+        "copied_edges": 94,
+        "max_query_suffix_link_steps": 47,
+        "max_latest_end_chain": 52
+      }
+    },
+    {
+      "sequence_length": 2048,
+      "pattern": "random",
+      "chunk_size": 256,
+      "latency_ms": 3.1705359870102257,
+      "tokens_per_second": 645947.5648252261,
+      "logical_bytes_per_update": 44.837890625,
+      "checksum": 1614341068251,
+      "memory": {
+        "states": 2330,
+        "edges": 4375,
+        "payload_symbols": 2048,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 91828
+      },
+      "complexity": {
+        "updates": 2048,
+        "transition_probes": 520656,
+        "query_suffix_link_steps": 1778,
+        "extension_suffix_link_steps": 6195,
+        "latest_end_updates": 5916,
+        "clones": 281,
+        "copied_edges": 281,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 4
+      }
+    },
+    {
+      "sequence_length": 2048,
+      "pattern": "random",
+      "chunk_size": 2048,
+      "latency_ms": 1.5037429984658957,
+      "tokens_per_second": 1361934.853288993,
+      "logical_bytes_per_update": 44.837890625,
+      "checksum": 1614341068251,
+      "memory": {
+        "states": 2330,
+        "edges": 4375,
+        "payload_symbols": 2048,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 91828
+      },
+      "complexity": {
+        "updates": 2048,
+        "transition_probes": 520656,
+        "query_suffix_link_steps": 1778,
+        "extension_suffix_link_steps": 6195,
+        "latest_end_updates": 5916,
+        "clones": 281,
+        "copied_edges": 281,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 4
+      }
+    },
+    {
+      "sequence_length": 2048,
+      "pattern": "all_match",
+      "chunk_size": 256,
+      "latency_ms": 6.01829300285317,
+      "tokens_per_second": 340295.82790819224,
+      "logical_bytes_per_update": 29.0078125,
+      "checksum": 2094086540996,
+      "memory": {
+        "states": 2049,
+        "edges": 2048,
+        "payload_symbols": 2048,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 59408
+      },
+      "complexity": {
+        "updates": 2048,
+        "transition_probes": 4094,
+        "query_suffix_link_steps": 0,
+        "extension_suffix_link_steps": 4095,
+        "latest_end_updates": 2100224,
+        "clones": 0,
+        "copied_edges": 0,
+        "max_query_suffix_link_steps": 0,
+        "max_latest_end_chain": 2049
+      }
+    },
+    {
+      "sequence_length": 2048,
+      "pattern": "all_match",
+      "chunk_size": 2048,
+      "latency_ms": 4.345588007709011,
+      "tokens_per_second": 471282.59659380437,
+      "logical_bytes_per_update": 29.0078125,
+      "checksum": 2094086540996,
+      "memory": {
+        "states": 2049,
+        "edges": 2048,
+        "payload_symbols": 2048,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 59408
+      },
+      "complexity": {
+        "updates": 2048,
+        "transition_probes": 4094,
+        "query_suffix_link_steps": 0,
+        "extension_suffix_link_steps": 4095,
+        "latest_end_updates": 2100224,
+        "clones": 0,
+        "copied_edges": 0,
+        "max_query_suffix_link_steps": 0,
+        "max_latest_end_chain": 2049
+      }
+    },
+    {
+      "sequence_length": 2048,
+      "pattern": "periodic64",
+      "chunk_size": 256,
+      "latency_ms": 2.412336994893849,
+      "tokens_per_second": 848969.2793067326,
+      "logical_bytes_per_update": 29.486328125,
+      "checksum": 1967287154143,
+      "memory": {
+        "states": 2057,
+        "edges": 2119,
+        "payload_symbols": 2048,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 60388
+      },
+      "complexity": {
+        "updates": 2048,
+        "transition_probes": 7713,
+        "query_suffix_link_steps": 16,
+        "extension_suffix_link_steps": 4111,
+        "latest_end_updates": 36344,
+        "clones": 8,
+        "copied_edges": 8,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 34
+      }
+    },
+    {
+      "sequence_length": 2048,
+      "pattern": "periodic64",
+      "chunk_size": 2048,
+      "latency_ms": 0.5087500030640513,
+      "tokens_per_second": 4025552.8013081076,
+      "logical_bytes_per_update": 29.486328125,
+      "checksum": 1967287154143,
+      "memory": {
+        "states": 2057,
+        "edges": 2119,
+        "payload_symbols": 2048,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 60388
+      },
+      "complexity": {
+        "updates": 2048,
+        "transition_probes": 7713,
+        "query_suffix_link_steps": 16,
+        "extension_suffix_link_steps": 4111,
+        "latest_end_updates": 36344,
+        "clones": 8,
+        "copied_edges": 8,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 34
+      }
+    },
+    {
+      "sequence_length": 2048,
+      "pattern": "skewed",
+      "chunk_size": 256,
+      "latency_ms": 2.6919679949060082,
+      "tokens_per_second": 760781.7046396598,
+      "logical_bytes_per_update": 44.794921875,
+      "checksum": 1679509274037,
+      "memory": {
+        "states": 2470,
+        "edges": 4181,
+        "payload_symbols": 2048,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 91740
+      },
+      "complexity": {
+        "updates": 2048,
+        "transition_probes": 327379,
+        "query_suffix_link_steps": 1638,
+        "extension_suffix_link_steps": 6703,
+        "latest_end_updates": 19210,
+        "clones": 421,
+        "copied_edges": 422,
+        "max_query_suffix_link_steps": 37,
+        "max_latest_end_chain": 40
+      }
+    },
+    {
+      "sequence_length": 2048,
+      "pattern": "skewed",
+      "chunk_size": 2048,
+      "latency_ms": 1.0610629979055375,
+      "tokens_per_second": 1930139.8729788954,
+      "logical_bytes_per_update": 44.794921875,
+      "checksum": 1679509274037,
+      "memory": {
+        "states": 2470,
+        "edges": 4181,
+        "payload_symbols": 2048,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 91740
+      },
+      "complexity": {
+        "updates": 2048,
+        "transition_probes": 327379,
+        "query_suffix_link_steps": 1638,
+        "extension_suffix_link_steps": 6703,
+        "latest_end_updates": 19210,
+        "clones": 421,
+        "copied_edges": 422,
+        "max_query_suffix_link_steps": 37,
+        "max_latest_end_chain": 40
+      }
+    },
+    {
+      "sequence_length": 4096,
+      "pattern": "random",
+      "chunk_size": 256,
+      "latency_ms": 6.167443003505468,
+      "tokens_per_second": 664132.6069283339,
+      "logical_bytes_per_update": 43.5205078125,
+      "checksum": 7239738218128,
+      "memory": {
+        "states": 4466,
+        "edges": 8559,
+        "payload_symbols": 4096,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 178260
+      },
+      "complexity": {
+        "updates": 4096,
+        "transition_probes": 1074380,
+        "query_suffix_link_steps": 3848,
+        "extension_suffix_link_steps": 12512,
+        "latest_end_updates": 12146,
+        "clones": 369,
+        "copied_edges": 370,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 4
+      }
+    },
+    {
+      "sequence_length": 4096,
+      "pattern": "random",
+      "chunk_size": 4096,
+      "latency_ms": 2.618325990624726,
+      "tokens_per_second": 1564358.3017035648,
+      "logical_bytes_per_update": 43.5205078125,
+      "checksum": 7239738218128,
+      "memory": {
+        "states": 4466,
+        "edges": 8559,
+        "payload_symbols": 4096,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 178260
+      },
+      "complexity": {
+        "updates": 4096,
+        "transition_probes": 1074380,
+        "query_suffix_link_steps": 3848,
+        "extension_suffix_link_steps": 12512,
+        "latest_end_updates": 12146,
+        "clones": 369,
+        "copied_edges": 370,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 4
+      }
+    },
+    {
+      "sequence_length": 4096,
+      "pattern": "all_match",
+      "chunk_size": 256,
+      "latency_ms": 19.209498015698045,
+      "tokens_per_second": 213227.85200595765,
+      "logical_bytes_per_update": 29.00390625,
+      "checksum": 8382489667506,
+      "memory": {
+        "states": 4097,
+        "edges": 4096,
+        "payload_symbols": 4096,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 118800
+      },
+      "complexity": {
+        "updates": 4096,
+        "transition_probes": 8190,
+        "query_suffix_link_steps": 0,
+        "extension_suffix_link_steps": 8191,
+        "latest_end_updates": 8394752,
+        "clones": 0,
+        "copied_edges": 0,
+        "max_query_suffix_link_steps": 0,
+        "max_latest_end_chain": 4097
+      }
+    },
+    {
+      "sequence_length": 4096,
+      "pattern": "all_match",
+      "chunk_size": 4096,
+      "latency_ms": 14.365013019414619,
+      "tokens_per_second": 285137.2285193316,
+      "logical_bytes_per_update": 29.00390625,
+      "checksum": 8382489667506,
+      "memory": {
+        "states": 4097,
+        "edges": 4096,
+        "payload_symbols": 4096,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 118800
+      },
+      "complexity": {
+        "updates": 4096,
+        "transition_probes": 8190,
+        "query_suffix_link_steps": 0,
+        "extension_suffix_link_steps": 8191,
+        "latest_end_updates": 8394752,
+        "clones": 0,
+        "copied_edges": 0,
+        "max_query_suffix_link_steps": 0,
+        "max_latest_end_chain": 4097
+      }
+    },
+    {
+      "sequence_length": 4096,
+      "pattern": "periodic64",
+      "chunk_size": 256,
+      "latency_ms": 5.400947004090995,
+      "tokens_per_second": 758385.5195945172,
+      "logical_bytes_per_update": 29.2158203125,
+      "checksum": 8126525891496,
+      "memory": {
+        "states": 4101,
+        "edges": 4163,
+        "payload_symbols": 4096,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 119668
+      },
+      "complexity": {
+        "updates": 4096,
+        "transition_probes": 11959,
+        "query_suffix_link_steps": 8,
+        "extension_suffix_link_steps": 8199,
+        "latest_end_updates": 137724,
+        "clones": 4,
+        "copied_edges": 4,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 66
+      }
+    },
+    {
+      "sequence_length": 4096,
+      "pattern": "periodic64",
+      "chunk_size": 4096,
+      "latency_ms": 0.8926200098358095,
+      "tokens_per_second": 4588738.718453586,
+      "logical_bytes_per_update": 29.2158203125,
+      "checksum": 8126525891496,
+      "memory": {
+        "states": 4101,
+        "edges": 4163,
+        "payload_symbols": 4096,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 119668
+      },
+      "complexity": {
+        "updates": 4096,
+        "transition_probes": 11959,
+        "query_suffix_link_steps": 8,
+        "extension_suffix_link_steps": 8199,
+        "latest_end_updates": 137724,
+        "clones": 4,
+        "copied_edges": 4,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 66
+      }
+    },
+    {
+      "sequence_length": 4096,
+      "pattern": "skewed",
+      "chunk_size": 256,
+      "latency_ms": 5.8642670046538115,
+      "tokens_per_second": 698467.514652635,
+      "logical_bytes_per_update": 47.3466796875,
+      "checksum": 6602426285897,
+      "memory": {
+        "states": 5402,
+        "edges": 8617,
+        "payload_symbols": 4096,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 193932
+      },
+      "complexity": {
+        "updates": 4096,
+        "transition_probes": 848677,
+        "query_suffix_link_steps": 2874,
+        "extension_suffix_link_steps": 14418,
+        "latest_end_updates": 47841,
+        "clones": 1305,
+        "copied_edges": 1324,
+        "max_query_suffix_link_steps": 57,
+        "max_latest_end_chain": 59
+      }
+    },
+    {
+      "sequence_length": 4096,
+      "pattern": "skewed",
+      "chunk_size": 4096,
+      "latency_ms": 2.291605982463807,
+      "tokens_per_second": 1787392.7853846014,
+      "logical_bytes_per_update": 47.3466796875,
+      "checksum": 6602426285897,
+      "memory": {
+        "states": 5402,
+        "edges": 8617,
+        "payload_symbols": 4096,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 193932
+      },
+      "complexity": {
+        "updates": 4096,
+        "transition_probes": 848677,
+        "query_suffix_link_steps": 2874,
+        "extension_suffix_link_steps": 14418,
+        "latest_end_updates": 47841,
+        "clones": 1305,
+        "copied_edges": 1324,
+        "max_query_suffix_link_steps": 57,
+        "max_latest_end_chain": 59
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "pattern": "random",
+      "chunk_size": 256,
+      "latency_ms": 11.829663009848446,
+      "tokens_per_second": 692496.4805151243,
+      "logical_bytes_per_update": 43.43798828125,
+      "checksum": 30298148899854,
+      "memory": {
+        "states": 8907,
+        "edges": 17095,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 355844
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 2278041,
+        "query_suffix_link_steps": 7950,
+        "extension_suffix_link_steps": 25491,
+        "latest_end_updates": 24806,
+        "clones": 714,
+        "copied_edges": 714,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 5
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "pattern": "random",
+      "chunk_size": 8192,
+      "latency_ms": 5.407688993727788,
+      "tokens_per_second": 1514880.0179710127,
+      "logical_bytes_per_update": 43.43798828125,
+      "checksum": 30298148899854,
+      "memory": {
+        "states": 8907,
+        "edges": 17095,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 355844
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 2278041,
+        "query_suffix_link_steps": 7950,
+        "extension_suffix_link_steps": 25491,
+        "latest_end_updates": 24806,
+        "clones": 714,
+        "copied_edges": 714,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 5
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "pattern": "all_match",
+      "chunk_size": 256,
+      "latency_ms": 70.8348420157563,
+      "tokens_per_second": 115649.30148609346,
+      "logical_bytes_per_update": 29.001953125,
+      "checksum": 33542245670980,
+      "memory": {
+        "states": 8193,
+        "edges": 8192,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 237584
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 16382,
+        "query_suffix_link_steps": 0,
+        "extension_suffix_link_steps": 16383,
+        "latest_end_updates": 33566720,
+        "clones": 0,
+        "copied_edges": 0,
+        "max_query_suffix_link_steps": 0,
+        "max_latest_end_chain": 8193
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "pattern": "all_match",
+      "chunk_size": 8192,
+      "latency_ms": 57.66863300232217,
+      "tokens_per_second": 142052.95970289654,
+      "logical_bytes_per_update": 29.001953125,
+      "checksum": 33542245670980,
+      "memory": {
+        "states": 8193,
+        "edges": 8192,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 237584
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 16382,
+        "query_suffix_link_steps": 0,
+        "extension_suffix_link_steps": 16383,
+        "latest_end_updates": 33566720,
+        "clones": 0,
+        "copied_edges": 0,
+        "max_query_suffix_link_steps": 0,
+        "max_latest_end_chain": 8193
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "pattern": "periodic64",
+      "chunk_size": 256,
+      "latency_ms": 12.475739000365138,
+      "tokens_per_second": 656634.4486495139,
+      "logical_bytes_per_update": 29.111328125,
+      "checksum": 33028332121601,
+      "memory": {
+        "states": 8198,
+        "edges": 8260,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 238480
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 20053,
+        "query_suffix_link_steps": 11,
+        "extension_suffix_link_steps": 16394,
+        "latest_end_updates": 537979,
+        "clones": 5,
+        "copied_edges": 5,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 130
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "pattern": "periodic64",
+      "chunk_size": 8192,
+      "latency_ms": 2.397817006567493,
+      "tokens_per_second": 3416440.8616514723,
+      "logical_bytes_per_update": 29.111328125,
+      "checksum": 33028332121601,
+      "memory": {
+        "states": 8198,
+        "edges": 8260,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 238480
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 20053,
+        "query_suffix_link_steps": 11,
+        "extension_suffix_link_steps": 16394,
+        "latest_end_updates": 537979,
+        "clones": 5,
+        "copied_edges": 5,
+        "max_query_suffix_link_steps": 2,
+        "max_latest_end_chain": 130
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "pattern": "skewed",
+      "chunk_size": 256,
+      "latency_ms": 14.226441999198869,
+      "tokens_per_second": 575829.1497242469,
+      "logical_bytes_per_update": 49.580078125,
+      "checksum": 24812852435950,
+      "memory": {
+        "states": 11949,
+        "edges": 17232,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 406160
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 2003993,
+        "query_suffix_link_steps": 5093,
+        "extension_suffix_link_steps": 30462,
+        "latest_end_updates": 93170,
+        "clones": 3756,
+        "copied_edges": 3908,
+        "max_query_suffix_link_steps": 50,
+        "max_latest_end_chain": 68
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "pattern": "skewed",
+      "chunk_size": 8192,
+      "latency_ms": 5.070596991572529,
+      "tokens_per_second": 1615588.8574097543,
+      "logical_bytes_per_update": 49.580078125,
+      "checksum": 24812852435950,
+      "memory": {
+        "states": 11949,
+        "edges": 17232,
+        "payload_symbols": 8192,
+        "automata": 1,
+        "sequences": 1,
+        "logical_bytes": 406160
+      },
+      "complexity": {
+        "updates": 8192,
+        "transition_probes": 2003993,
+        "query_suffix_link_steps": 5093,
+        "extension_suffix_link_steps": 30462,
+        "latest_end_updates": 93170,
+        "clones": 3756,
+        "copied_edges": 3908,
+        "max_query_suffix_link_steps": 50,
+        "max_latest_end_chain": 68
+      }
+    }
+  ]
+}

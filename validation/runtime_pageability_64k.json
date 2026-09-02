@@ -1,0 +1,976 @@
+{
+  "settings": {
+    "tokens": [
+      65536
+    ],
+    "patterns": [
+      "random",
+      "skewed",
+      "periodic64",
+      "copied1024",
+      "natural"
+    ],
+    "bits": 8,
+    "seed": 123,
+    "page_kib": [
+      4,
+      16,
+      64
+    ],
+    "cache_mib": [
+      0.25,
+      1.0,
+      4.0
+    ],
+    "hot_tail_mib": 1.0,
+    "natural_path": "/home/wenjie/repo/ROSA/rosa_soft/README.md",
+    "skip_native_validation": false,
+    "output": "validation/runtime_pageability_64k.json"
+  },
+  "model": "exact routes, ideal indexed-transition page lower bound",
+  "rows": [
+    {
+      "pattern": "random",
+      "tokens": 65536,
+      "elapsed_ms": 10592.608815000858,
+      "checksum": 1691786853,
+      "counts": {
+        "states": 83213,
+        "edges": 148703,
+        "payload_symbols": 65536
+      },
+      "page_profile": {
+        "logical_bytes": {
+          "state": 1331408,
+          "edge": 1338327,
+          "payload": 65536,
+          "control": 32
+        },
+        "total_logical_bytes": 2735303,
+        "accesses_by_kind": {
+          "clone_edge_create": 17693,
+          "clone_edge_read": 17693,
+          "clone_redirect_target": 35155,
+          "clone_redirect_transition": 35155,
+          "clone_redirect_transition_index": 35155,
+          "clone_reparent": 17676,
+          "clone_source": 17676,
+          "clone_suffix": 17735,
+          "clone_target": 17676,
+          "control_create": 1,
+          "edge_create": 131010,
+          "extension_child": 65280,
+          "extension_last": 65535,
+          "extension_link": 65535,
+          "extension_parent": 65280,
+          "extension_suffix": 131009,
+          "extension_transition": 65280,
+          "extension_transition_add": 131010,
+          "extension_transition_index": 196289,
+          "extension_transition_redirect": 17735,
+          "extension_transition_target": 65280,
+          "latest_write": 220487,
+          "payload_append": 65536,
+          "payload_successor": 65294,
+          "query_latest": 65294,
+          "query_suffix": 65237,
+          "query_transition": 65294,
+          "query_transition_index": 130771,
+          "query_transition_target": 65294,
+          "run_control": 2,
+          "run_materialize_root": 1,
+          "state_create": 83213
+        },
+        "reads_by_region": {
+          "edge": 349151,
+          "payload": 65294,
+          "state": 855261
+        },
+        "writes_by_region": {
+          "control": 3,
+          "edge": 166438,
+          "payload": 65536,
+          "state": 535598
+        },
+        "cold_writes": {
+          "edge": 616,
+          "state": 31194
+        },
+        "distinct_cold_written_records": 1587,
+        "caches": [
+          {
+            "page_size": 4096,
+            "capacity_pages": 64,
+            "resident_bytes": 262144,
+            "accesses": 2037281,
+            "hits": 1947919,
+            "misses": 89362,
+            "miss_rate": 0.043863364945729136,
+            "read_misses": 88165,
+            "write_misses": 1197,
+            "dirty_evictions": 38550,
+            "transfer_bytes_upper_bound": 366026752
+          },
+          {
+            "page_size": 4096,
+            "capacity_pages": 256,
+            "resident_bytes": 1048576,
+            "accesses": 2037281,
+            "hits": 2002681,
+            "misses": 34600,
+            "miss_rate": 0.016983420549251674,
+            "read_misses": 33880,
+            "write_misses": 720,
+            "dirty_evictions": 20453,
+            "transfer_bytes_upper_bound": 141721600
+          },
+          {
+            "page_size": 4096,
+            "capacity_pages": 1024,
+            "resident_bytes": 4194304,
+            "accesses": 2037281,
+            "hits": 2036611,
+            "misses": 670,
+            "miss_rate": 0.0003288697042774168,
+            "read_misses": 0,
+            "write_misses": 670,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 2744320
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 16,
+            "resident_bytes": 262144,
+            "accesses": 2037281,
+            "hits": 1944897,
+            "misses": 92384,
+            "miss_rate": 0.04534671456711176,
+            "read_misses": 91383,
+            "write_misses": 1001,
+            "dirty_evictions": 39067,
+            "transfer_bytes_upper_bound": 1513619456
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 64,
+            "resident_bytes": 1048576,
+            "accesses": 2037281,
+            "hits": 2002287,
+            "misses": 34994,
+            "miss_rate": 0.01717681556937899,
+            "read_misses": 34765,
+            "write_misses": 229,
+            "dirty_evictions": 20317,
+            "transfer_bytes_upper_bound": 573341696
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 256,
+            "resident_bytes": 4194304,
+            "accesses": 2037281,
+            "hits": 2037112,
+            "misses": 169,
+            "miss_rate": 8.295370152669171e-05,
+            "read_misses": 0,
+            "write_misses": 169,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 2768896
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 4,
+            "resident_bytes": 262144,
+            "accesses": 2037281,
+            "hits": 1663815,
+            "misses": 373466,
+            "miss_rate": 0.18331589996667128,
+            "read_misses": 292345,
+            "write_misses": 81121,
+            "dirty_evictions": 248031,
+            "transfer_bytes_upper_bound": 24475467776
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 16,
+            "resident_bytes": 1048576,
+            "accesses": 2037281,
+            "hits": 1999368,
+            "misses": 37913,
+            "miss_rate": 0.018609607609357766,
+            "read_misses": 37850,
+            "write_misses": 63,
+            "dirty_evictions": 21320,
+            "transfer_bytes_upper_bound": 2484666368
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 64,
+            "resident_bytes": 4194304,
+            "accesses": 2037281,
+            "hits": 2037237,
+            "misses": 44,
+            "miss_rate": 2.159741341523334e-05,
+            "read_misses": 0,
+            "write_misses": 44,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 2883584
+          }
+        ]
+      }
+    },
+    {
+      "pattern": "skewed",
+      "tokens": 65536,
+      "elapsed_ms": 15123.710232961457,
+      "checksum": 1599552407,
+      "counts": {
+        "states": 105883,
+        "edges": 145890,
+        "payload_symbols": 65536
+      },
+      "page_profile": {
+        "logical_bytes": {
+          "state": 1694128,
+          "edge": 1313010,
+          "payload": 65536,
+          "control": 32
+        },
+        "total_logical_bytes": 3072706,
+        "accesses_by_kind": {
+          "clone_edge_create": 49745,
+          "clone_edge_read": 49745,
+          "clone_redirect_target": 91185,
+          "clone_redirect_transition": 91185,
+          "clone_redirect_transition_index": 91185,
+          "clone_reparent": 40346,
+          "clone_source": 40346,
+          "clone_suffix": 51484,
+          "clone_target": 40346,
+          "control_create": 1,
+          "edge_create": 96145,
+          "extension_child": 65262,
+          "extension_last": 65517,
+          "extension_link": 65517,
+          "extension_parent": 65262,
+          "extension_suffix": 96126,
+          "extension_transition": 65262,
+          "extension_transition_add": 96145,
+          "extension_transition_index": 161388,
+          "extension_transition_redirect": 51484,
+          "extension_transition_target": 65262,
+          "latest_write": 915565,
+          "payload_append": 65536,
+          "payload_successor": 65283,
+          "query_latest": 65265,
+          "query_suffix": 30060,
+          "query_transition": 65265,
+          "query_transition_index": 95576,
+          "query_transition_target": 65265,
+          "run_control": 20,
+          "run_materialize_root": 1,
+          "state_create": 105883
+        },
+        "reads_by_region": {
+          "edge": 493169,
+          "payload": 65283,
+          "state": 827471
+        },
+        "writes_by_region": {
+          "control": 21,
+          "edge": 197374,
+          "payload": 65536,
+          "state": 1263803
+        },
+        "cold_writes": {
+          "edge": 454,
+          "state": 279875
+        },
+        "distinct_cold_written_records": 11437,
+        "caches": [
+          {
+            "page_size": 4096,
+            "capacity_pages": 64,
+            "resident_bytes": 262144,
+            "accesses": 2912657,
+            "hits": 2826870,
+            "misses": 85787,
+            "miss_rate": 0.029453176257966524,
+            "read_misses": 62261,
+            "write_misses": 23526,
+            "dirty_evictions": 39765,
+            "transfer_bytes_upper_bound": 351383552
+          },
+          {
+            "page_size": 4096,
+            "capacity_pages": 256,
+            "resident_bytes": 1048576,
+            "accesses": 2912657,
+            "hits": 2875633,
+            "misses": 37024,
+            "miss_rate": 0.012711417787951002,
+            "read_misses": 26159,
+            "write_misses": 10865,
+            "dirty_evictions": 20670,
+            "transfer_bytes_upper_bound": 151650304
+          },
+          {
+            "page_size": 4096,
+            "capacity_pages": 1024,
+            "resident_bytes": 4194304,
+            "accesses": 2912657,
+            "hits": 2911905,
+            "misses": 752,
+            "miss_rate": 0.00025818350736114826,
+            "read_misses": 0,
+            "write_misses": 752,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 3080192
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 16,
+            "resident_bytes": 262144,
+            "accesses": 2912657,
+            "hits": 2778178,
+            "misses": 134479,
+            "miss_rate": 0.04617055835960087,
+            "read_misses": 84030,
+            "write_misses": 50449,
+            "dirty_evictions": 74312,
+            "transfer_bytes_upper_bound": 2203303936
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 64,
+            "resident_bytes": 1048576,
+            "accesses": 2912657,
+            "hits": 2875713,
+            "misses": 36944,
+            "miss_rate": 0.012683951457380667,
+            "read_misses": 26442,
+            "write_misses": 10502,
+            "dirty_evictions": 20406,
+            "transfer_bytes_upper_bound": 605290496
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 256,
+            "resident_bytes": 4194304,
+            "accesses": 2912657,
+            "hits": 2912467,
+            "misses": 190,
+            "miss_rate": 6.523253510454543e-05,
+            "read_misses": 0,
+            "write_misses": 190,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 3112960
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 4,
+            "resident_bytes": 262144,
+            "accesses": 2912657,
+            "hits": 2292548,
+            "misses": 620109,
+            "miss_rate": 0.21290148479549773,
+            "read_misses": 422916,
+            "write_misses": 197193,
+            "dirty_evictions": 413634,
+            "transfer_bytes_upper_bound": 40639463424
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 16,
+            "resident_bytes": 1048576,
+            "accesses": 2912657,
+            "hits": 2864423,
+            "misses": 48234,
+            "miss_rate": 0.01656013735911918,
+            "read_misses": 32920,
+            "write_misses": 15314,
+            "dirty_evictions": 26771,
+            "transfer_bytes_upper_bound": 3161063424
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 64,
+            "resident_bytes": 4194304,
+            "accesses": 2912657,
+            "hits": 2912608,
+            "misses": 49,
+            "miss_rate": 1.6823127474330138e-05,
+            "read_misses": 0,
+            "write_misses": 49,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 3211264
+          }
+        ]
+      }
+    },
+    {
+      "pattern": "periodic64",
+      "tokens": 65536,
+      "elapsed_ms": 162559.13394398522,
+      "checksum": 2143258778,
+      "counts": {
+        "states": 65545,
+        "edges": 65607,
+        "payload_symbols": 65536
+      },
+      "page_profile": {
+        "logical_bytes": {
+          "state": 1048720,
+          "edge": 590463,
+          "payload": 65536,
+          "control": 32
+        },
+        "total_logical_bytes": 1704751,
+        "accesses_by_kind": {
+          "clone_edge_create": 8,
+          "clone_edge_read": 8,
+          "clone_redirect_target": 8,
+          "clone_redirect_transition": 8,
+          "clone_redirect_transition_index": 8,
+          "clone_reparent": 8,
+          "clone_source": 8,
+          "clone_suffix": 8,
+          "clone_target": 8,
+          "control_create": 1,
+          "edge_create": 65599,
+          "extension_child": 65481,
+          "extension_last": 65535,
+          "extension_link": 65535,
+          "extension_parent": 65481,
+          "extension_suffix": 65598,
+          "extension_transition": 65481,
+          "extension_transition_add": 65599,
+          "extension_transition_index": 131079,
+          "extension_transition_redirect": 8,
+          "extension_transition_target": 65481,
+          "latest_write": 33670134,
+          "payload_append": 65536,
+          "payload_successor": 65481,
+          "query_latest": 65481,
+          "query_suffix": 17,
+          "query_transition": 65481,
+          "query_transition_index": 65551,
+          "query_transition_target": 65481,
+          "run_control": 2,
+          "run_materialize_root": 1,
+          "state_create": 65545
+        },
+        "reads_by_region": {
+          "edge": 261948,
+          "payload": 65481,
+          "state": 524247
+        },
+        "writes_by_region": {
+          "control": 3,
+          "edge": 65615,
+          "payload": 65536,
+          "state": 33866830
+        },
+        "cold_writes": {
+          "state": 9
+        },
+        "distinct_cold_written_records": 1,
+        "caches": [
+          {
+            "page_size": 4096,
+            "capacity_pages": 64,
+            "resident_bytes": 262144,
+            "accesses": 34849660,
+            "hits": 26818695,
+            "misses": 8030965,
+            "miss_rate": 0.23044600722073041,
+            "read_misses": 161126,
+            "write_misses": 7869839,
+            "dirty_evictions": 8023099,
+            "transfer_bytes_upper_bound": 32894832640
+          },
+          {
+            "page_size": 4096,
+            "capacity_pages": 256,
+            "resident_bytes": 1048576,
+            "accesses": 34849660,
+            "hits": 34713999,
+            "misses": 135661,
+            "miss_rate": 0.0038927495992787304,
+            "read_misses": 1382,
+            "write_misses": 134279,
+            "dirty_evictions": 135283,
+            "transfer_bytes_upper_bound": 555667456
+          },
+          {
+            "page_size": 4096,
+            "capacity_pages": 1024,
+            "resident_bytes": 4194304,
+            "accesses": 34849660,
+            "hits": 34849241,
+            "misses": 419,
+            "miss_rate": 1.2023072821944318e-05,
+            "read_misses": 0,
+            "write_misses": 419,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 1716224
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 16,
+            "resident_bytes": 262144,
+            "accesses": 34849660,
+            "hits": 32723275,
+            "misses": 2126385,
+            "miss_rate": 0.06101594678398584,
+            "read_misses": 155745,
+            "write_misses": 1970640,
+            "dirty_evictions": 2124321,
+            "transfer_bytes_upper_bound": 34838691840
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 64,
+            "resident_bytes": 1048576,
+            "accesses": 34849660,
+            "hits": 34715773,
+            "misses": 133887,
+            "miss_rate": 0.003841845228906107,
+            "read_misses": 5217,
+            "write_misses": 128670,
+            "dirty_evictions": 133695,
+            "transfer_bytes_upper_bound": 2193604608
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 256,
+            "resident_bytes": 4194304,
+            "accesses": 34849660,
+            "hits": 34849553,
+            "misses": 107,
+            "miss_rate": 3.0703312456993843e-06,
+            "read_misses": 0,
+            "write_misses": 107,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 1753088
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 4,
+            "resident_bytes": 262144,
+            "accesses": 34849660,
+            "hits": 34193485,
+            "misses": 656175,
+            "miss_rate": 0.018828734627540124,
+            "read_misses": 168866,
+            "write_misses": 487309,
+            "dirty_evictions": 655659,
+            "transfer_bytes_upper_bound": 43003084800
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 16,
+            "resident_bytes": 1048576,
+            "accesses": 34849660,
+            "hits": 34710139,
+            "misses": 139521,
+            "miss_rate": 0.004003511081600223,
+            "read_misses": 20577,
+            "write_misses": 118944,
+            "dirty_evictions": 139377,
+            "transfer_bytes_upper_bound": 9143648256
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 64,
+            "resident_bytes": 4194304,
+            "accesses": 34849660,
+            "hits": 34849631,
+            "misses": 29,
+            "miss_rate": 8.321458516381508e-07,
+            "read_misses": 0,
+            "write_misses": 29,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 1900544
+          }
+        ]
+      }
+    },
+    {
+      "pattern": "copied1024",
+      "tokens": 65536,
+      "elapsed_ms": 10132.439212000463,
+      "checksum": 2081190530,
+      "counts": {
+        "states": 83149,
+        "edges": 148631,
+        "payload_symbols": 65536
+      },
+      "page_profile": {
+        "logical_bytes": {
+          "state": 1330384,
+          "edge": 1337679,
+          "payload": 65536,
+          "control": 32
+        },
+        "total_logical_bytes": 2733631,
+        "accesses_by_kind": {
+          "clone_edge_create": 17630,
+          "clone_edge_read": 17630,
+          "clone_redirect_target": 35036,
+          "clone_redirect_transition": 35036,
+          "clone_redirect_transition_index": 35036,
+          "clone_reparent": 17612,
+          "clone_source": 17612,
+          "clone_suffix": 17681,
+          "clone_target": 17612,
+          "control_create": 1,
+          "edge_create": 131001,
+          "extension_child": 65280,
+          "extension_last": 65535,
+          "extension_link": 65535,
+          "extension_parent": 65280,
+          "extension_suffix": 131000,
+          "extension_transition": 65280,
+          "extension_transition_add": 131001,
+          "extension_transition_index": 196280,
+          "extension_transition_redirect": 17681,
+          "extension_transition_target": 65280,
+          "latest_write": 220471,
+          "payload_append": 65536,
+          "payload_successor": 65300,
+          "query_latest": 65300,
+          "query_suffix": 787,
+          "query_transition": 65300,
+          "query_transition_index": 66321,
+          "query_transition_target": 65300,
+          "run_control": 2,
+          "run_materialize_root": 1,
+          "state_create": 83149
+        },
+        "reads_by_region": {
+          "edge": 348862,
+          "payload": 65300,
+          "state": 726112
+        },
+        "writes_by_region": {
+          "control": 3,
+          "edge": 166312,
+          "payload": 65536,
+          "state": 535381
+        },
+        "cold_writes": {
+          "edge": 598,
+          "state": 31086
+        },
+        "distinct_cold_written_records": 1542,
+        "caches": [
+          {
+            "page_size": 4096,
+            "capacity_pages": 64,
+            "resident_bytes": 262144,
+            "accesses": 1907506,
+            "hits": 1866248,
+            "misses": 41258,
+            "miss_rate": 0.021629289763701924,
+            "read_misses": 40101,
+            "write_misses": 1157,
+            "dirty_evictions": 35194,
+            "transfer_bytes_upper_bound": 168992768
+          },
+          {
+            "page_size": 4096,
+            "capacity_pages": 256,
+            "resident_bytes": 1048576,
+            "accesses": 1907506,
+            "hits": 1890698,
+            "misses": 16808,
+            "miss_rate": 0.00881150570430709,
+            "read_misses": 16113,
+            "write_misses": 695,
+            "dirty_evictions": 14955,
+            "transfer_bytes_upper_bound": 68845568
+          },
+          {
+            "page_size": 4096,
+            "capacity_pages": 1024,
+            "resident_bytes": 4194304,
+            "accesses": 1907506,
+            "hits": 1906837,
+            "misses": 669,
+            "miss_rate": 0.0003507197356128893,
+            "read_misses": 0,
+            "write_misses": 669,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 2740224
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 16,
+            "resident_bytes": 262144,
+            "accesses": 1907506,
+            "hits": 1865459,
+            "misses": 42047,
+            "miss_rate": 0.022042918868931474,
+            "read_misses": 41040,
+            "write_misses": 1007,
+            "dirty_evictions": 35894,
+            "transfer_bytes_upper_bound": 688898048
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 64,
+            "resident_bytes": 1048576,
+            "accesses": 1907506,
+            "hits": 1890618,
+            "misses": 16888,
+            "miss_rate": 0.008853445284051532,
+            "read_misses": 16672,
+            "write_misses": 216,
+            "dirty_evictions": 15210,
+            "transfer_bytes_upper_bound": 276692992
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 256,
+            "resident_bytes": 4194304,
+            "accesses": 1907506,
+            "hits": 1907337,
+            "misses": 169,
+            "miss_rate": 8.859736221013197e-05,
+            "read_misses": 0,
+            "write_misses": 169,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 2768896
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 4,
+            "resident_bytes": 262144,
+            "accesses": 1907506,
+            "hits": 1539360,
+            "misses": 368146,
+            "miss_rate": 0.19299860655746298,
+            "read_misses": 327628,
+            "write_misses": 40518,
+            "dirty_evictions": 248041,
+            "transfer_bytes_upper_bound": 24126816256
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 16,
+            "resident_bytes": 1048576,
+            "accesses": 1907506,
+            "hits": 1888415,
+            "misses": 19091,
+            "miss_rate": 0.01000835646126408,
+            "read_misses": 19039,
+            "write_misses": 52,
+            "dirty_evictions": 17064,
+            "transfer_bytes_upper_bound": 1251147776
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 64,
+            "resident_bytes": 4194304,
+            "accesses": 1907506,
+            "hits": 1907462,
+            "misses": 44,
+            "miss_rate": 2.3066768859442644e-05,
+            "read_misses": 0,
+            "write_misses": 44,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 2883584
+          }
+        ]
+      }
+    },
+    {
+      "pattern": "natural",
+      "tokens": 65536,
+      "elapsed_ms": 9587.761504051741,
+      "checksum": 1371732204,
+      "counts": {
+        "states": 73457,
+        "edges": 82788,
+        "payload_symbols": 65536
+      },
+      "page_profile": {
+        "logical_bytes": {
+          "state": 1175312,
+          "edge": 745092,
+          "payload": 65536,
+          "control": 32
+        },
+        "total_logical_bytes": 1985972,
+        "accesses_by_kind": {
+          "clone_edge_create": 8764,
+          "clone_edge_read": 8764,
+          "clone_redirect_target": 18503,
+          "clone_redirect_transition": 18503,
+          "clone_redirect_transition_index": 18503,
+          "clone_reparent": 7920,
+          "clone_source": 7920,
+          "clone_suffix": 10696,
+          "clone_target": 7920,
+          "control_create": 1,
+          "edge_create": 74024,
+          "extension_child": 65449,
+          "extension_last": 65535,
+          "extension_link": 65535,
+          "extension_parent": 65449,
+          "extension_suffix": 74023,
+          "extension_transition": 65449,
+          "extension_transition_add": 74024,
+          "extension_transition_index": 139472,
+          "extension_transition_redirect": 10696,
+          "extension_transition_target": 65449,
+          "latest_write": 506763,
+          "payload_append": 65536,
+          "payload_successor": 65449,
+          "query_latest": 65449,
+          "query_suffix": 11219,
+          "query_transition": 65449,
+          "query_transition_index": 76753,
+          "query_transition_target": 65449,
+          "run_control": 2,
+          "run_materialize_root": 1,
+          "state_create": 73457
+        },
+        "reads_by_region": {
+          "edge": 307566,
+          "payload": 65449,
+          "state": 600468
+        },
+        "writes_by_region": {
+          "control": 3,
+          "edge": 93484,
+          "payload": 65536,
+          "state": 735620
+        },
+        "cold_writes": {
+          "state": 28579
+        },
+        "distinct_cold_written_records": 4485,
+        "caches": [
+          {
+            "page_size": 4096,
+            "capacity_pages": 64,
+            "resident_bytes": 262144,
+            "accesses": 1868126,
+            "hits": 1856376,
+            "misses": 11750,
+            "miss_rate": 0.006289725639491126,
+            "read_misses": 3154,
+            "write_misses": 8596,
+            "dirty_evictions": 10571,
+            "transfer_bytes_upper_bound": 48128000
+          },
+          {
+            "page_size": 4096,
+            "capacity_pages": 256,
+            "resident_bytes": 1048576,
+            "accesses": 1868126,
+            "hits": 1867307,
+            "misses": 819,
+            "miss_rate": 0.00043840725946750914,
+            "read_misses": 225,
+            "write_misses": 594,
+            "dirty_evictions": 501,
+            "transfer_bytes_upper_bound": 3354624
+          },
+          {
+            "page_size": 4096,
+            "capacity_pages": 1024,
+            "resident_bytes": 4194304,
+            "accesses": 1868126,
+            "hits": 1867640,
+            "misses": 486,
+            "miss_rate": 0.0002601537583653351,
+            "read_misses": 0,
+            "write_misses": 486,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 1990656
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 16,
+            "resident_bytes": 262144,
+            "accesses": 1868126,
+            "hits": 1844403,
+            "misses": 23723,
+            "miss_rate": 0.012698822242182807,
+            "read_misses": 3816,
+            "write_misses": 19907,
+            "dirty_evictions": 22243,
+            "transfer_bytes_upper_bound": 388677632
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 64,
+            "resident_bytes": 1048576,
+            "accesses": 1868126,
+            "hits": 1867923,
+            "misses": 203,
+            "miss_rate": 0.00010866504721844244,
+            "read_misses": 54,
+            "write_misses": 149,
+            "dirty_evictions": 125,
+            "transfer_bytes_upper_bound": 3325952
+          },
+          {
+            "page_size": 16384,
+            "capacity_pages": 256,
+            "resident_bytes": 4194304,
+            "accesses": 1868126,
+            "hits": 1868003,
+            "misses": 123,
+            "miss_rate": 6.584138328999222e-05,
+            "read_misses": 0,
+            "write_misses": 123,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 2015232
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 4,
+            "resident_bytes": 262144,
+            "accesses": 1868126,
+            "hits": 1438933,
+            "misses": 429193,
+            "miss_rate": 0.2297452099055417,
+            "read_misses": 218425,
+            "write_misses": 210768,
+            "dirty_evictions": 367172,
+            "transfer_bytes_upper_bound": 28127592448
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 16,
+            "resident_bytes": 1048576,
+            "accesses": 1868126,
+            "hits": 1868074,
+            "misses": 52,
+            "miss_rate": 2.7835381553492645e-05,
+            "read_misses": 13,
+            "write_misses": 39,
+            "dirty_evictions": 34,
+            "transfer_bytes_upper_bound": 3407872
+          },
+          {
+            "page_size": 65536,
+            "capacity_pages": 64,
+            "resident_bytes": 4194304,
+            "accesses": 1868126,
+            "hits": 1868094,
+            "misses": 32,
+            "miss_rate": 1.7129465571380088e-05,
+            "read_misses": 0,
+            "write_misses": 32,
+            "dirty_evictions": 0,
+            "transfer_bytes_upper_bound": 2097152
+          }
+        ]
+      }
+    }
+  ]
+}

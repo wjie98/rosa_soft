@@ -8,7 +8,7 @@ not accidentally become part of the supported operator contract.
 
 | Document | Purpose |
 | --- | --- |
-| [Production Guide](PRODUCTION_GUIDE.md) | Public API, build variants, code ownership, runtime lifecycle, validation, and release workflow. Start here when maintaining or integrating the package. |
+| [Production Guide](PRODUCTION_GUIDE.md) | Public API, build variants, code ownership, SAM reference, validation, and release workflow. Start here when maintaining or integrating the package. |
 | [Concept](CONCEPT.md) | Mathematical definition of exact hard forward and dense surrogate backward. |
 | [Design](ROSA_SOFT_DESIGN.md) | Python, C++, CUDA, autograd, execution-plan, and packed-layout implementation boundaries. |
 | [Reference Guide](ROSA_SOFT_REFERENCE.md) | Equation-level PyTorch oracle and inspection tensor conventions. |
@@ -26,6 +26,12 @@ kernel experiments, and possible future estimator families. They are evidence,
 not production configuration. A research result changes the supported surface
 only after an explicit implementation decision, production parity, and an
 update to the documents above.
+
+The [Production Integration Audit](research/PRODUCTION_INTEGRATION_AUDIT.md)
+records the experiments that led to the maintained estimator and CUDA
+schedules. Runtime, hard-index, compressed-automaton, and bitflip documents in
+the same directory are historical research. Their implementations are not in
+the package build graph and must not be read as current production behavior.
 
 ## Reading Paths
 

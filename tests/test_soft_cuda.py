@@ -77,18 +77,48 @@ def test_cuda_hard_forward_matches_reference(
     assert set(actual.float().unique().tolist()) <= {-1.0, 0.0, 1.0}
 
 
+def test_cuda_hard_forward_matches_beyond_surrogate_horizon():
+    query = torch.tensor(
+        [-1.0, -1.0, -1.0, -1.0, 1.0],
+        device="cuda",
+    ).view(1, 5, 1, 1)
+    key = torch.tensor(
+        [-1.0, 1.0, 1.0, 1.0, -1.0],
+        device="cuda",
+    ).view(1, 5, 1, 1)
+    value = torch.tensor(
+        [1.0, -1.0, 1.0, -1.0, -1.0],
+        device="cuda",
+    ).view(1, 5, 1, 1)
+
+    short = rosa_soft.rosa_soft(
+        query,
+        key,
+        value,
+        max_suffix_length=1,
+    )
+    long = rosa_soft.rosa_soft(
+        query,
+        key,
+        value,
+        max_suffix_length=5,
+    )
+
+    assert torch.equal(short, long)
+    assert short[0, 4, 0, 0].item() == 1
+
+
 def test_raw_and_fake_packed_symbol_layout_contracts():
     query = _nonzero_randn((2, 5, 3, 4), seed=4)
     key = _nonzero_randn((2, 5, 3, 4), seed=5)
     value = _nonzero_randn((2, 5, 1, 2), seed=6)
-    dense = torch.ops.rosa_soft.hard_forward(query, key, value, 4)
+    dense = torch.ops.rosa_soft.hard_forward(query, key, value)
     offsets = torch.tensor([0, 5, 10], dtype=torch.int32, device="cuda")
     varlen = torch.ops.rosa_soft.hard_forward_varlen(
         query.flatten(0, 1),
         key.flatten(0, 1),
         value.flatten(0, 1),
         offsets,
-        4,
     )
     assert dense[0].shape == (2, 5, 3, 2)
     assert dense[1].shape == dense[2].shape == (2, 3, 5)
@@ -106,7 +136,6 @@ def test_raw_and_fake_packed_symbol_layout_contracts():
             fake_query,
             fake_key,
             fake_value,
-            4,
         )
     assert fake[1].shape == fake[2].shape == (2, 3, 5)
 
@@ -119,7 +148,6 @@ def test_raw_cuda_vjp_rejects_token_major_packed_symbols():
         query,
         key,
         value,
-        4,
     )
     with pytest.raises(RuntimeError, match="packed_query_symbols head mismatch"):
         torch.ops.rosa_soft.surrogate_vjp_masked(
@@ -517,7 +545,6 @@ def test_cuda_masked_vjp_matches_full_vjp(gradient_mask, dropout_p):
         query,
         key,
         value,
-        6,
     )
     grad_output = _nonzero_randn(output.shape, seed=43)
     arguments = (
@@ -891,7 +918,6 @@ def test_raw_cuda_vjp_rejects_unrepresentable_scalars():
         tensor,
         tensor,
         tensor,
-        2,
     )
     for window, scale, mismatch_scale, message in (
         (2, 1e-300, 3.0, "scale"),
@@ -953,7 +979,6 @@ def test_raw_cuda_vjp_validates_dropout_seed(
             tensor,
             tensor,
             tensor,
-            2,
         )
     )
     with pytest.raises(RuntimeError, match=message):
@@ -1087,7 +1112,7 @@ def test_cuda_public_and_dispatch_signatures_are_minimal():
     ) == expected_parameters
     assert str(torch.ops.rosa_soft.hard_forward.default._schema) == (
         "rosa_soft::hard_forward(Tensor query, Tensor key, "
-        "Tensor value, int max_suffix_length) -> "
+        "Tensor value) -> "
         "(Tensor output, Tensor packed_query_symbols, "
         "Tensor packed_key_symbols)"
     )

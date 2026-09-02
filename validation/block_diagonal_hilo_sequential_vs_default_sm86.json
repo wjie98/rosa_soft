@@ -1,0 +1,545 @@
+{
+  "device": "NVIDIA GeForce RTX 3070",
+  "compute_capability": [
+    8,
+    6
+  ],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "heads": 4,
+  "value_heads": 2,
+  "rows": [
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 1,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 18.112607955932617,
+      "baseline_plan": "block64",
+      "latency_ms": 17.915456771850586,
+      "latency_ratio": 0.9891152514004778,
+      "max_abs_errors": [
+        0.0001773238182067871,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 2,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 17.927167892456055,
+      "baseline_plan": "block64",
+      "latency_ms": 17.889280319213867,
+      "latency_ratio": 0.9978865834542593,
+      "max_abs_errors": [
+        0.0,
+        0.00016370415687561035,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 3,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 19.058687210083008,
+      "baseline_plan": "block64",
+      "latency_ms": 18.918399810791016,
+      "latency_ratio": 0.9926391887465484,
+      "max_abs_errors": [
+        0.0001773238182067871,
+        0.00016370415687561035,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 4,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 7.877632141113281,
+      "baseline_plan": "block64",
+      "latency_ms": 7.38918399810791,
+      "latency_ratio": 0.9379955633551146,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        0.0006867647171020508
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 5,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 19.57676887512207,
+      "baseline_plan": "block64",
+      "latency_ms": 19.44166374206543,
+      "latency_ratio": 0.9930987011228226,
+      "max_abs_errors": [
+        0.0001773238182067871,
+        0.0,
+        0.0006867647171020508
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 6,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 19.562496185302734,
+      "baseline_plan": "block64",
+      "latency_ms": 19.499935150146484,
+      "latency_ratio": 0.9968019911894858,
+      "max_abs_errors": [
+        0.0,
+        0.00016370415687561035,
+        0.0006867647171020508
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 7,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 21.210752487182617,
+      "baseline_plan": "block64",
+      "latency_ms": 21.650623321533203,
+      "latency_ratio": 1.0207381060439225,
+      "max_abs_errors": [
+        0.0001773238182067871,
+        0.00016370415687561035,
+        0.0006866455078125
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 1,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 64.1503677368164,
+      "baseline_plan": "block64",
+      "latency_ms": 64.34611511230469,
+      "latency_ratio": 1.0030513835289512,
+      "max_abs_errors": [
+        0.00022596120834350586,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 2,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 64.55398559570312,
+      "baseline_plan": "block64",
+      "latency_ms": 64.71231842041016,
+      "latency_ratio": 1.0024527195841735,
+      "max_abs_errors": [
+        0.0,
+        0.00019657611846923828,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 3,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 69.23468780517578,
+      "baseline_plan": "block64",
+      "latency_ms": 69.51526641845703,
+      "latency_ratio": 1.0040525728096124,
+      "max_abs_errors": [
+        0.00022596120834350586,
+        0.00019657611846923828,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 4,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 28.018335342407227,
+      "baseline_plan": "block64",
+      "latency_ms": 27.572223663330078,
+      "latency_ratio": 0.9840778663819497,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        0.0005939006805419922
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 5,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 70.00975799560547,
+      "baseline_plan": "block64",
+      "latency_ms": 70.33139038085938,
+      "latency_ratio": 1.0045941079424114,
+      "max_abs_errors": [
+        0.00022596120834350586,
+        0.0,
+        0.0005937814712524414
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 6,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 72.11417388916016,
+      "baseline_plan": "block64",
+      "latency_ms": 71.64313507080078,
+      "latency_ratio": 0.9934681520572729,
+      "max_abs_errors": [
+        0.0,
+        0.00019657611846923828,
+        0.0005937814712524414
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 8,
+      "value_dim": 64,
+      "gradient_mask": 7,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 75.7422103881836,
+      "baseline_plan": "block64",
+      "latency_ms": 76.6382064819336,
+      "latency_ratio": 1.0118295477403942,
+      "max_abs_errors": [
+        0.00022596120834350586,
+        0.00019657611846923828,
+        0.0005937814712524414
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 1,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 19.713024139404297,
+      "baseline_plan": "block64",
+      "latency_ms": 19.83344078063965,
+      "latency_ratio": 1.0061084813970602,
+      "max_abs_errors": [
+        2.0463019609451294e-05,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 2,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 19.908159255981445,
+      "baseline_plan": "block64",
+      "latency_ms": 19.969024658203125,
+      "latency_ratio": 1.0030573093895354,
+      "max_abs_errors": [
+        0.0,
+        3.1732022762298584e-05,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 3,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 22.574016571044922,
+      "baseline_plan": "block64",
+      "latency_ms": 22.388511657714844,
+      "latency_ratio": 0.9917823701091802,
+      "max_abs_errors": [
+        2.0463019609451294e-05,
+        3.1732022762298584e-05,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 4,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 7.931903839111328,
+      "baseline_plan": "block64",
+      "latency_ms": 7.5232319831848145,
+      "latency_ratio": 0.9484774570877424,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        0.0008195638656616211
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 5,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 21.43129539489746,
+      "baseline_plan": "block64",
+      "latency_ms": 21.29305648803711,
+      "latency_ratio": 0.9935496709688737,
+      "max_abs_errors": [
+        2.0463019609451294e-05,
+        0.0,
+        0.0008194446563720703
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 6,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 21.555967330932617,
+      "baseline_plan": "block64",
+      "latency_ms": 21.49171257019043,
+      "latency_ratio": 0.9970191659805504,
+      "max_abs_errors": [
+        0.0,
+        3.1732022762298584e-05,
+        0.0008194446563720703
+      ]
+    },
+    {
+      "seq_len": 4096,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 7,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 25.196544647216797,
+      "baseline_plan": "block64",
+      "latency_ms": 24.88934326171875,
+      "latency_ratio": 0.9878077970690327,
+      "max_abs_errors": [
+        2.0463019609451294e-05,
+        3.1732022762298584e-05,
+        0.0008194446563720703
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 1,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 69.94226837158203,
+      "baseline_plan": "block64",
+      "latency_ms": 70.71392059326172,
+      "latency_ratio": 1.0110327022506638,
+      "max_abs_errors": [
+        2.3886561393737793e-05,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 2,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 71.30032348632812,
+      "baseline_plan": "block64",
+      "latency_ms": 72.2550048828125,
+      "latency_ratio": 1.0133895801562167,
+      "max_abs_errors": [
+        0.0,
+        3.563612699508667e-05,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 3,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 81.34553527832031,
+      "baseline_plan": "block64",
+      "latency_ms": 81.2042236328125,
+      "latency_ratio": 0.9982628223537491,
+      "max_abs_errors": [
+        2.3886561393737793e-05,
+        3.563612699508667e-05,
+        0.0
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 4,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 28.72012710571289,
+      "baseline_plan": "block64",
+      "latency_ms": 28.66975975036621,
+      "latency_ratio": 0.9982462697619239,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        0.0006803274154663086
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 5,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 77.09193420410156,
+      "baseline_plan": "block64",
+      "latency_ms": 77.5973129272461,
+      "latency_ratio": 1.006555533057538,
+      "max_abs_errors": [
+        2.3886561393737793e-05,
+        0.0,
+        0.0006803274154663086
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 6,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 77.8482894897461,
+      "baseline_plan": "block64",
+      "latency_ms": 78.25100708007812,
+      "latency_ratio": 1.0051731077583288,
+      "max_abs_errors": [
+        0.0,
+        3.563612699508667e-05,
+        0.0006803274154663086
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "bits": 32,
+      "value_dim": 64,
+      "gradient_mask": 7,
+      "tile_rows": 64,
+      "tile_routes": 64,
+      "threads": 256,
+      "max_registers": null,
+      "baseline_ms": 89.33785247802734,
+      "baseline_plan": "block64",
+      "latency_ms": 89.51795196533203,
+      "latency_ratio": 1.0020159370558968,
+      "max_abs_errors": [
+        2.3886561393737793e-05,
+        3.563612699508667e-05,
+        0.0006803274154663086
+      ]
+    }
+  ]
+}

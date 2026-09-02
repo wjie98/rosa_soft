@@ -1,0 +1,182 @@
+{
+  "device": "NVIDIA GeForce RTX 3070",
+  "compute_capability": [
+    8,
+    6
+  ],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "settings": {
+    "sequence_lengths": [
+      32768,
+      65536
+    ],
+    "windows": [
+      1
+    ],
+    "patterns": [
+      "random",
+      "aligned",
+      "periodic64",
+      "periodic4",
+      "all_match",
+      "all_mismatch"
+    ],
+    "batch": 1,
+    "heads": 4,
+    "value_heads": 2,
+    "bits": 8,
+    "value_dim": 64,
+    "dtype": "float16",
+    "seed": 7000,
+    "warmup": 4,
+    "repeats": 11,
+    "output": "validation/unlimited_hard_trajectory_d8_long_sm86.json"
+  },
+  "rows": [
+    {
+      "sequence_length": 32768,
+      "window": 1,
+      "pattern": "random",
+      "latency_ms": 1.7315839529037476,
+      "random_latency_ratio": 1.0,
+      "key_entropy_bits": 7.994547951774593,
+      "key_collision_probability": 0.0039052995563073653,
+      "key_max_code_fraction": 0.00489044189453125,
+      "key_unique_code_fraction": 1.0,
+      "latest_route_symbol_match_fraction": 0.003929258324205875
+    },
+    {
+      "sequence_length": 32768,
+      "window": 1,
+      "pattern": "aligned",
+      "latency_ms": 1.4642239809036255,
+      "random_latency_ratio": 0.8455980308943278,
+      "key_entropy_bits": 7.994547951774593,
+      "key_collision_probability": 0.0039052995563073653,
+      "key_max_code_fraction": 0.00489044189453125,
+      "key_unique_code_fraction": 1.0,
+      "latest_route_symbol_match_fraction": 1.0
+    },
+    {
+      "sequence_length": 32768,
+      "window": 1,
+      "pattern": "periodic64",
+      "latency_ms": 2.699199914932251,
+      "random_latency_ratio": 1.5588039554223623,
+      "key_entropy_bits": 5.798789941389348,
+      "key_collision_probability": 0.018890957365642263,
+      "key_max_code_fraction": 0.0390625,
+      "key_unique_code_fraction": 0.2255859375,
+      "latest_route_symbol_match_fraction": 0.0
+    },
+    {
+      "sequence_length": 32768,
+      "window": 1,
+      "pattern": "periodic4",
+      "latency_ms": 1.2621760368347168,
+      "random_latency_ratio": 0.728914145177965,
+      "key_entropy_bits": 2.0,
+      "key_collision_probability": 0.249977111117893,
+      "key_max_code_fraction": 0.25,
+      "key_unique_code_fraction": 0.015625,
+      "latest_route_symbol_match_fraction": 0.0
+    },
+    {
+      "sequence_length": 32768,
+      "window": 1,
+      "pattern": "all_match",
+      "latency_ms": 1.202847957611084,
+      "random_latency_ratio": 0.6946518276483161,
+      "key_entropy_bits": 0.0,
+      "key_collision_probability": 1.0,
+      "key_max_code_fraction": 1.0,
+      "key_unique_code_fraction": 0.00390625,
+      "latest_route_symbol_match_fraction": 1.0
+    },
+    {
+      "sequence_length": 32768,
+      "window": 1,
+      "pattern": "all_mismatch",
+      "latency_ms": 0.6959360241889954,
+      "random_latency_ratio": 0.4019071804297784,
+      "key_entropy_bits": 0.0,
+      "key_collision_probability": 1.0,
+      "key_max_code_fraction": 1.0,
+      "key_unique_code_fraction": 0.00390625,
+      "latest_route_symbol_match_fraction": 0.0
+    },
+    {
+      "sequence_length": 65536,
+      "window": 1,
+      "pattern": "random",
+      "latency_ms": 3.3095359802246094,
+      "random_latency_ratio": 1.0,
+      "key_entropy_bits": 7.997141170676248,
+      "key_collision_probability": 0.003906543371087492,
+      "key_max_code_fraction": 0.00469970703125,
+      "key_unique_code_fraction": 1.0,
+      "latest_route_symbol_match_fraction": 0.003833829192444682
+    },
+    {
+      "sequence_length": 65536,
+      "window": 1,
+      "pattern": "aligned",
+      "latency_ms": 2.6398720741271973,
+      "random_latency_ratio": 0.7976562545024926,
+      "key_entropy_bits": 7.997141170676248,
+      "key_collision_probability": 0.003906543371087492,
+      "key_max_code_fraction": 0.00469970703125,
+      "key_unique_code_fraction": 1.0,
+      "latest_route_symbol_match_fraction": 1.0
+    },
+    {
+      "sequence_length": 65536,
+      "window": 1,
+      "pattern": "periodic64",
+      "latency_ms": 7.1342082023620605,
+      "random_latency_ratio": 2.155652105005331,
+      "key_entropy_bits": 5.790977441389348,
+      "key_collision_probability": 0.019028000305180436,
+      "key_max_code_fraction": 0.0390625,
+      "key_unique_code_fraction": 0.224609375,
+      "latest_route_symbol_match_fraction": 0.0
+    },
+    {
+      "sequence_length": 65536,
+      "window": 1,
+      "pattern": "periodic4",
+      "latency_ms": 2.3306241035461426,
+      "random_latency_ratio": 0.7042147652940668,
+      "key_entropy_bits": 2.0,
+      "key_collision_probability": 0.24998855573357748,
+      "key_max_code_fraction": 0.25,
+      "key_unique_code_fraction": 0.015625,
+      "latest_route_symbol_match_fraction": 0.0
+    },
+    {
+      "sequence_length": 65536,
+      "window": 1,
+      "pattern": "all_match",
+      "latency_ms": 2.4437758922576904,
+      "random_latency_ratio": 0.7384043886695675,
+      "key_entropy_bits": 0.0,
+      "key_collision_probability": 1.0,
+      "key_max_code_fraction": 1.0,
+      "key_unique_code_fraction": 0.00390625,
+      "latest_route_symbol_match_fraction": 1.0
+    },
+    {
+      "sequence_length": 65536,
+      "window": 1,
+      "pattern": "all_mismatch",
+      "latency_ms": 1.390496015548706,
+      "random_latency_ratio": 0.42014833011555197,
+      "key_entropy_bits": 0.0,
+      "key_collision_probability": 1.0,
+      "key_max_code_fraction": 1.0,
+      "key_unique_code_fraction": 0.00390625,
+      "latest_route_symbol_match_fraction": 0.0
+    }
+  ]
+}

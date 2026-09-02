@@ -1,0 +1,2432 @@
+{
+  "compute_capability": [
+    8,
+    6
+  ],
+  "cuda": "12.8",
+  "device": "NVIDIA GeForce RTX 3070",
+  "dropout_p": 0.0,
+  "dtype": "float32",
+  "heads": 4,
+  "repeats": 7,
+  "rows": [
+    {
+      "baseline_ms": 1.6977920532226562,
+      "bits": 8,
+      "extra_mib": 0.125,
+      "gradient_mask": 1,
+      "latency_ms": 1.686527967453003,
+      "latency_ratio": 0.9933654502927656,
+      "max_abs_errors": [
+        1.4901161193847656e-08,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        1.411573169463054e-08,
+        0.0,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.6875519752502441,
+      "bits": 8,
+      "extra_mib": 0.125,
+      "gradient_mask": 1,
+      "latency_ms": 1.7189760208129883,
+      "latency_ratio": 1.0186210830976534,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.404187853244366e-07,
+        0.0,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.686527967453003,
+      "bits": 8,
+      "extra_mib": 0.125,
+      "gradient_mask": 1,
+      "latency_ms": 1.7373759746551514,
+      "latency_ratio": 1.0301495191205985,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        1.7948126540545672e-08,
+        0.0,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.686527967453003,
+      "bits": 8,
+      "extra_mib": 0.125,
+      "gradient_mask": 1,
+      "latency_ms": 1.792896032333374,
+      "latency_ratio": 1.063069256444652,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        1.7298924959163742e-08,
+        0.0,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.51363205909729,
+      "bits": 8,
+      "extra_mib": 0.125,
+      "gradient_mask": 1,
+      "latency_ms": 1.511296033859253,
+      "latency_ratio": 0.9984566756339515,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.409225601240905e-07,
+        0.0,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.5022079944610596,
+      "bits": 8,
+      "extra_mib": 0.25,
+      "gradient_mask": 2,
+      "latency_ms": 1.5030080080032349,
+      "latency_ratio": 1.000532558437397,
+      "max_abs_errors": [
+        0.0,
+        5.960464477539063e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        0.0,
+        2.611526639384465e-08,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.5022399425506592,
+      "bits": 8,
+      "extra_mib": 0.25,
+      "gradient_mask": 2,
+      "latency_ms": 1.5175679922103882,
+      "latency_ratio": 1.0102034629925387,
+      "max_abs_errors": [
+        0.0,
+        2.60770320892334e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        0.0,
+        2.641220646637521e-07,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.5024000406265259,
+      "bits": 8,
+      "extra_mib": 0.25,
+      "gradient_mask": 2,
+      "latency_ms": 1.5429760217666626,
+      "latency_ratio": 1.0270074414556165,
+      "max_abs_errors": [
+        0.0,
+        4.470348358154297e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        0.0,
+        2.781177421695702e-08,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.5039680004119873,
+      "bits": 8,
+      "extra_mib": 0.25,
+      "gradient_mask": 2,
+      "latency_ms": 1.5360000133514404,
+      "latency_ratio": 1.0212983340939956,
+      "max_abs_errors": [
+        0.0,
+        4.470348358154297e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        0.0,
+        3.03866087847382e-08,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.502784013748169,
+      "bits": 8,
+      "extra_mib": 0.25,
+      "gradient_mask": 2,
+      "latency_ms": 1.5092799663543701,
+      "latency_ratio": 1.0043226122628224,
+      "max_abs_errors": [
+        0.0,
+        2.60770320892334e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        0.0,
+        2.643916729994089e-07,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.687391996383667,
+      "bits": 8,
+      "extra_mib": 0.375,
+      "gradient_mask": 3,
+      "latency_ms": 1.6875200271606445,
+      "latency_ratio": 1.00007587494622,
+      "max_abs_errors": [
+        7.450580596923828e-09,
+        4.470348358154297e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        4.164177447307793e-09,
+        2.0221083474325496e-08,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.6876800060272217,
+      "bits": 8,
+      "extra_mib": 0.375,
+      "gradient_mask": 3,
+      "latency_ms": 1.6696959733963013,
+      "latency_ratio": 0.9893439321632691,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        2.60770320892334e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.4026428491197294e-07,
+        2.641574781137024e-07,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.6770559549331665,
+      "bits": 8,
+      "extra_mib": 0.375,
+      "gradient_mask": 3,
+      "latency_ms": 1.6830719709396362,
+      "latency_ratio": 1.003587248230313,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        5.960464477539063e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        1.265504590008959e-08,
+        2.81691434622644e-08,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.6769920587539673,
+      "bits": 8,
+      "extra_mib": 0.375,
+      "gradient_mask": 3,
+      "latency_ms": 1.7274880409240723,
+      "latency_ratio": 1.0301110442989363,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        5.960464477539063e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        1.0748345324884667e-08,
+        2.5311594598065312e-08,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.670143961906433,
+      "bits": 8,
+      "extra_mib": 0.375,
+      "gradient_mask": 3,
+      "latency_ms": 1.6291840076446533,
+      "latency_ratio": 0.9754751954346349,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        2.60770320892334e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.4011183086258825e-07,
+        2.638670650867425e-07,
+        0.0
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 0.7536640167236328,
+      "bits": 8,
+      "extra_mib": 0.5,
+      "gradient_mask": 4,
+      "latency_ms": 0.7536640167236328,
+      "latency_ratio": 1.0,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        1.7881393432617188e-07
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        3.781719115636406e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 0.7537599802017212,
+      "bits": 8,
+      "extra_mib": 0.5,
+      "gradient_mask": 4,
+      "latency_ms": 0.7751680016517639,
+      "latency_ratio": 1.0284016424489841,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        6.169668154143437e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 0.7536640167236328,
+      "bits": 8,
+      "extra_mib": 0.5,
+      "gradient_mask": 4,
+      "latency_ms": 0.7778880000114441,
+      "latency_ratio": 1.0321416211339358,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        2.4139881134033203e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        9.225056601280812e-06
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 0.7545599937438965,
+      "bits": 8,
+      "extra_mib": 0.5,
+      "gradient_mask": 4,
+      "latency_ms": 0.7741439938545227,
+      "latency_ratio": 1.0259541988350804,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        6.117875273048412e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 0.7536960244178772,
+      "bits": 8,
+      "extra_mib": 0.5,
+      "gradient_mask": 4,
+      "latency_ms": 0.7761920094490051,
+      "latency_ratio": 1.0298475569756427,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        2.428889274597168e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        9.224977475241758e-06
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.7782080173492432,
+      "bits": 8,
+      "extra_mib": 0.625,
+      "gradient_mask": 5,
+      "latency_ms": 1.7715200185775757,
+      "latency_ratio": 0.9962389109112008,
+      "max_abs_errors": [
+        7.450580596923828e-09,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        2.7896205345712133e-09,
+        0.0,
+        3.418350402739634e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.772544026374817,
+      "bits": 8,
+      "extra_mib": 0.625,
+      "gradient_mask": 5,
+      "latency_ms": 1.8268159627914429,
+      "latency_ratio": 1.0306181034767425,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.4087873384814884e-07,
+        0.0,
+        8.13531499943565e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.7715200185775757,
+      "bits": 8,
+      "extra_mib": 0.625,
+      "gradient_mask": 5,
+      "latency_ms": 1.8524160385131836,
+      "latency_ratio": 1.0456647506589074,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        2.4139881134033203e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        1.0491506330367883e-08,
+        0.0,
+        9.225082976627164e-06
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.7704960107803345,
+      "bits": 8,
+      "extra_mib": 0.625,
+      "gradient_mask": 5,
+      "latency_ms": 1.8626559972763062,
+      "latency_ratio": 1.052053202003744,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        1.0346140832950823e-08,
+        0.0,
+        5.49166649932431e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.7704960107803345,
+      "bits": 8,
+      "extra_mib": 0.625,
+      "gradient_mask": 5,
+      "latency_ms": 1.8063360452651978,
+      "latency_ratio": 1.0202429343340158,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        0.0,
+        2.4139881134033203e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.401330903012422e-07,
+        0.0,
+        9.224976565747056e-06
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.7776639461517334,
+      "bits": 8,
+      "extra_mib": 0.75,
+      "gradient_mask": 6,
+      "latency_ms": 1.7703360319137573,
+      "latency_ratio": 0.9958777842944728,
+      "max_abs_errors": [
+        0.0,
+        2.9802322387695312e-08,
+        5.960464477539063e-08
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        0.0,
+        1.204647936958736e-08,
+        3.3200894478113696e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.8566399812698364,
+      "bits": 8,
+      "extra_mib": 0.75,
+      "gradient_mask": 6,
+      "latency_ms": 1.8114240169525146,
+      "latency_ratio": 0.9756463478253891,
+      "max_abs_errors": [
+        0.0,
+        2.60770320892334e-07,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        0.0,
+        2.6466804570191016e-07,
+        5.2027637309493e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.770367980003357,
+      "bits": 8,
+      "extra_mib": 0.75,
+      "gradient_mask": 6,
+      "latency_ms": 1.8472959995269775,
+      "latency_ratio": 1.0434531240920177,
+      "max_abs_errors": [
+        0.0,
+        2.9802322387695312e-08,
+        2.407468855381012e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        0.0,
+        1.7627597159730612e-08,
+        9.225437679560855e-06
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.7694720029830933,
+      "bits": 8,
+      "extra_mib": 0.75,
+      "gradient_mask": 6,
+      "latency_ms": 1.800927996635437,
+      "latency_ratio": 1.017777050780862,
+      "max_abs_errors": [
+        0.0,
+        2.9802322387695312e-08,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        0.0,
+        1.9246115812165954e-08,
+        4.678460285845176e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.7704960107803345,
+      "bits": 8,
+      "extra_mib": 0.75,
+      "gradient_mask": 6,
+      "latency_ms": 1.8042880296707153,
+      "latency_ratio": 1.019086187534242,
+      "max_abs_errors": [
+        0.0,
+        2.60770320892334e-07,
+        2.407468855381012e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        0.0,
+        2.648098984536773e-07,
+        9.225484973285347e-06
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.950719952583313,
+      "bits": 8,
+      "extra_mib": 0.875,
+      "gradient_mask": 7,
+      "latency_ms": 1.9496959447860718,
+      "latency_ratio": 0.9994750616069287,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        2.9802322387695312e-08,
+        4.470348358154297e-08
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        7.506518961974962e-09,
+        1.7075974412250616e-08,
+        3.554957572760031e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.9496959447860718,
+      "bits": 8,
+      "extra_mib": 0.875,
+      "gradient_mask": 7,
+      "latency_ms": 1.9640320539474487,
+      "latency_ratio": 1.0073529973736237,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        2.60770320892334e-07,
+        1.7881393432617188e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.404021302027104e-07,
+        2.650240560342354e-07,
+        4.866276270831804e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 2.008064031600952,
+      "bits": 8,
+      "extra_mib": 0.875,
+      "gradient_mask": 7,
+      "latency_ms": 2.0101120471954346,
+      "latency_ratio": 1.0010198955622196,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        2.9802322387695312e-08,
+        2.407468855381012e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        1.2168605678652966e-08,
+        1.9429421627137344e-08,
+        9.224949280906003e-06
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.9513920545578003,
+      "bits": 8,
+      "extra_mib": 0.875,
+      "gradient_mask": 7,
+      "latency_ms": 1.9875839948654175,
+      "latency_ratio": 1.0185467293581958,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        4.470348358154297e-08,
+        1.7881393432617188e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        1.20189342922572e-08,
+        2.4633033390841774e-08,
+        4.172517620304461e-08
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 1.950719952583313,
+      "bits": 8,
+      "extra_mib": 0.875,
+      "gradient_mask": 7,
+      "latency_ms": 1.9456000328063965,
+      "latency_ratio": 0.9973753691450501,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        2.60770320892334e-07,
+        2.407468855381012e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.4035506385189365e-07,
+        2.653726198786899e-07,
+        9.224676432495471e-06
+      ],
+      "seq_len": 1024,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 19.206911087036133,
+      "bits": 8,
+      "extra_mib": 0.5,
+      "gradient_mask": 1,
+      "latency_ms": 19.165184020996094,
+      "latency_ratio": 0.9978274973080807,
+      "max_abs_errors": [
+        1.4901161193847656e-08,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        3.9411265362332415e-08,
+        0.0,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 19.120351791381836,
+      "bits": 8,
+      "extra_mib": 0.5,
+      "gradient_mask": 1,
+      "latency_ms": 19.6997127532959,
+      "latency_ratio": 1.0303007480320105,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.7513593181538454e-07,
+        0.0,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 18.940927505493164,
+      "bits": 8,
+      "extra_mib": 0.5,
+      "gradient_mask": 1,
+      "latency_ms": 19.43142318725586,
+      "latency_ratio": 1.0258960751325639,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        4.246763296578138e-08,
+        0.0,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 19.64236831665039,
+      "bits": 8,
+      "extra_mib": 0.5,
+      "gradient_mask": 1,
+      "latency_ms": 20.50115203857422,
+      "latency_ratio": 1.0437209865979276,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        3.993460850892916e-08,
+        0.0,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 19.2675838470459,
+      "bits": 8,
+      "extra_mib": 0.5,
+      "gradient_mask": 1,
+      "latency_ms": 19.075071334838867,
+      "latency_ratio": 0.9900084767381694,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.74753091389357e-07,
+        0.0,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 19.298303604125977,
+      "bits": 8,
+      "extra_mib": 1.0,
+      "gradient_mask": 2,
+      "latency_ms": 19.015552520751953,
+      "latency_ratio": 0.9853483969796407,
+      "max_abs_errors": [
+        0.0,
+        2.9802322387695312e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        0.0,
+        3.220235100798163e-08,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 18.925439834594727,
+      "bits": 8,
+      "extra_mib": 1.0,
+      "gradient_mask": 2,
+      "latency_ms": 19.08198356628418,
+      "latency_ratio": 1.0082716033581052,
+      "max_abs_errors": [
+        0.0,
+        2.980232238769531e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        0.0,
+        3.1375734010907763e-07,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 19.0515193939209,
+      "bits": 8,
+      "extra_mib": 1.0,
+      "gradient_mask": 2,
+      "latency_ms": 19.474271774291992,
+      "latency_ratio": 1.0221899561725238,
+      "max_abs_errors": [
+        0.0,
+        5.960464477539063e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        0.0,
+        4.057095637222119e-08,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 19.176095962524414,
+      "bits": 8,
+      "extra_mib": 1.0,
+      "gradient_mask": 2,
+      "latency_ms": 18.856735229492188,
+      "latency_ratio": 0.983345894093545,
+      "max_abs_errors": [
+        0.0,
+        5.960464477539063e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        0.0,
+        4.054225755112384e-08,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 18.929664611816406,
+      "bits": 8,
+      "extra_mib": 1.0,
+      "gradient_mask": 2,
+      "latency_ms": 18.946880340576172,
+      "latency_ratio": 1.00090945767465,
+      "max_abs_errors": [
+        0.0,
+        2.980232238769531e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        0.0,
+        3.134016139938467e-07,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 21.934080123901367,
+      "bits": 8,
+      "extra_mib": 1.5,
+      "gradient_mask": 3,
+      "latency_ms": 21.554176330566406,
+      "latency_ratio": 0.9826797480820277,
+      "max_abs_errors": [
+        2.2351741790771484e-08,
+        4.470348358154297e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        3.668550618840527e-08,
+        3.368277035065148e-08,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 21.601503372192383,
+      "bits": 8,
+      "extra_mib": 1.5,
+      "gradient_mask": 3,
+      "latency_ms": 20.985855102539062,
+      "latency_ratio": 0.9714997489273898,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        2.980232238769531e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.740414117852197e-07,
+        3.145724463138322e-07,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 21.750783920288086,
+      "bits": 8,
+      "extra_mib": 1.5,
+      "gradient_mask": 3,
+      "latency_ms": 20.825088500976562,
+      "latency_ratio": 0.9574408249972048,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        8.940696716308594e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        3.6998081043293496e-08,
+        4.072453307912838e-08,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 21.482175827026367,
+      "bits": 8,
+      "extra_mib": 1.5,
+      "gradient_mask": 3,
+      "latency_ms": 22.135648727416992,
+      "latency_ratio": 1.030419306947879,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        8.940696716308594e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        6.431258725569933e-08,
+        6.060776769345466e-08,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 21.195775985717773,
+      "bits": 8,
+      "extra_mib": 1.5,
+      "gradient_mask": 3,
+      "latency_ms": 21.584896087646484,
+      "latency_ratio": 1.0183583796220015,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        2.980232238769531e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.7402305136092764e-07,
+        3.1400620059685025e-07,
+        0.0
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 9.885824203491211,
+      "bits": 8,
+      "extra_mib": 2.0,
+      "gradient_mask": 4,
+      "latency_ms": 9.873023986816406,
+      "latency_ratio": 0.9987051947909124,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        5.960464477539063e-08
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        4.0178058213768963e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 9.462783813476562,
+      "bits": 8,
+      "extra_mib": 2.0,
+      "gradient_mask": 4,
+      "latency_ms": 9.684991836547852,
+      "latency_ratio": 1.023482310010594,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        5.960464477539063e-08
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        4.903905903574923e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 9.466879844665527,
+      "bits": 8,
+      "extra_mib": 2.0,
+      "gradient_mask": 4,
+      "latency_ms": 9.279487609863281,
+      "latency_ratio": 0.9802054913681154,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        5.788169801235199e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        3.43191422871314e-05
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 10.158080101013184,
+      "bits": 8,
+      "extra_mib": 2.0,
+      "gradient_mask": 4,
+      "latency_ms": 9.59609603881836,
+      "latency_ratio": 0.9446761537016457,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        5.960464477539063e-08
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        4.073065795751063e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 9.56390380859375,
+      "bits": 8,
+      "extra_mib": 2.0,
+      "gradient_mask": 4,
+      "latency_ms": 9.595904350280762,
+      "latency_ratio": 1.0033459706755161,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        5.788169801235199e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        3.431908044149168e-05
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 22.933183670043945,
+      "bits": 8,
+      "extra_mib": 2.5,
+      "gradient_mask": 5,
+      "latency_ms": 22.622047424316406,
+      "latency_ratio": 0.9864329240020018,
+      "max_abs_errors": [
+        2.2351741790771484e-08,
+        0.0,
+        5.960464477539063e-08
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        3.831332051618119e-08,
+        0.0,
+        2.8124357953629442e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 22.499967575073242,
+      "bits": 8,
+      "extra_mib": 2.5,
+      "gradient_mask": 5,
+      "latency_ms": 23.658496856689453,
+      "latency_ratio": 1.0514902644970785,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.740731019912346e-07,
+        0.0,
+        8.431045728229947e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 22.92406463623047,
+      "bits": 8,
+      "extra_mib": 2.5,
+      "gradient_mask": 5,
+      "latency_ms": 24.284160614013672,
+      "latency_ratio": 1.0593304895691853,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        5.788169801235199e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        4.155310762143927e-08,
+        0.0,
+        3.431962613831274e-05
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 22.923871994018555,
+      "bits": 8,
+      "extra_mib": 2.5,
+      "gradient_mask": 5,
+      "latency_ms": 24.036352157592773,
+      "latency_ratio": 1.0485293306411978,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        4.044912671474776e-08,
+        0.0,
+        7.764347742522659e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 23.113727569580078,
+      "bits": 8,
+      "extra_mib": 2.5,
+      "gradient_mask": 5,
+      "latency_ms": 22.965248107910156,
+      "latency_ratio": 0.9935761351680317,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        0.0,
+        5.788169801235199e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.739654121342028e-07,
+        0.0,
+        3.4319673432037234e-05
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 22.529695510864258,
+      "bits": 8,
+      "extra_mib": 3.0,
+      "gradient_mask": 6,
+      "latency_ms": 22.90073585510254,
+      "latency_ratio": 1.0164689462429424,
+      "max_abs_errors": [
+        0.0,
+        4.470348358154297e-08,
+        8.940696716308594e-08
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        0.0,
+        5.999565644287941e-08,
+        6.924830131538329e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 22.485567092895508,
+      "bits": 8,
+      "extra_mib": 3.0,
+      "gradient_mask": 6,
+      "latency_ms": 23.274560928344727,
+      "latency_ratio": 1.0350889009020594,
+      "max_abs_errors": [
+        0.0,
+        2.980232238769531e-07,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        0.0,
+        3.146966776057525e-07,
+        7.729899920150274e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 23.10860824584961,
+      "bits": 8,
+      "extra_mib": 3.0,
+      "gradient_mask": 6,
+      "latency_ms": 23.445472717285156,
+      "latency_ratio": 1.0145774452468832,
+      "max_abs_errors": [
+        0.0,
+        8.940696716308594e-08,
+        5.790963768959045e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        0.0,
+        6.336631486192346e-08,
+        3.4319520636927336e-05
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 22.413984298706055,
+      "bits": 8,
+      "extra_mib": 3.0,
+      "gradient_mask": 6,
+      "latency_ms": 23.364416122436523,
+      "latency_ratio": 1.0424035196538144,
+      "max_abs_errors": [
+        0.0,
+        8.940696716308594e-08,
+        8.940696716308594e-08
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        0.0,
+        6.344396297208732e-08,
+        6.82437288901383e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 22.940160751342773,
+      "bits": 8,
+      "extra_mib": 3.0,
+      "gradient_mask": 6,
+      "latency_ms": 23.459840774536133,
+      "latency_ratio": 1.022653721951924,
+      "max_abs_errors": [
+        0.0,
+        2.980232238769531e-07,
+        5.793757736682892e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        0.0,
+        3.146613494209305e-07,
+        3.431948789511807e-05
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 25.07360076904297,
+      "bits": 8,
+      "extra_mib": 3.5,
+      "gradient_mask": 7,
+      "latency_ms": 25.248287200927734,
+      "latency_ratio": 1.0069669463709592,
+      "max_abs_errors": [
+        2.2351741790771484e-08,
+        4.470348358154297e-08,
+        5.960464477539063e-08
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        3.595117092913824e-08,
+        3.082162081113893e-08,
+        2.6074136627585176e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 25.397247314453125,
+      "bits": 8,
+      "extra_mib": 3.5,
+      "gradient_mask": 7,
+      "latency_ms": 25.012895584106445,
+      "latency_ratio": 0.9848664020321622,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        2.980232238769531e-07,
+        5.960464477539063e-08
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.7401944180383e-07,
+        3.1447333981304837e-07,
+        5.311537876195871e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 24.961023330688477,
+      "bits": 8,
+      "extra_mib": 3.5,
+      "gradient_mask": 7,
+      "latency_ms": 25.484159469604492,
+      "latency_ratio": 1.0209581206661844,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        8.940696716308594e-08,
+        5.784444510936737e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        6.127145724121874e-08,
+        5.862280971768996e-08,
+        3.431936420383863e-05
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 24.654848098754883,
+      "bits": 8,
+      "extra_mib": 3.5,
+      "gradient_mask": 7,
+      "latency_ms": 25.56211280822754,
+      "latency_ratio": 1.0367986331060979,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        8.940696716308594e-08,
+        5.960464477539063e-08
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        3.9598042178567994e-08,
+        4.0121037159224215e-08,
+        4.064108338752703e-08
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 25.16054344177246,
+      "bits": 8,
+      "extra_mib": 3.5,
+      "gradient_mask": 7,
+      "latency_ms": 24.826879501342773,
+      "latency_ratio": 0.9867386035916964,
+      "max_abs_errors": [
+        1.7881393432617188e-07,
+        2.980232238769531e-07,
+        5.7872384786605835e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.7409581093706947e-07,
+        3.138460158425005e-07,
+        3.431958975852467e-05
+      ],
+      "seq_len": 4096,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 73.16035461425781,
+      "bits": 8,
+      "extra_mib": 1.0,
+      "gradient_mask": 1,
+      "latency_ms": 74.01538848876953,
+      "latency_ratio": 1.011687120422255,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        6.551010045541261e-08,
+        0.0,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 72.92108917236328,
+      "bits": 8,
+      "extra_mib": 1.0,
+      "gradient_mask": 1,
+      "latency_ms": 73.96556854248047,
+      "latency_ratio": 1.0143234197674744,
+      "max_abs_errors": [
+        2.384185791015625e-07,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.9080649710522266e-07,
+        0.0,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 72.99788665771484,
+      "bits": 8,
+      "extra_mib": 1.0,
+      "gradient_mask": 1,
+      "latency_ms": 75.11449432373047,
+      "latency_ratio": 1.0289954649775046,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        6.692218335047073e-08,
+        0.0,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 73.08697509765625,
+      "bits": 8,
+      "extra_mib": 1.0,
+      "gradient_mask": 1,
+      "latency_ms": 78.44659423828125,
+      "latency_ratio": 1.073332069544042,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        6.300727761754388e-08,
+        0.0,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 74.0997085571289,
+      "bits": 8,
+      "extra_mib": 1.0,
+      "gradient_mask": 1,
+      "latency_ms": 72.283935546875,
+      "latency_ratio": 0.9754955445087345,
+      "max_abs_errors": [
+        2.384185791015625e-07,
+        0.0,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.90501901645257e-07,
+        0.0,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 73.6727066040039,
+      "bits": 8,
+      "extra_mib": 2.0,
+      "gradient_mask": 2,
+      "latency_ms": 73.43513488769531,
+      "latency_ratio": 0.9967753089677354,
+      "max_abs_errors": [
+        0.0,
+        5.960464477539063e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        0.0,
+        4.989139057443026e-08,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 72.11519622802734,
+      "bits": 8,
+      "extra_mib": 2.0,
+      "gradient_mask": 2,
+      "latency_ms": 73.81065368652344,
+      "latency_ratio": 1.02351040484082,
+      "max_abs_errors": [
+        0.0,
+        2.384185791015625e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        0.0,
+        3.4571587548271054e-07,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 73.74540710449219,
+      "bits": 8,
+      "extra_mib": 2.0,
+      "gradient_mask": 2,
+      "latency_ms": 74.39769744873047,
+      "latency_ratio": 1.0088451656835256,
+      "max_abs_errors": [
+        0.0,
+        5.960464477539063e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        0.0,
+        5.119001400544221e-08,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 72.76441955566406,
+      "bits": 8,
+      "extra_mib": 2.0,
+      "gradient_mask": 2,
+      "latency_ms": 74.49491119384766,
+      "latency_ratio": 1.0237821128616271,
+      "max_abs_errors": [
+        0.0,
+        5.960464477539063e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        0.0,
+        5.099447264456103e-08,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 73.98194885253906,
+      "bits": 8,
+      "extra_mib": 2.0,
+      "gradient_mask": 2,
+      "latency_ms": 72.22886657714844,
+      "latency_ratio": 0.9763039186912355,
+      "max_abs_errors": [
+        0.0,
+        2.384185791015625e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        0.0,
+        3.459695392393769e-07,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 81.97529602050781,
+      "bits": 8,
+      "extra_mib": 3.0,
+      "gradient_mask": 3,
+      "latency_ms": 81.30355072021484,
+      "latency_ratio": 0.9918055154064351,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        5.960464477539063e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        7.848657190834274e-08,
+        5.289907534233862e-08,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 81.87171173095703,
+      "bits": 8,
+      "extra_mib": 3.0,
+      "gradient_mask": 3,
+      "latency_ms": 80.64102172851562,
+      "latency_ratio": 0.9849680680124823,
+      "max_abs_errors": [
+        2.384185791015625e-07,
+        2.384185791015625e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.90375311351454e-07,
+        3.453358488059166e-07,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 81.13862609863281,
+      "bits": 8,
+      "extra_mib": 3.0,
+      "gradient_mask": 3,
+      "latency_ms": 82.33187103271484,
+      "latency_ratio": 1.0147062501727786,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        5.960464477539063e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        6.644513916853612e-08,
+        4.9776520683053604e-08,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 81.72441864013672,
+      "bits": 8,
+      "extra_mib": 3.0,
+      "gradient_mask": 3,
+      "latency_ms": 83.12115478515625,
+      "latency_ratio": 1.0170908055176249,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        5.960464477539063e-08,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        6.3855438270366e-08,
+        4.678191345419691e-08,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 82.56304168701172,
+      "bits": 8,
+      "extra_mib": 3.0,
+      "gradient_mask": 3,
+      "latency_ms": 79.08454132080078,
+      "latency_ratio": 0.957868553590872,
+      "max_abs_errors": [
+        2.384185791015625e-07,
+        2.384185791015625e-07,
+        0.0
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.904825180394255e-07,
+        3.45432681569946e-07,
+        0.0
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 36.562591552734375,
+      "bits": 8,
+      "extra_mib": 4.0,
+      "gradient_mask": 4,
+      "latency_ms": 36.48835372924805,
+      "latency_ratio": 0.9979695688862958,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        5.9392100126842706e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 36.91593551635742,
+      "bits": 8,
+      "extra_mib": 4.0,
+      "gradient_mask": 4,
+      "latency_ms": 36.52608108520508,
+      "latency_ratio": 0.9894393999312411,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        7.305668248136499e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 36.75116729736328,
+      "bits": 8,
+      "extra_mib": 4.0,
+      "gradient_mask": 4,
+      "latency_ms": 37.07254409790039,
+      "latency_ratio": 1.0087446691947706,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        8.400529623031616e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        6.074979683035053e-05
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 37.06150436401367,
+      "bits": 8,
+      "extra_mib": 4.0,
+      "gradient_mask": 4,
+      "latency_ms": 36.2718391418457,
+      "latency_ratio": 0.9786931147097546,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        5.825024018690783e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 36.56089782714844,
+      "bits": 8,
+      "extra_mib": 4.0,
+      "gradient_mask": 4,
+      "latency_ms": 37.136383056640625,
+      "latency_ratio": 1.0157404567090489,
+      "max_abs_errors": [
+        0.0,
+        0.0,
+        8.400529623031616e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        0.0,
+        0.0,
+        6.074947668821551e-05
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 86.83821105957031,
+      "bits": 8,
+      "extra_mib": 5.0,
+      "gradient_mask": 5,
+      "latency_ms": 87.03135681152344,
+      "latency_ratio": 1.0022242023366952,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        7.227341569659984e-08,
+        0.0,
+        4.6824045085713806e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 87.04307556152344,
+      "bits": 8,
+      "extra_mib": 5.0,
+      "gradient_mask": 5,
+      "latency_ms": 89.4935073852539,
+      "latency_ratio": 1.0281519444013494,
+      "max_abs_errors": [
+        2.384185791015625e-07,
+        0.0,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.9143569690859294e-07,
+        0.0,
+        6.665117524562447e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 87.46063995361328,
+      "bits": 8,
+      "extra_mib": 5.0,
+      "gradient_mask": 5,
+      "latency_ms": 91.01209259033203,
+      "latency_ratio": 1.0406062960275884,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        0.0,
+        8.411705493927002e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        7.223685827284498e-08,
+        0.0,
+        6.074929842725396e-05
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 86.77273559570312,
+      "bits": 8,
+      "extra_mib": 5.0,
+      "gradient_mask": 5,
+      "latency_ms": 91.85881805419922,
+      "latency_ratio": 1.0586138309871143,
+      "max_abs_errors": [
+        3.3527612686157227e-08,
+        0.0,
+        8.940696716308594e-08
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        6.998849499950666e-08,
+        0.0,
+        6.122347429027286e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 86.60173034667969,
+      "bits": 8,
+      "extra_mib": 5.0,
+      "gradient_mask": 5,
+      "latency_ms": 89.63072204589844,
+      "latency_ratio": 1.0349761106053337,
+      "max_abs_errors": [
+        2.384185791015625e-07,
+        0.0,
+        8.409842848777771e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.912397008003609e-07,
+        0.0,
+        6.0749069234589115e-05
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 86.78297424316406,
+      "bits": 8,
+      "extra_mib": 6.0,
+      "gradient_mask": 6,
+      "latency_ms": 87.70252990722656,
+      "latency_ratio": 1.0105960376684708,
+      "max_abs_errors": [
+        0.0,
+        5.960464477539063e-08,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        0.0,
+        4.412827081523574e-08,
+        6.623639592362451e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 87.92131042480469,
+      "bits": 8,
+      "extra_mib": 6.0,
+      "gradient_mask": 6,
+      "latency_ms": 88.56877136230469,
+      "latency_ratio": 1.0073640956256418,
+      "max_abs_errors": [
+        0.0,
+        2.384185791015625e-07,
+        1.4901161193847656e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        0.0,
+        3.455968169419066e-07,
+        7.290779535651382e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 87.5683822631836,
+      "bits": 8,
+      "extra_mib": 6.0,
+      "gradient_mask": 6,
+      "latency_ms": 90.51830291748047,
+      "latency_ratio": 1.033687052084975,
+      "max_abs_errors": [
+        0.0,
+        5.960464477539063e-08,
+        8.40798020362854e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        0.0,
+        4.06946156772392e-08,
+        6.074924749555066e-05
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 87.55891418457031,
+      "bits": 8,
+      "extra_mib": 6.0,
+      "gradient_mask": 6,
+      "latency_ms": 88.59442901611328,
+      "latency_ratio": 1.011826492381577,
+      "max_abs_errors": [
+        0.0,
+        5.960464477539063e-08,
+        1.4901161193847656e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        0.0,
+        4.827260013939849e-08,
+        6.44308570940666e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 86.90054321289062,
+      "bits": 8,
+      "extra_mib": 6.0,
+      "gradient_mask": 6,
+      "latency_ms": 88.93746948242188,
+      "latency_ratio": 1.0234397415047354,
+      "max_abs_errors": [
+        0.0,
+        2.384185791015625e-07,
+        8.409842848777771e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        0.0,
+        3.4531458936726267e-07,
+        6.074913835618645e-05
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 95.52178955078125,
+      "bits": 8,
+      "extra_mib": 7.0,
+      "gradient_mask": 7,
+      "latency_ms": 94.94947052001953,
+      "latency_ratio": 0.9940084976061146,
+      "max_abs_errors": [
+        3.3527612686157227e-08,
+        5.960464477539063e-08,
+        1.7881393432617188e-07
+      ],
+      "pattern": "random",
+      "plan": "baseline",
+      "relative_l2_errors": [
+        6.933183271939924e-08,
+        4.80706923156049e-08,
+        6.63835706404825e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 95.37535858154297,
+      "bits": 8,
+      "extra_mib": 7.0,
+      "gradient_mask": 7,
+      "latency_ms": 96.302978515625,
+      "latency_ratio": 1.0097259915755803,
+      "max_abs_errors": [
+        2.384185791015625e-07,
+        2.384185791015625e-07,
+        1.1920928955078125e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_utility",
+      "relative_l2_errors": [
+        2.916818857556791e-07,
+        3.4505433177400846e-07,
+        7.954946568133892e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 95.92095947265625,
+      "bits": 8,
+      "extra_mib": 7.0,
+      "gradient_mask": 7,
+      "latency_ms": 97.78790283203125,
+      "latency_ratio": 1.0194633515932168,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        5.960464477539063e-08,
+        8.40798020362854e-06
+      ],
+      "pattern": "random",
+      "plan": "tc_value",
+      "relative_l2_errors": [
+        6.800570417908602e-08,
+        4.824393329272425e-08,
+        6.0749367548851296e-05
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 95.91353607177734,
+      "bits": 8,
+      "extra_mib": 7.0,
+      "gradient_mask": 7,
+      "latency_ms": 97.32093048095703,
+      "latency_ratio": 1.0146735744173425,
+      "max_abs_errors": [
+        2.9802322387695312e-08,
+        5.960464477539063e-08,
+        1.4901161193847656e-07
+      ],
+      "pattern": "random",
+      "plan": "tc_gate",
+      "relative_l2_errors": [
+        7.316206307450557e-08,
+        5.395605739977327e-08,
+        6.551190523396144e-08
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    },
+    {
+      "baseline_ms": 96.03993225097656,
+      "bits": 8,
+      "extra_mib": 7.0,
+      "gradient_mask": 7,
+      "latency_ms": 95.6385269165039,
+      "latency_ratio": 0.9958204329692395,
+      "max_abs_errors": [
+        2.384185791015625e-07,
+        2.384185791015625e-07,
+        8.404254913330078e-06
+      ],
+      "pattern": "random",
+      "plan": "tensor_core",
+      "relative_l2_errors": [
+        2.9189797601247847e-07,
+        3.4521511338425626e-07,
+        6.074927296140231e-05
+      ],
+      "seq_len": 8192,
+      "value_dim": 64,
+      "window": 32
+    }
+  ],
+  "torch": "2.11.0+cu128",
+  "value_heads": 2,
+  "warmup": 3
+}

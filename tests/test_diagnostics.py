@@ -44,9 +44,9 @@ def test_diagnostics_summarize_detached_inspection():
     assert diagnostics.route_rows == 24
     assert diagnostics.competitive_route_count > 0
     assert diagnostics.hard_nonnull_route_fraction == torch.tensor(5 / 6)
-    assert diagnostics.max_exact_suffix_length == torch.tensor(3.0)
-    assert diagnostics.soft_hard_score_gap_mean == 0
-    assert diagnostics.soft_hard_score_gap_quantile == 0
+    assert diagnostics.max_exact_suffix_length == torch.tensor(5.0)
+    assert diagnostics.soft_hard_score_gap_mean == torch.tensor(1 / 3)
+    assert diagnostics.soft_hard_score_gap_quantile == 1
     assert 0 < diagnostics.hard_selected_route_probability_mean <= 1
     assert diagnostics.effective_route_count_mean >= 1
     assert diagnostics.soft_hard_route_agreement == 1

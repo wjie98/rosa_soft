@@ -1,0 +1,618 @@
+{
+  "schema_version": 1,
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 3070",
+  "baselines": [
+    "production",
+    "bitflip"
+  ],
+  "estimators": [
+    "production",
+    "bitflip",
+    "state_linear_delta",
+    "state_quadratic_delta",
+    "state_cubic_delta",
+    "delta_rule"
+  ],
+  "model_seeds": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "gradient_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "steps": 500,
+  "success_threshold": 0.001,
+  "sequence_length": 16,
+  "qk_bits": 8,
+  "value_bits": 4,
+  "max_suffix_length": 3,
+  "fingerprint_length": 3,
+  "sketch_dim": 32,
+  "sketch_seed": 0,
+  "scale": 1.0,
+  "mismatch_scale": 3.0,
+  "proxy_has_trainable_parameters": false,
+  "proxy_has_auxiliary_loss": false,
+  "proxy_uses_attention_scale": false,
+  "state_dimensions": {
+    "local_feature": 256,
+    "state_linear": 9,
+    "state_quadratic": 37,
+    "state_cubic": 93,
+    "single_suffix": 16777216,
+    "single_suffix_sketch": 32,
+    "exact_multi_suffix": 16843008,
+    "sketch_multi_suffix": 96,
+    "exact_single_delta_memory_floats_per_head": 67108864,
+    "single_sketch_delta_memory_floats_per_head": 128,
+    "multi_sketch_delta_memory_floats_per_head": 384,
+    "state_linear_delta_memory_floats_per_head": 36,
+    "state_quadratic_delta_memory_floats_per_head": 148,
+    "state_cubic_delta_memory_floats_per_head": 372,
+    "state_full_delta_memory_floats_per_head": 1024
+  },
+  "fits": [
+    {
+      "estimator": "production",
+      "model_seed": 0,
+      "initial_loss": 1.9436928033828735,
+      "initial_accuracy": 0.25,
+      "initial_gradient_norms": {
+        "query_key": 0.015130961313843727,
+        "value": 0.11524654924869537
+      },
+      "final_loss": 0.00020695349667221308,
+      "final_accuracy": 1.0,
+      "best_loss": 0.00013588917499873787,
+      "best_step": 500,
+      "first_below_threshold": 79,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 1088,
+      "step_ms": 4.38272486400092
+    },
+    {
+      "estimator": "production",
+      "model_seed": 1,
+      "initial_loss": 1.9008742570877075,
+      "initial_accuracy": 0.4545454680919647,
+      "initial_gradient_norms": {
+        "query_key": 0.022080399096012115,
+        "value": 0.06566180288791656
+      },
+      "final_loss": 0.2524324655532837,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.2524324655532837,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 3.1727621220052242
+    },
+    {
+      "estimator": "production",
+      "model_seed": 2,
+      "initial_loss": 1.9898765087127686,
+      "initial_accuracy": 0.3636363744735718,
+      "initial_gradient_norms": {
+        "query_key": 0.009832359850406647,
+        "value": 0.19753114879131317
+      },
+      "final_loss": 0.3668096661567688,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.3021869957447052,
+      "best_step": 469,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 3.1851751999929547
+    },
+    {
+      "estimator": "production",
+      "model_seed": 3,
+      "initial_loss": 1.8237944841384888,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.022325119003653526,
+        "value": 0.10738459974527359
+      },
+      "final_loss": 0.0002218478621216491,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0002218478621216491,
+      "best_step": 500,
+      "first_below_threshold": 138,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 1088,
+      "step_ms": 3.1966209180100122
+    },
+    {
+      "estimator": "bitflip",
+      "model_seed": 0,
+      "initial_loss": 1.9436928033828735,
+      "initial_accuracy": 0.25,
+      "initial_gradient_norms": {
+        "query_key": 0.0,
+        "value": 0.0
+      },
+      "final_loss": 0.6932643055915833,
+      "final_accuracy": 0.5,
+      "best_loss": 0.6932643055915833,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 1088,
+      "step_ms": 10.13302024200675
+    },
+    {
+      "estimator": "bitflip",
+      "model_seed": 1,
+      "initial_loss": 1.9008742570877075,
+      "initial_accuracy": 0.4545454680919647,
+      "initial_gradient_norms": {
+        "query_key": 0.5031053423881531,
+        "value": 0.0
+      },
+      "final_loss": 0.5043100714683533,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.5043100714683533,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 10.248850160001894
+    },
+    {
+      "estimator": "bitflip",
+      "model_seed": 2,
+      "initial_loss": 1.9898765087127686,
+      "initial_accuracy": 0.3636363744735718,
+      "initial_gradient_norms": {
+        "query_key": 0.0,
+        "value": 0.0
+      },
+      "final_loss": 0.6392377614974976,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.6392377614974976,
+      "best_step": 500,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 10.126879236006062
+    },
+    {
+      "estimator": "bitflip",
+      "model_seed": 3,
+      "initial_loss": 1.8237944841384888,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.09557244926691055,
+        "value": 0.0
+      },
+      "final_loss": 0.00022134494793135673,
+      "final_accuracy": 1.0,
+      "best_loss": 0.00021743919933214784,
+      "best_step": 495,
+      "first_below_threshold": 156,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 1088,
+      "step_ms": 10.31154864000564
+    },
+    {
+      "estimator": "state_linear_delta",
+      "model_seed": 0,
+      "initial_loss": 1.9436928033828735,
+      "initial_accuracy": 0.25,
+      "initial_gradient_norms": {
+        "query_key": 0.18714819848537445,
+        "value": 0.17728964984416962
+      },
+      "final_loss": 0.0004042120126541704,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0004042120126541704,
+      "best_step": 500,
+      "first_below_threshold": 317,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 1088,
+      "step_ms": 28.703135711999494
+    },
+    {
+      "estimator": "state_linear_delta",
+      "model_seed": 1,
+      "initial_loss": 1.9008742570877075,
+      "initial_accuracy": 0.4545454680919647,
+      "initial_gradient_norms": {
+        "query_key": 0.2003054916858673,
+        "value": 0.15178599953651428
+      },
+      "final_loss": 0.03104560263454914,
+      "final_accuracy": 1.0,
+      "best_loss": 0.019096704199910164,
+      "best_step": 494,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 27.33928644200205
+    },
+    {
+      "estimator": "state_linear_delta",
+      "model_seed": 2,
+      "initial_loss": 1.9898765087127686,
+      "initial_accuracy": 0.3636363744735718,
+      "initial_gradient_norms": {
+        "query_key": 0.16473747789859772,
+        "value": 0.34058678150177
+      },
+      "final_loss": 0.3362574577331543,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.3071644604206085,
+      "best_step": 240,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 27.864876142004505
+    },
+    {
+      "estimator": "state_linear_delta",
+      "model_seed": 3,
+      "initial_loss": 1.8237944841384888,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.3349917232990265,
+        "value": 0.23909567296504974
+      },
+      "final_loss": 0.00023554876679554582,
+      "final_accuracy": 1.0,
+      "best_loss": 0.00023554876679554582,
+      "best_step": 500,
+      "first_below_threshold": 170,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 1088,
+      "step_ms": 28.62506163000944
+    },
+    {
+      "estimator": "state_quadratic_delta",
+      "model_seed": 0,
+      "initial_loss": 1.9436928033828735,
+      "initial_accuracy": 0.25,
+      "initial_gradient_norms": {
+        "query_key": 0.1842769831418991,
+        "value": 0.12301938980817795
+      },
+      "final_loss": 0.6933149695396423,
+      "final_accuracy": 0.5,
+      "best_loss": 0.5501075387001038,
+      "best_step": 56,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 1088,
+      "step_ms": 53.260682776002795
+    },
+    {
+      "estimator": "state_quadratic_delta",
+      "model_seed": 1,
+      "initial_loss": 1.9008742570877075,
+      "initial_accuracy": 0.4545454680919647,
+      "initial_gradient_norms": {
+        "query_key": 0.19081276655197144,
+        "value": 0.09772299975156784
+      },
+      "final_loss": 0.0007547046989202499,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0007547046989202499,
+      "best_step": 500,
+      "first_below_threshold": 458,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 52.86105744000815
+    },
+    {
+      "estimator": "state_quadratic_delta",
+      "model_seed": 2,
+      "initial_loss": 1.9898765087127686,
+      "initial_accuracy": 0.3636363744735718,
+      "initial_gradient_norms": {
+        "query_key": 0.12427551299333572,
+        "value": 0.23717422783374786
+      },
+      "final_loss": 0.7104917168617249,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.30929651856422424,
+      "best_step": 316,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 52.97772695000458
+    },
+    {
+      "estimator": "state_quadratic_delta",
+      "model_seed": 3,
+      "initial_loss": 1.8237944841384888,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.2336088865995407,
+        "value": 0.1438320130109787
+      },
+      "final_loss": 0.00046063127228990197,
+      "final_accuracy": 1.0,
+      "best_loss": 0.00019436953880358487,
+      "best_step": 494,
+      "first_below_threshold": 137,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 1088,
+      "step_ms": 52.81141713199031
+    },
+    {
+      "estimator": "state_cubic_delta",
+      "model_seed": 0,
+      "initial_loss": 1.9436928033828735,
+      "initial_accuracy": 0.25,
+      "initial_gradient_norms": {
+        "query_key": 0.17565202713012695,
+        "value": 0.11366616189479828
+      },
+      "final_loss": 0.6939024925231934,
+      "final_accuracy": 0.5,
+      "best_loss": 0.206916943192482,
+      "best_step": 400,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 1088,
+      "step_ms": 103.2879140139994
+    },
+    {
+      "estimator": "state_cubic_delta",
+      "model_seed": 1,
+      "initial_loss": 1.9008742570877075,
+      "initial_accuracy": 0.4545454680919647,
+      "initial_gradient_norms": {
+        "query_key": 0.18308313190937042,
+        "value": 0.09083813428878784
+      },
+      "final_loss": 0.5068444609642029,
+      "final_accuracy": 0.6363636255264282,
+      "best_loss": 0.0010625022696331143,
+      "best_step": 321,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 103.07769661999191
+    },
+    {
+      "estimator": "state_cubic_delta",
+      "model_seed": 2,
+      "initial_loss": 1.9898765087127686,
+      "initial_accuracy": 0.3636363744735718,
+      "initial_gradient_norms": {
+        "query_key": 0.11763019114732742,
+        "value": 0.22134415805339813
+      },
+      "final_loss": 0.43410366773605347,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.3087818920612335,
+      "best_step": 371,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 103.46938695799327
+    },
+    {
+      "estimator": "state_cubic_delta",
+      "model_seed": 3,
+      "initial_loss": 1.8237944841384888,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.21081626415252686,
+        "value": 0.12740428745746613
+      },
+      "final_loss": 0.00025047885719686747,
+      "final_accuracy": 1.0,
+      "best_loss": 0.0002170917287003249,
+      "best_step": 494,
+      "first_below_threshold": 121,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 1088,
+      "step_ms": 103.31258118400001
+    },
+    {
+      "estimator": "delta_rule",
+      "model_seed": 0,
+      "initial_loss": 1.9436928033828735,
+      "initial_accuracy": 0.25,
+      "initial_gradient_norms": {
+        "query_key": 0.17350351810455322,
+        "value": 0.11112093180418015
+      },
+      "final_loss": 0.6933216452598572,
+      "final_accuracy": 0.5,
+      "best_loss": 0.2559267282485962,
+      "best_step": 264,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 12,
+      "trainable_parameter_count": 1088,
+      "step_ms": 24.53270882999641
+    },
+    {
+      "estimator": "delta_rule",
+      "model_seed": 1,
+      "initial_loss": 1.9008742570877075,
+      "initial_accuracy": 0.4545454680919647,
+      "initial_gradient_norms": {
+        "query_key": 0.18180350959300995,
+        "value": 0.08889289945363998
+      },
+      "final_loss": 0.25313034653663635,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.018292607739567757,
+      "best_step": 84,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 24.761116768000647
+    },
+    {
+      "estimator": "delta_rule",
+      "model_seed": 2,
+      "initial_loss": 1.9898765087127686,
+      "initial_accuracy": 0.3636363744735718,
+      "initial_gradient_norms": {
+        "query_key": 0.11768652498722076,
+        "value": 0.21727706491947174
+      },
+      "final_loss": 0.43578824400901794,
+      "final_accuracy": 0.8181818723678589,
+      "best_loss": 0.307096928358078,
+      "best_step": 142,
+      "first_below_threshold": -1,
+      "ever_success": false,
+      "final_success": false,
+      "fit_target_count": 11,
+      "trainable_parameter_count": 1088,
+      "step_ms": 24.69083146000048
+    },
+    {
+      "estimator": "delta_rule",
+      "model_seed": 3,
+      "initial_loss": 1.8237944841384888,
+      "initial_accuracy": 0.0,
+      "initial_gradient_norms": {
+        "query_key": 0.20759643614292145,
+        "value": 0.12411811202764511
+      },
+      "final_loss": 0.00023367253015749156,
+      "final_accuracy": 1.0,
+      "best_loss": 0.00023367253015749156,
+      "best_step": 500,
+      "first_below_threshold": 138,
+      "ever_success": true,
+      "final_success": true,
+      "fit_target_count": 9,
+      "trainable_parameter_count": 1088,
+      "step_ms": 24.499842151999474
+    }
+  ],
+  "fit_summaries": {
+    "production": {
+      "runs": 4,
+      "ever_successes": 2,
+      "final_successes": 2,
+      "median_best_loss": 0.12632715670770267,
+      "median_final_loss": 0.12632715670770267,
+      "median_final_accuracy": 0.9090909361839294,
+      "median_success_step": 108.5,
+      "mean_step_ms": 3.484320776002278
+    },
+    "bitflip": {
+      "runs": 4,
+      "ever_successes": 1,
+      "final_successes": 1,
+      "median_best_loss": 0.5717739164829254,
+      "median_final_loss": 0.5717739164829254,
+      "median_final_accuracy": 0.6363636255264282,
+      "median_success_step": 156,
+      "mean_step_ms": 10.205074569505086
+    },
+    "state_linear_delta": {
+      "runs": 4,
+      "ever_successes": 2,
+      "final_successes": 2,
+      "median_best_loss": 0.009750458106282167,
+      "median_final_loss": 0.015724907323601656,
+      "median_final_accuracy": 1.0,
+      "median_success_step": 243.5,
+      "mean_step_ms": 28.133089981503872
+    },
+    "state_quadratic_delta": {
+      "runs": 4,
+      "ever_successes": 2,
+      "final_successes": 2,
+      "median_best_loss": 0.15502561163157225,
+      "median_final_loss": 0.3470348371192813,
+      "median_final_accuracy": 0.8181818127632141,
+      "median_success_step": 297.5,
+      "mean_step_ms": 52.97772107450146
+    },
+    "state_cubic_delta": {
+      "runs": 4,
+      "ever_successes": 1,
+      "final_successes": 1,
+      "median_best_loss": 0.10398972273105755,
+      "median_final_loss": 0.4704740643501282,
+      "median_final_accuracy": 0.7272727489471436,
+      "median_success_step": 121,
+      "mean_step_ms": 103.28689469399615
+    },
+    "delta_rule": {
+      "runs": 4,
+      "ever_successes": 1,
+      "final_successes": 1,
+      "median_best_loss": 0.13710966799408197,
+      "median_final_loss": 0.34445929527282715,
+      "median_final_accuracy": 0.8181818723678589,
+      "median_success_step": 138,
+      "mean_step_ms": 24.621124802499253
+    }
+  },
+  "gradient_cases": [],
+  "gradient_summaries": {}
+}

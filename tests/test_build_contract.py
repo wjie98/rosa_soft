@@ -26,6 +26,21 @@ def _load_setup_module():
 BUILD_SETUP = _load_setup_module()
 
 
+def test_source_manifest_contains_native_headers_and_prunes_research():
+    manifest = (ROOT / "MANIFEST.in").read_text()
+
+    assert "*.h *.cuh *.cpp *.cu" in manifest
+    for directory in (
+        "benchmarks",
+        "contrib",
+        "docs/research",
+        "tests",
+        "validation",
+    ):
+        assert f"prune {directory}" in manifest
+    assert "recursive-include docs *.md" not in manifest
+
+
 def test_default_build_is_cpu_without_cuda_home():
     config = BUILD_SETUP.resolve_build_configuration(None, environ={})
 
@@ -33,7 +48,7 @@ def test_default_build_is_cpu_without_cuda_home():
     assert not config.use_cuda
     assert BUILD_SETUP.source_names_for(config) == [
         "export.cpp",
-        "rosa_runtime.cpp",
+        "rosa_sam.cpp",
     ]
     assert BUILD_SETUP.define_macros_for(config) == []
 
@@ -48,9 +63,11 @@ def test_default_cuda_build_contains_only_core_translation_units():
     assert config.use_cuda
     assert BUILD_SETUP.source_names_for(config) == [
         "export.cpp",
-        "rosa_runtime.cpp",
+        "rosa_sam.cpp",
         "rosa_soft.cpp",
         "cuda/rosa_soft_kernels.cu",
+        "cuda/rosa_soft_streaming_kernels.cu",
+        "cuda/rosa_soft_block_diagonal_kernels.cu",
     ]
     assert BUILD_SETUP.define_macros_for(config) == [
         ("ROSA_WITH_CUDA", "1"),
@@ -69,11 +86,72 @@ def test_frozen_cuda_schema_contains_only_production_operators():
     ]
     assert "research_" not in export_source
 
-    for source_name in ("rosa_soft.cpp", "cuda/rosa_soft_kernels.cu"):
+    for source_name in (
+        "rosa_soft.cpp",
+        "cuda/rosa_soft_kernels.cu",
+        "cuda/rosa_soft_streaming_kernels.cu",
+        "cuda/rosa_soft_block_diagonal_kernels.cu",
+    ):
         source = (ROOT / "rosa_soft" / "csrc" / source_name).read_text()
         assert "research_" not in source
         assert "hard_forward_indexed" not in source
         assert "surrogate_vjp_diagonal" not in source
+
+
+def test_fixed_length_streaming_dispatch_is_architecture_and_mask_gated():
+    native_source = (
+        ROOT / "rosa_soft" / "csrc" / "rosa_soft.cpp"
+    ).read_text()
+
+    assert "kLegacyStreamingVjpMinSequenceLength = 4096" in native_source
+    assert "kAmpereStreamingVjpMinSequenceLength = 512" in native_source
+    assert (
+        "kAmpereValueOnlyStreamingVjpMinSequenceLength = 2048"
+        in native_source
+    )
+    assert "device_major >= 8" in native_source
+    assert "gradient_mask == 4" in native_source
+    assert (
+        "should_use_streaming_vjp(query, gradient_mask, device_major)"
+        in native_source
+    )
+
+
+def test_block_diagonal_dispatch_is_internal_and_shape_gated():
+    native_source = (
+        ROOT / "rosa_soft" / "csrc" / "rosa_soft.cpp"
+    ).read_text()
+    block_source = (
+        ROOT
+        / "rosa_soft"
+        / "csrc"
+        / "cuda"
+        / "rosa_soft_block_diagonal_kernels.cu"
+    ).read_text()
+
+    assert "kBlockDiagonalVjpMinSequenceLength = 4096" in native_source
+    assert "device_major >= 8" in native_source
+    assert "max_suffix_length == 32" in native_source
+    assert "value.size(3) == 64" in native_source
+    assert "rosa_soft_block_diagonal_vjp_cuda" in native_source
+    assert '#include "rosa_soft_vjp_common.cuh"' in block_source
+    assert '#include "rosa_soft_streaming_kernels.cu"' not in block_source
+    assert "int plan" not in block_source
+    assert "block_diagonal_vjp_kernel<scalar_t>" in block_source
+
+
+def test_training_hard_forward_uses_the_unlimited_scan():
+    hard_source = (
+        ROOT
+        / "rosa_soft"
+        / "csrc"
+        / "cuda"
+        / "rosa_soft_kernels.cu"
+    ).read_text()
+
+    assert "rosa_soft_hard_index_cuda" not in hard_source
+    assert "query_codes" not in hard_source
+    assert "hard_forward_kernel<scalar_t, false>" in hard_source
 
 
 def test_packed_symbol_shape_contracts_are_explicit_without_cuda():
@@ -159,9 +237,11 @@ def test_get_extensions_is_configuration_only(monkeypatch):
     assert captured["name"] == "rosa_soft._C"
     assert [Path(path).name for path in captured["sources"]] == [
         "export.cpp",
-        "rosa_runtime.cpp",
+        "rosa_sam.cpp",
         "rosa_soft.cpp",
         "rosa_soft_kernels.cu",
+        "rosa_soft_streaming_kernels.cu",
+        "rosa_soft_block_diagonal_kernels.cu",
     ]
     assert captured["kwargs"]["define_macros"] == [
         ("ROSA_WITH_CUDA", "1"),
@@ -280,7 +360,9 @@ def test_public_capabilities_and_placeholders_are_stable():
     assert rosa_soft.__all__ == [
         "__version__",
         "BUILD_CAPABILITIES",
-        "RosaRuntime",
+        "RosaSam",
+        "rosa_hard_reference",
+        "rosa_hard_varlen_reference",
         "rosa_soft",
         "rosa_soft_reference",
         "rosa_soft_varlen",
@@ -308,14 +390,15 @@ def test_public_capabilities_and_placeholders_are_stable():
         "HAS_ROSA_SOFT_CUDA",
         "ROSA_SOFT_DEFAULT_MISMATCH_SCALE",
         "ROSA_SOFT_DEFAULT_SCALE",
+        "RosaRuntime",
         "RosaRuntimeWork",
     ):
         assert not hasattr(rosa_soft, removed_name)
 
     capabilities = rosa_soft.BUILD_CAPABILITIES
     assert capabilities.rosa_soft_cuda <= capabilities.compiled_extension
-    assert capabilities.rosa_runtime <= capabilities.compiled_extension
-    assert capabilities.variant in {"reference", "cpu-runtime", "cuda"}
+    assert capabilities.rosa_sam <= capabilities.compiled_extension
+    assert capabilities.variant in {"reference", "cpu", "cuda"}
     if not capabilities.compiled_extension:
         assert capabilities.variant == "reference"
     if not capabilities.rosa_soft_cuda:
@@ -329,9 +412,9 @@ def test_public_capabilities_and_placeholders_are_stable():
             match="rosa_soft_varlen CUDA training operator is unavailable",
         ):
             rosa_soft.rosa_soft_varlen(None, None, None, None)
-    if not capabilities.rosa_runtime:
-        with pytest.raises(RuntimeError, match="RosaRuntime is unavailable"):
-            rosa_soft.RosaRuntime(1)
+    if not capabilities.rosa_sam:
+        with pytest.raises(RuntimeError, match="RosaSam is unavailable"):
+            rosa_soft.RosaSam(1, 1)
 
 
 def test_partial_cuda_registration_is_rejected():

@@ -12,7 +12,6 @@
 #include <tuple>
 #include <type_traits>
 
-
 namespace {
 
 constexpr int kBlockThreads = 128;
@@ -317,10 +316,8 @@ __device__ __forceinline__ int exact_suffix_length(
     int i,
     int route_position,
     int seq_len,
-    int num_heads,
-    int max_suffix_length) {
-  const int suffix_steps =
-      min(max_suffix_length, min(i + 1, route_position));
+    int num_heads) {
+  const int suffix_steps = min(i + 1, route_position);
   for (int suffix_offset_tokens = 0;
        suffix_offset_tokens < suffix_steps;
        ++suffix_offset_tokens) {
@@ -373,7 +370,6 @@ __global__ void hard_forward_kernel(
     int num_heads,
     int num_value_heads,
     int value_dim,
-    int max_suffix_length,
     const int32_t* __restrict__ cu_seqlens,
     int num_sequences,
     int total_tokens) {
@@ -442,8 +438,7 @@ __global__ void hard_forward_kernel(
         i,
         route_position,
         seq_len,
-        num_heads,
-        max_suffix_length);
+        num_heads);
     merge_hard_route(
         length,
         route_position,
@@ -1766,8 +1761,7 @@ void launch_pack_pair(
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> hard_forward_cuda(
     torch::Tensor query,
     torch::Tensor key,
-    torch::Tensor value,
-    int64_t max_suffix_length) {
+    torch::Tensor value) {
   const c10::cuda::CUDAGuard device_guard(query.device());
   const int batch_size = static_cast<int>(query.size(0));
   const int seq_len = static_cast<int>(query.size(1));
@@ -1820,7 +1814,6 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> hard_forward_cuda(
             num_heads,
             num_value_heads,
             value_dim,
-            static_cast<int>(max_suffix_length),
             nullptr,
             0,
             batch_size * seq_len);
@@ -1839,8 +1832,7 @@ hard_forward_varlen_cuda(
     torch::Tensor query,
     torch::Tensor key,
     torch::Tensor value,
-    torch::Tensor cu_seqlens,
-    int64_t max_suffix_length) {
+    torch::Tensor cu_seqlens) {
   const c10::cuda::CUDAGuard device_guard(query.device());
   const int total_tokens = static_cast<int>(query.size(0));
   const int num_heads = static_cast<int>(query.size(1));
@@ -1906,7 +1898,6 @@ hard_forward_varlen_cuda(
             num_heads,
             num_value_heads,
             value_dim,
-            static_cast<int>(max_suffix_length),
             cu_seqlens.data_ptr<int32_t>(),
             num_sequences,
             total_tokens);

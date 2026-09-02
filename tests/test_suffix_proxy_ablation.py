@@ -170,7 +170,7 @@ def test_proxy_scores_do_not_leak_sign_preserving_amplitude():
 
 def test_all_proxy_variants_share_exact_hard_forward():
     query, key, value = _inputs()
-    expected, _, _, _ = _hard_route_forward(query, key, value, 4)
+    expected, _, _, _ = _hard_route_forward(query, key, value)
 
     outputs = [
         ablation.rosa_soft_suffix_proxy(

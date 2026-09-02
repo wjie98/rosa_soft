@@ -1,0 +1,255 @@
+{
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "compute_capability": [
+    7,
+    5
+  ],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "settings": {
+    "sequence_lengths": [
+      4096,
+      8192,
+      16384
+    ],
+    "windows": [
+      1
+    ],
+    "patterns": [
+      "random",
+      "aligned",
+      "periodic64",
+      "periodic4",
+      "all_match",
+      "all_mismatch"
+    ],
+    "batch": 1,
+    "heads": 4,
+    "value_heads": 2,
+    "bits": 8,
+    "value_dim": 64,
+    "dtype": "float16",
+    "seed": 7000,
+    "warmup": 5,
+    "repeats": 21,
+    "output": "validation/unlimited_hard_multiwarp4_sm75.json"
+  },
+  "rows": [
+    {
+      "sequence_length": 4096,
+      "window": 1,
+      "pattern": "random",
+      "latency_ms": 0.13568000495433807,
+      "random_latency_ratio": 1.0,
+      "key_entropy_bits": 7.952394566598686,
+      "key_collision_probability": 0.00391760745764652,
+      "key_max_code_fraction": 0.0069580078125,
+      "key_unique_code_fraction": 1.0,
+      "latest_route_symbol_match_fraction": 0.004151404369622469
+    },
+    {
+      "sequence_length": 4096,
+      "window": 1,
+      "pattern": "aligned",
+      "latency_ms": 0.2200320065021515,
+      "random_latency_ratio": 1.6216981019141423,
+      "key_entropy_bits": 7.952394566598686,
+      "key_collision_probability": 0.00391760745764652,
+      "key_max_code_fraction": 0.0069580078125,
+      "key_unique_code_fraction": 1.0,
+      "latest_route_symbol_match_fraction": 1.0
+    },
+    {
+      "sequence_length": 4096,
+      "window": 1,
+      "pattern": "periodic64",
+      "latency_ms": 0.21952000260353088,
+      "random_latency_ratio": 1.6179244884123378,
+      "key_entropy_bits": 5.733341162084022,
+      "key_collision_probability": 0.01978021978021978,
+      "key_max_code_fraction": 0.04296875,
+      "key_unique_code_fraction": 0.2177734375,
+      "latest_route_symbol_match_fraction": 0.0116605618968606
+    },
+    {
+      "sequence_length": 4096,
+      "window": 1,
+      "pattern": "periodic4",
+      "latency_ms": 0.18636800348758698,
+      "random_latency_ratio": 1.3735848812086018,
+      "key_entropy_bits": 1.875,
+      "key_collision_probability": 0.2810744810744811,
+      "key_max_code_fraction": 0.3125,
+      "key_unique_code_fraction": 0.0146484375,
+      "latest_route_symbol_match_fraction": 0.0625152662396431
+    },
+    {
+      "sequence_length": 4096,
+      "window": 1,
+      "pattern": "all_match",
+      "latency_ms": 0.19385600090026855,
+      "random_latency_ratio": 1.428773539369409,
+      "key_entropy_bits": 0.0,
+      "key_collision_probability": 1.0,
+      "key_max_code_fraction": 1.0,
+      "key_unique_code_fraction": 0.00390625,
+      "latest_route_symbol_match_fraction": 1.0
+    },
+    {
+      "sequence_length": 4096,
+      "window": 1,
+      "pattern": "all_mismatch",
+      "latency_ms": 0.0835840031504631,
+      "random_latency_ratio": 0.6160377365743211,
+      "key_entropy_bits": 0.0,
+      "key_collision_probability": 1.0,
+      "key_max_code_fraction": 1.0,
+      "key_unique_code_fraction": 0.00390625,
+      "latest_route_symbol_match_fraction": 0.0
+    },
+    {
+      "sequence_length": 8192,
+      "window": 1,
+      "pattern": "random",
+      "latency_ms": 0.2606399953365326,
+      "random_latency_ratio": 1.0,
+      "key_entropy_bits": 7.973846391374671,
+      "key_collision_probability": 0.00392514697915395,
+      "key_max_code_fraction": 0.0062255859375,
+      "key_unique_code_fraction": 1.0,
+      "latest_route_symbol_match_fraction": 0.0036625564098358154
+    },
+    {
+      "sequence_length": 8192,
+      "window": 1,
+      "pattern": "aligned",
+      "latency_ms": 0.5969280004501343,
+      "random_latency_ratio": 2.2902394533862465,
+      "key_entropy_bits": 7.973846391374671,
+      "key_collision_probability": 0.00392514697915395,
+      "key_max_code_fraction": 0.0062255859375,
+      "key_unique_code_fraction": 1.0,
+      "latest_route_symbol_match_fraction": 1.0
+    },
+    {
+      "sequence_length": 8192,
+      "window": 1,
+      "pattern": "periodic64",
+      "latency_ms": 0.5934079885482788,
+      "random_latency_ratio": 2.2767341895555346,
+      "key_entropy_bits": 5.7890625,
+      "key_collision_probability": 0.01880112318398242,
+      "key_max_code_fraction": 0.03125,
+      "key_unique_code_fraction": 0.2236328125,
+      "latest_route_symbol_match_fraction": 0.007813453674316406
+    },
+    {
+      "sequence_length": 8192,
+      "window": 1,
+      "pattern": "periodic4",
+      "latency_ms": 0.5364800095558167,
+      "random_latency_ratio": 2.058318059985865,
+      "key_entropy_bits": 2.0,
+      "key_collision_probability": 0.2499084360883897,
+      "key_max_code_fraction": 0.25,
+      "key_unique_code_fraction": 0.015625,
+      "latest_route_symbol_match_fraction": 0.0
+    },
+    {
+      "sequence_length": 8192,
+      "window": 1,
+      "pattern": "all_match",
+      "latency_ms": 0.5298240184783936,
+      "random_latency_ratio": 2.0327809544129885,
+      "key_entropy_bits": 0.0,
+      "key_collision_probability": 1.0,
+      "key_max_code_fraction": 1.0,
+      "key_unique_code_fraction": 0.00390625,
+      "latest_route_symbol_match_fraction": 1.0
+    },
+    {
+      "sequence_length": 8192,
+      "window": 1,
+      "pattern": "all_mismatch",
+      "latency_ms": 0.12697599828243256,
+      "random_latency_ratio": 0.48717004509796724,
+      "key_entropy_bits": 0.0,
+      "key_collision_probability": 1.0,
+      "key_max_code_fraction": 1.0,
+      "key_unique_code_fraction": 0.00390625,
+      "latest_route_symbol_match_fraction": 0.0
+    },
+    {
+      "sequence_length": 16384,
+      "window": 1,
+      "pattern": "random",
+      "latency_ms": 0.4280320107936859,
+      "random_latency_ratio": 1.0,
+      "key_entropy_bits": 7.988634592628244,
+      "key_collision_probability": 0.00390693735801307,
+      "key_max_code_fraction": 0.0053558349609375,
+      "key_unique_code_fraction": 1.0,
+      "latest_route_symbol_match_fraction": 0.0037844106554985046
+    },
+    {
+      "sequence_length": 16384,
+      "window": 1,
+      "pattern": "aligned",
+      "latency_ms": 1.5974400043487549,
+      "random_latency_ratio": 3.7320573323165096,
+      "key_entropy_bits": 7.988634592628244,
+      "key_collision_probability": 0.00390693735801307,
+      "key_max_code_fraction": 0.0053558349609375,
+      "key_unique_code_fraction": 1.0,
+      "latest_route_symbol_match_fraction": 1.0
+    },
+    {
+      "sequence_length": 16384,
+      "window": 1,
+      "pattern": "periodic64",
+      "latency_ms": 1.5722240209579468,
+      "random_latency_ratio": 3.673145889352113,
+      "key_entropy_bits": 5.717716162084022,
+      "key_collision_probability": 0.02020386986510407,
+      "key_max_code_fraction": 0.0390625,
+      "key_unique_code_fraction": 0.2158203125,
+      "latest_route_symbol_match_fraction": 0.0039064884185791016
+    },
+    {
+      "sequence_length": 16384,
+      "window": 1,
+      "pattern": "periodic4",
+      "latency_ms": 1.457535982131958,
+      "random_latency_ratio": 3.4052032216686228,
+      "key_entropy_bits": 2.0,
+      "key_collision_probability": 0.24995422083867425,
+      "key_max_code_fraction": 0.25,
+      "key_unique_code_fraction": 0.015625,
+      "latest_route_symbol_match_fraction": 0.0
+    },
+    {
+      "sequence_length": 16384,
+      "window": 1,
+      "pattern": "all_match",
+      "latency_ms": 1.458624005317688,
+      "random_latency_ratio": 3.4077451418014477,
+      "key_entropy_bits": 0.0,
+      "key_collision_probability": 1.0,
+      "key_max_code_fraction": 1.0,
+      "key_unique_code_fraction": 0.00390625,
+      "latest_route_symbol_match_fraction": 1.0
+    },
+    {
+      "sequence_length": 16384,
+      "window": 1,
+      "pattern": "all_mismatch",
+      "latency_ms": 0.17427200078964233,
+      "random_latency_ratio": 0.4071471207643919,
+      "key_entropy_bits": 0.0,
+      "key_collision_probability": 1.0,
+      "key_max_code_fraction": 1.0,
+      "key_unique_code_fraction": 0.00390625,
+      "latest_route_symbol_match_fraction": 0.0
+    }
+  ]
+}

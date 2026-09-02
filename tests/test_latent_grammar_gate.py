@@ -35,7 +35,9 @@ def test_grammar_batch_has_complementary_payloads_and_identical_queries():
 
 
 @pytest.mark.parametrize("phrase_length", [2, 4, 8])
-def test_explicit_codebook_needs_the_full_capacity_window(phrase_length):
+def test_explicit_codebook_routes_with_the_full_available_trajectory(
+    phrase_length,
+):
     candidate_count = required_candidate_count(phrase_length)
     batch = make_grammar_batch(
         seed=4,
@@ -44,8 +46,7 @@ def test_explicit_codebook_needs_the_full_capacity_window(phrase_length):
         candidate_count=candidate_count,
     )
 
-    assert oracle_route_accuracy(batch, phrase_length) == 1.0
-    assert oracle_route_accuracy(batch, phrase_length - 1) < 1.0
+    assert oracle_route_accuracy(batch) == 1.0
 
 
 def test_stateless_blank_tail_cannot_unfold_cue_identity():

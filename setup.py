@@ -33,12 +33,14 @@ PACKAGE_VERSION = _read_package_version()
 
 CPU_SOURCES = [
     "export.cpp",
-    "rosa_runtime.cpp",
+    "rosa_sam.cpp",
 ]
 
 ROSA_CUDA_SOURCES = [
     "rosa_soft.cpp",
     "cuda/rosa_soft_kernels.cu",
+    "cuda/rosa_soft_streaming_kernels.cu",
+    "cuda/rosa_soft_block_diagonal_kernels.cu",
 ]
 
 
@@ -139,15 +141,14 @@ def get_extensions(cpp_extension=None):
     )
 
     if sys.platform == "win32":
-        cxx_args = ["/O2", "/openmp"]
+        cxx_args = ["/O2"]
         extra_link_args = []
     else:
         cxx_args = [
             "-O3",
-            "-fopenmp",
             "-fdiagnostics-color=always",
         ]
-        extra_link_args = ["-fopenmp"]
+        extra_link_args = []
 
     extra_compile_args = {"cxx": cxx_args}
     if config.use_cuda:

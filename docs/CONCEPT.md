@@ -48,8 +48,9 @@ L(t,a) = max l such that
          for every r in [0, l),
 ```
 
-bounded by `max_suffix_length` and both sequence boundaries. Equality means
-all `D` bits match for that head and position.
+bounded only by the query and candidate sequence boundaries. There is no
+configured hard suffix horizon. Equality means all `D` bits match for that
+head and position.
 
 Forward selects the non-null route with largest `L(t,a)`. Equal lengths select
 the latest route, meaning largest `a`. If every non-null route has length
@@ -217,7 +218,7 @@ The public controls are intentionally limited:
 
 | Control | Default | Effect |
 | --- | ---: | --- |
-| `max_suffix_length` | `32` | Hard and surrogate suffix horizon. |
+| `max_suffix_length` | `32` | Surrogate-backward suffix horizon only. |
 | `scale` | `1.0` | Multiplicative backward attention-logit scale. |
 | `dropout_p` | `0.0` | Post-softmax inverted attention dropout in backward. |
 | `mismatch_scale` | `3.0` | Leakage and gradient scale of local mismatches. |
@@ -225,6 +226,10 @@ The public controls are intentionally limited:
 These values are explicit run-level hyperparameters. The operator does not
 derive them from `D`, `T`, the configured window, the active suffix length, or
 the training step.
+
+The hard route is not one of these tunable horizons. It always uses the full
+causal suffix. Changing `max_suffix_length` can change proxy gradients and
+compute cost, but cannot change the returned hard value.
 
 For long near-match discovery, an overly large mismatch scale can make
 products vanish before the model repairs later suffix positions. Changing the

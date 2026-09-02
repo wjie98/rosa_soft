@@ -94,13 +94,11 @@ def make_shared_projection_task(
         base_task.query,
         projected_key,
         base_task.value,
-        max_suffix_length,
     )
     target_output, _, target_routes, _ = _hard_route_forward(
         base_task.query,
         target_key,
         base_task.value,
-        max_suffix_length,
     )
     if int(initial_routes[0, 0, -1]) != 3:
         raise RuntimeError("shared projection must start on route 3")
@@ -129,7 +127,6 @@ def _hard_loss(
         task.route_task.query,
         key,
         task.route_task.value,
-        max_suffix_length,
     )
     loss, grad_output = _loss_and_upstream(
         output,
