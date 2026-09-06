@@ -22,6 +22,8 @@ __all__ = [
     "ROSA_SOFT_DEFAULT_MISMATCH_SCALE",
     "ROSA_SOFT_DEFAULT_SCALE",
     "rosa_soft",
+    "rosa_soft_unbounded",
+    "rosa_soft_unbounded_varlen",
     "rosa_soft_varlen",
 ]
 
@@ -214,6 +216,43 @@ def _fake_surrogate_vjp_masked(
     )
 
 
+@torch.library.register_fake("rosa_soft::surrogate_vjp_unbounded_masked")
+def _fake_surrogate_vjp_unbounded_masked(
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    grad_output: Tensor,
+    packed_query_symbols: Tensor,
+    packed_key_symbols: Tensor,
+    dropout_seed: Tensor,
+    scale: float,
+    dropout_p: float,
+    mismatch_scale: float,
+    gradient_mask: int,
+):
+    del (
+        grad_output,
+        packed_query_symbols,
+        packed_key_symbols,
+        dropout_seed,
+        scale,
+        dropout_p,
+        mismatch_scale,
+    )
+    return tuple(
+        input_tensor.new_empty(
+            input_tensor.shape,
+            dtype=torch.float32,
+        )
+        if gradient_mask & bit
+        else input_tensor.new_empty((0,), dtype=torch.float32)
+        for bit, input_tensor in zip(
+            (1, 2, 4),
+            (query, key, value),
+        )
+    )
+
+
 @torch.library.register_fake("rosa_soft::surrogate_vjp_varlen_masked")
 def _fake_surrogate_vjp_varlen_masked(
     query: Tensor,
@@ -250,6 +289,44 @@ def _fake_surrogate_vjp_varlen_masked(
         gradient
         if gradient_mask & bit
         else gradient.new_empty((0,))
+        for bit, gradient in zip((1, 2, 4), gradients)
+    )
+
+
+@torch.library.register_fake(
+    "rosa_soft::surrogate_vjp_unbounded_varlen_masked"
+)
+def _fake_surrogate_vjp_unbounded_varlen_masked(
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    cu_seqlens: Tensor,
+    grad_output: Tensor,
+    packed_query_symbols: Tensor,
+    packed_key_symbols: Tensor,
+    dropout_seed: Tensor,
+    scale: float,
+    dropout_p: float,
+    mismatch_scale: float,
+    gradient_mask: int,
+):
+    del (
+        cu_seqlens,
+        grad_output,
+        packed_query_symbols,
+        packed_key_symbols,
+        dropout_seed,
+        scale,
+        dropout_p,
+        mismatch_scale,
+    )
+    gradients = (
+        query.new_empty(query.shape, dtype=torch.float32),
+        key.new_empty(key.shape, dtype=torch.float32),
+        value.new_empty(value.shape, dtype=torch.float32),
+    )
+    return tuple(
+        gradient if gradient_mask & bit else gradient.new_empty((0,))
         for bit, gradient in zip((1, 2, 4), gradients)
     )
 
@@ -410,6 +487,134 @@ class _HardForwardSoftVjpVarlenFunction(torch.autograd.Function):
         )
 
 
+class _HardForwardUnboundedSoftVjpFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        dropout_seed: Tensor,
+        scale: float,
+        dropout_p: float,
+        mismatch_scale: float,
+    ) -> Tensor:
+        hard_output, packed_query_symbols, packed_key_symbols = (
+            torch.ops.rosa_soft.hard_forward(query, key, value)
+        )
+        ctx.scale = float(scale)
+        ctx.dropout_p = float(dropout_p)
+        ctx.mismatch_scale = float(mismatch_scale)
+        ctx.save_for_backward(
+            query,
+            key,
+            value,
+            packed_query_symbols,
+            packed_key_symbols,
+            dropout_seed,
+        )
+        return hard_output
+
+    @staticmethod
+    @once_differentiable
+    def backward(ctx, grad_output: Tensor):
+        (
+            query,
+            key,
+            value,
+            packed_query_symbols,
+            packed_key_symbols,
+            dropout_seed,
+        ) = ctx.saved_tensors
+        needs_input_grad = ctx.needs_input_grad[:3]
+        gradients = torch.ops.rosa_soft.surrogate_vjp_unbounded_masked(
+            query,
+            key,
+            value,
+            grad_output,
+            packed_query_symbols,
+            packed_key_symbols,
+            dropout_seed,
+            ctx.scale,
+            ctx.dropout_p,
+            ctx.mismatch_scale,
+            _gradient_mask(needs_input_grad),
+        )
+        requested_gradients = _cast_requested_gradients(
+            gradients,
+            (query, key, value),
+            needs_input_grad,
+        )
+        return (*requested_gradients, None, None, None, None)
+
+
+class _HardForwardUnboundedSoftVjpVarlenFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        cu_seqlens: Tensor,
+        dropout_seed: Tensor,
+        scale: float,
+        dropout_p: float,
+        mismatch_scale: float,
+    ) -> Tensor:
+        hard_output, packed_query_symbols, packed_key_symbols = (
+            torch.ops.rosa_soft.hard_forward_varlen(
+                query, key, value, cu_seqlens
+            )
+        )
+        ctx.scale = float(scale)
+        ctx.dropout_p = float(dropout_p)
+        ctx.mismatch_scale = float(mismatch_scale)
+        ctx.save_for_backward(
+            query,
+            key,
+            value,
+            cu_seqlens,
+            packed_query_symbols,
+            packed_key_symbols,
+            dropout_seed,
+        )
+        return hard_output
+
+    @staticmethod
+    @once_differentiable
+    def backward(ctx, grad_output: Tensor):
+        (
+            query,
+            key,
+            value,
+            cu_seqlens,
+            packed_query_symbols,
+            packed_key_symbols,
+            dropout_seed,
+        ) = ctx.saved_tensors
+        needs_input_grad = ctx.needs_input_grad[:3]
+        gradients = torch.ops.rosa_soft.surrogate_vjp_unbounded_varlen_masked(
+            query,
+            key,
+            value,
+            cu_seqlens,
+            grad_output,
+            packed_query_symbols,
+            packed_key_symbols,
+            dropout_seed,
+            ctx.scale,
+            ctx.dropout_p,
+            ctx.mismatch_scale,
+            _gradient_mask(needs_input_grad),
+        )
+        requested_gradients = _cast_requested_gradients(
+            gradients,
+            (query, key, value),
+            needs_input_grad,
+        )
+        return (*requested_gradients, None, None, None, None, None)
+
+
 def rosa_soft(
     query: Tensor,
     key: Tensor,
@@ -504,6 +709,85 @@ def rosa_soft_varlen(
         cu_seqlens,
         dropout_seed,
         max_suffix_length,
+        float(scale),
+        float(dropout_p),
+        float(mismatch_scale),
+    )
+
+
+def rosa_soft_unbounded(
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    *,
+    scale: float = ROSA_SOFT_DEFAULT_SCALE,
+    dropout_p: float = ROSA_SOFT_DEFAULT_DROPOUT_P,
+    mismatch_scale: float = ROSA_SOFT_DEFAULT_MISMATCH_SCALE,
+) -> Tensor:
+    """Run exact hard ROSA with an exact unlimited-suffix dense CUDA VJP."""
+
+    _validate_cuda_call(
+        query,
+        key,
+        value,
+        query.size(1),
+        scale,
+        dropout_p,
+        mismatch_scale,
+    )
+    needs_backward = torch.is_grad_enabled() and any(
+        tensor.requires_grad for tensor in (query, key, value)
+    )
+    if not needs_backward:
+        return torch.ops.rosa_soft.hard_forward(query, key, value)[0]
+    dropout_seed = make_dropout_seed(query, dropout_p, needs_backward)
+    return _HardForwardUnboundedSoftVjpFunction.apply(
+        query,
+        key,
+        value,
+        dropout_seed,
+        float(scale),
+        float(dropout_p),
+        float(mismatch_scale),
+    )
+
+
+def rosa_soft_unbounded_varlen(
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    cu_seqlens: Tensor,
+    *,
+    scale: float = ROSA_SOFT_DEFAULT_SCALE,
+    dropout_p: float = ROSA_SOFT_DEFAULT_DROPOUT_P,
+    mismatch_scale: float = ROSA_SOFT_DEFAULT_MISMATCH_SCALE,
+) -> Tensor:
+    """Run exact hard ROSA and unlimited dense VJP on packed sequences."""
+
+    _validate_cuda_varlen_call(
+        query,
+        key,
+        value,
+        cu_seqlens,
+        query.size(0),
+        scale,
+        dropout_p,
+        mismatch_scale,
+    )
+    needs_backward = torch.is_grad_enabled() and any(
+        tensor.requires_grad for tensor in (query, key, value)
+    )
+    if not needs_backward:
+        return torch.ops.rosa_soft.hard_forward_varlen(
+            query, key, value, cu_seqlens
+        )[0]
+    dropout_seed = make_dropout_seed(query, dropout_p, needs_backward)
+    return _HardForwardUnboundedSoftVjpVarlenFunction.apply(
+        query,
+        key,
+        value,
+        cu_seqlens,
+        dropout_seed,
         float(scale),
         float(dropout_p),
         float(mismatch_scale),

@@ -2,6 +2,18 @@
 
 Status: implementation and evidence audit, 2026-08-21.
 
+Historical note (2026-09-05): the absolute latency tables below describe the
+earlier finite-window production implementation, not the subsequently
+promoted unbounded slab-replay VJP. Some intervening GPU1 runs were affected
+by unrelated load. Current unbounded decisions use only the idle-card,
+interleaved recheck recorded in `PERSISTENT_MACRO_TILE_VJP.md`.
+
+2026-09-06 update: eligible fixed-length FP16/Dv64 unbounded workloads now use
+the exact occupancy-bounded grouped-checkpoint specialization documented in
+`GROUPED_CHECKPOINT_VJP.md`. The estimator is unchanged; other shapes and
+packed varlen retain exact slab replay. Sections below remain the estimator
+and finite-kernel decision record rather than a current dispatch inventory.
+
 Post-audit outcome: the architecture-aware streaming crossover and ordinary
 `64 x 64` block-TF32 plan were promoted later the same day. The estimator and
 public API did not change. Treat the candidate rankings below as the evidence
@@ -156,7 +168,7 @@ training, not more RosaSoft kernel controls.
 | Candidate | Decision |
 | --- | --- |
 | Named-barrier block pipeline | The newest FP16 matrix improves mean production ratio from 0.776 to 0.768, only about one additional percentage point, while shared memory rises from 69.1 to 85.1 KiB. Do not bundle into first promotion. |
-| Exact hard diagonal index | Up to about 12x faster on collapsed all-match codes but regressed random inputs. Revisit only behind a cheap, validated code-density dispatch. |
+| Exact unlimited hard diagonal DP | Promoted for T>=512. Random T=4096 adds about 0.08 ms, while periodic/all-equal inputs improve by over 160x; `O(BHT)` winner state and exact SAM parity are retained. |
 | Warp/diagonal prefix scan primitive | Useful in isolated diagonal ownership and for a selected hard route. Keep as a building block, not dense-route ownership. |
 
 ### 6.3 Measured negative kernel variants

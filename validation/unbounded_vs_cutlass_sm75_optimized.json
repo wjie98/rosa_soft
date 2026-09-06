@@ -1,0 +1,81 @@
+{
+  "date": "2026-09-06",
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "compute_capability": [7, 5],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "measurement": {
+    "order": "alternating",
+    "rounds": 7,
+    "warmup_per_timed_round": 3,
+    "repeats_per_round": 10,
+    "clock_warmup": {
+      "cutlass_steps": 30,
+      "rosa_steps": 8
+    }
+  },
+  "rosa": {
+    "operation": "exact unlimited hard forward plus unlimited dense soft backward",
+    "shape": "B=1,Hq=4,Hv=2,D=8,Dv=64",
+    "dtype": "float16",
+    "dropout_p": 0.0,
+    "mismatch_scale": 3.0
+  },
+  "control": {
+    "operation": "xformers.ops.memory_efficient_attention with LowerTriangularMask",
+    "shape": "B=1,H=4,D=64",
+    "dtype": "float16",
+    "backend": "CUTLASS memory-efficient attention"
+  },
+  "results": [
+    {
+      "seq_len": 4096,
+      "rosa_ms": 7.848908996582031,
+      "cutlass_ms": 1.696985626220703,
+      "ratio": 4.625206528155492,
+      "rosa_samples_ms": [
+        8.689107513427734,
+        7.853852844238281,
+        7.822988891601563,
+        7.869916534423828,
+        7.838105773925781,
+        7.848908996582031,
+        7.829913330078125
+      ],
+      "cutlass_samples_ms": [
+        1.7037408828735352,
+        1.696985626220703,
+        1.7250303268432616,
+        1.6912639617919922,
+        1.7370975494384766,
+        1.6925535202026367,
+        1.6863712310791015
+      ]
+    },
+    {
+      "seq_len": 8192,
+      "rosa_ms": 31.28349609375,
+      "cutlass_ms": 5.411711883544922,
+      "ratio": 5.780702440732647,
+      "rosa_samples_ms": [
+        31.1625732421875,
+        31.29217529296875,
+        31.28349609375,
+        31.2941650390625,
+        31.205990600585938,
+        31.268045043945314,
+        31.2929931640625
+      ],
+      "cutlass_samples_ms": [
+        5.368832015991211,
+        5.417007827758789,
+        5.364736175537109,
+        5.420719909667969,
+        5.411711883544922,
+        5.429036712646484,
+        5.38592643737793
+      ]
+    }
+  ],
+  "note": "The Turing GPU cannot execute the current PyTorch FlashAttention backend; this control must not be reported as FA1."
+}

@@ -79,6 +79,8 @@ _required_cuda_operators = (
     "hard_forward_varlen",
     "surrogate_vjp_masked",
     "surrogate_vjp_varlen_masked",
+    "surrogate_vjp_unbounded_masked",
+    "surrogate_vjp_unbounded_varlen_masked",
 )
 _cuda_operator_flags = tuple(
     _has_compiled_extension and _has_cuda_kernels(operator)
@@ -126,7 +128,12 @@ def _raise_unavailable(feature: str, build_hint: str) -> None:
 
 
 if _has_rosa_soft_cuda:
-    from .soft import rosa_soft, rosa_soft_varlen
+    from .soft import (
+        rosa_soft,
+        rosa_soft_unbounded,
+        rosa_soft_unbounded_varlen,
+        rosa_soft_varlen,
+    )
 else:
     def rosa_soft(
         query,
@@ -178,6 +185,45 @@ else:
             "Build with USE_CUDA=1 (or auto with CUDA_HOME available).",
         )
 
+    def rosa_soft_unbounded(
+        query,
+        key,
+        value,
+        *,
+        scale=_DEFAULT_SCALE,
+        dropout_p=_DEFAULT_DROPOUT_P,
+        mismatch_scale=_DEFAULT_MISMATCH_SCALE,
+    ):
+        del query, key, value, scale, dropout_p, mismatch_scale
+        _raise_unavailable(
+            "rosa_soft_unbounded CUDA training operator",
+            "Build with USE_CUDA=1 (or auto with CUDA_HOME available).",
+        )
+
+    def rosa_soft_unbounded_varlen(
+        query,
+        key,
+        value,
+        cu_seqlens,
+        *,
+        scale=_DEFAULT_SCALE,
+        dropout_p=_DEFAULT_DROPOUT_P,
+        mismatch_scale=_DEFAULT_MISMATCH_SCALE,
+    ):
+        del (
+            query,
+            key,
+            value,
+            cu_seqlens,
+            scale,
+            dropout_p,
+            mismatch_scale,
+        )
+        _raise_unavailable(
+            "rosa_soft_unbounded_varlen CUDA training operator",
+            "Build with USE_CUDA=1 (or auto with CUDA_HOME available).",
+        )
+
 
 if _has_rosa_sam:
     from .sam import (
@@ -217,6 +263,8 @@ __all__ = [
     "rosa_hard_varlen_reference",
     "rosa_soft",
     "rosa_soft_reference",
+    "rosa_soft_unbounded",
+    "rosa_soft_unbounded_varlen",
     "rosa_soft_varlen",
     "rosa_soft_varlen_reference",
 ]

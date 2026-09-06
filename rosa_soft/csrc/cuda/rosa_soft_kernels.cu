@@ -33,6 +33,7 @@ constexpr int kMinPackedScoreCacheSequenceLength = 256;
 constexpr int kPackedScoreCacheCapacity = 1024;
 constexpr int kMinDenseRecomputeSequenceLength = 4096;
 constexpr int kMinValueOnlyRoutesPerSuffixStepForRecompute = 64;
+constexpr int kHardDiagonalMinSequenceLength = 512;
 
 
 enum class BackwardPlan {
@@ -523,6 +524,256 @@ __global__ void hard_forward_kernel(
         d;
     output[output_idx] = write_scalar<scalar_t>(result);
   }
+}
+
+
+template <bool PackedVarlen>
+__global__ void hard_diagonal_winner_kernel(
+    const int32_t* __restrict__ packed_query_symbols,
+    const int32_t* __restrict__ packed_key_symbols,
+    int64_t* __restrict__ winners,
+    int batch_size,
+    int seq_len,
+    int num_heads,
+    const int32_t* __restrict__ cu_seqlens,
+    int num_sequences,
+    int total_tokens) {
+  const int warp = threadIdx.x / kWarpSize;
+  const int lane = threadIdx.x & (kWarpSize - 1);
+  const int64_t task =
+      static_cast<int64_t>(blockIdx.x) * kWarpsPerBlock + warp;
+
+  int delta;
+  int diagonal_length;
+  const int32_t* query;
+  const int32_t* key;
+  int64_t* winner;
+  if constexpr (PackedVarlen) {
+    const int64_t task_count =
+        static_cast<int64_t>(num_heads) * total_tokens;
+    if (task >= task_count) {
+      return;
+    }
+    const int head = static_cast<int>(task / total_tokens);
+    const int global_token = static_cast<int>(task % total_tokens);
+    int sequence = 0;
+    int sequence_start = 0;
+    int sequence_end = 0;
+    if (lane == 0) {
+      sequence = find_packed_sequence(
+          cu_seqlens, num_sequences, global_token);
+      if (sequence < num_sequences) {
+        sequence_start = cu_seqlens[sequence];
+        sequence_end = cu_seqlens[sequence + 1];
+      }
+    }
+    sequence = __shfl_sync(0xffffffffu, sequence, 0);
+    sequence_start = __shfl_sync(
+        0xffffffffu, sequence_start, 0);
+    sequence_end = __shfl_sync(0xffffffffu, sequence_end, 0);
+    if (sequence >= num_sequences || sequence_end <= sequence_start) {
+      return;
+    }
+    delta = global_token - sequence_start;
+    if (delta <= 0) {
+      return;
+    }
+    diagonal_length = sequence_end - global_token;
+    query = packed_query_symbols +
+        static_cast<int64_t>(head) * total_tokens + sequence_start;
+    key = packed_key_symbols +
+        static_cast<int64_t>(head) * total_tokens + sequence_start;
+    winner = winners +
+        static_cast<int64_t>(head) * total_tokens + sequence_start;
+  } else {
+    const int diagonals = seq_len - 1;
+    const int64_t task_count =
+        static_cast<int64_t>(batch_size) * num_heads * diagonals;
+    if (task >= task_count) {
+      return;
+    }
+    const int series = static_cast<int>(task / diagonals);
+    delta = static_cast<int>(task % diagonals) + 1;
+    diagonal_length = seq_len - delta;
+    query = packed_query_symbols +
+        static_cast<int64_t>(series) * seq_len;
+    key = packed_key_symbols +
+        static_cast<int64_t>(series) * seq_len;
+    winner = winners + static_cast<int64_t>(series) * seq_len;
+  }
+
+  int latest_mismatch = -1;
+  for (int chunk = 0; chunk < diagonal_length; chunk += kWarpSize) {
+    const int key_position = chunk + lane;
+    const bool active = key_position < diagonal_length;
+    const int query_position = key_position + delta;
+    const bool equal = active &&
+        query[query_position] == key[key_position];
+    int prefix_mismatch = active && !equal ? key_position : -1;
+#pragma unroll
+    for (int offset = 1; offset < kWarpSize; offset <<= 1) {
+      const int previous = __shfl_up_sync(
+          0xffffffffu, prefix_mismatch, offset);
+      if (lane >= offset) {
+        prefix_mismatch = max(prefix_mismatch, previous);
+      }
+    }
+    const int preceding_mismatch = max(
+        latest_mismatch, prefix_mismatch);
+    if (equal) {
+      const int length = key_position - preceding_mismatch;
+      const uint64_t priority =
+          (static_cast<uint64_t>(length) << 32) |
+          static_cast<uint32_t>(key_position + 1);
+      atomicMax(
+          reinterpret_cast<unsigned long long*>(
+              winner + query_position),
+          static_cast<unsigned long long>(priority));
+    }
+    const int chunk_mismatch = __shfl_sync(
+        0xffffffffu, prefix_mismatch, kWarpSize - 1);
+    latest_mismatch = max(latest_mismatch, chunk_mismatch);
+  }
+}
+
+
+template <typename scalar_t, bool PackedVarlen>
+__global__ void gather_hard_diagonal_winners_kernel(
+    const int64_t* __restrict__ winners,
+    const scalar_t* __restrict__ value,
+    scalar_t* __restrict__ output,
+    int seq_len,
+    int num_heads,
+    int num_value_heads,
+    int value_dim,
+    const int32_t* __restrict__ cu_seqlens,
+    int num_sequences,
+    int total_tokens) {
+  __shared__ int packed_sequence_start;
+  const int linear_row = blockIdx.x;
+  int token;
+  int head;
+  int batch;
+  int sequence_start = 0;
+  int64_t winner_index;
+  if constexpr (PackedVarlen) {
+    token = linear_row / num_heads;
+    head = linear_row % num_heads;
+    batch = 0;
+    if (threadIdx.x == 0) {
+      const int sequence = find_packed_sequence(
+          cu_seqlens, num_sequences, token);
+      packed_sequence_start = sequence < num_sequences
+          ? cu_seqlens[sequence]
+          : -1;
+    }
+    __syncthreads();
+    if (packed_sequence_start < 0) {
+      return;
+    }
+    sequence_start = packed_sequence_start;
+    winner_index = static_cast<int64_t>(head) * total_tokens + token;
+  } else {
+    token = linear_row % seq_len;
+    head = (linear_row / seq_len) % num_heads;
+    batch = linear_row / (seq_len * num_heads);
+    winner_index =
+        (static_cast<int64_t>(batch) * num_heads + head) * seq_len +
+        token;
+  }
+  const uint64_t priority = static_cast<uint64_t>(
+      winners[winner_index]);
+  const int route_position = static_cast<int>(
+      priority & 0xffffffffu);
+  const int value_head = head / (num_heads / num_value_heads);
+  for (int feature = threadIdx.x;
+       feature < value_dim;
+       feature += blockDim.x) {
+    float result = 0.0f;
+    if (route_position > 0) {
+      const int64_t value_index = PackedVarlen
+          ? (static_cast<int64_t>(sequence_start + route_position) *
+                 num_value_heads +
+             value_head) *
+                  value_dim +
+              feature
+          : ((static_cast<int64_t>(batch) * seq_len + route_position) *
+                 num_value_heads +
+             value_head) *
+                  value_dim +
+              feature;
+      result = read_float(value, value_index) > 0.0f ? 1.0f : -1.0f;
+    }
+    const int64_t output_row = PackedVarlen
+        ? linear_row
+        : (static_cast<int64_t>(batch) * seq_len + token) *
+              num_heads +
+          head;
+    const int64_t output_index = output_row * value_dim + feature;
+    output[output_index] = write_scalar<scalar_t>(result);
+  }
+}
+
+
+template <typename scalar_t, bool PackedVarlen>
+void launch_hard_diagonal(
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
+    const torch::Tensor& value,
+    torch::Tensor& output,
+    int batch_size,
+    int seq_len,
+    int num_heads,
+    int num_value_heads,
+    int value_dim,
+    const torch::Tensor& cu_seqlens,
+    int num_sequences,
+    int total_tokens,
+    cudaStream_t stream) {
+  const int winner_tokens = PackedVarlen ? total_tokens : seq_len;
+  const int winner_batches = PackedVarlen ? 1 : batch_size;
+  torch::Tensor winners = torch::zeros(
+      {winner_batches, num_heads, winner_tokens},
+      packed_query_symbols.options().dtype(torch::kInt64));
+  const int64_t tasks = PackedVarlen
+      ? static_cast<int64_t>(num_heads) * total_tokens
+      : static_cast<int64_t>(batch_size) * num_heads * (seq_len - 1);
+  if (tasks > 0) {
+    const int blocks = static_cast<int>(
+        (tasks + kWarpsPerBlock - 1) / kWarpsPerBlock);
+    hard_diagonal_winner_kernel<PackedVarlen><<<
+        blocks,
+        kBlockThreads,
+        0,
+        stream>>>(
+        packed_query_symbols.data_ptr<int32_t>(),
+        packed_key_symbols.data_ptr<int32_t>(),
+        winners.data_ptr<int64_t>(),
+        batch_size,
+        seq_len,
+        num_heads,
+        PackedVarlen ? cu_seqlens.data_ptr<int32_t>() : nullptr,
+        num_sequences,
+        total_tokens);
+  }
+  const int64_t output_rows = PackedVarlen
+      ? static_cast<int64_t>(total_tokens) * num_heads
+      : static_cast<int64_t>(batch_size) * seq_len * num_heads;
+  gather_hard_diagonal_winners_kernel<scalar_t, PackedVarlen><<<
+      output_rows,
+      kBlockThreads,
+      0,
+      stream>>>(
+      winners.data_ptr<int64_t>(),
+      value.data_ptr<scalar_t>(),
+      output.data_ptr<scalar_t>(),
+      seq_len,
+      num_heads,
+      num_value_heads,
+      value_dim,
+      PackedVarlen ? cu_seqlens.data_ptr<int32_t>() : nullptr,
+      num_sequences,
+      total_tokens);
 }
 
 
@@ -1799,24 +2050,41 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> hard_forward_cuda(
             num_heads,
             symbol_dim,
             stream);
-        const size_t shared_bytes =
-            2 * kWarpsPerBlock * sizeof(int);
-        hard_forward_kernel<scalar_t, false><<<
-            symbol_rows,
-            kBlockThreads,
-            shared_bytes,
-            stream>>>(
-            packed_query_symbols.data_ptr<int32_t>(),
-            packed_key_symbols.data_ptr<int32_t>(),
-            value.data_ptr<scalar_t>(),
-            output.data_ptr<scalar_t>(),
-            seq_len,
-            num_heads,
-            num_value_heads,
-            value_dim,
-            nullptr,
-            0,
-            batch_size * seq_len);
+        if (seq_len >= kHardDiagonalMinSequenceLength) {
+          launch_hard_diagonal<scalar_t, false>(
+              packed_query_symbols,
+              packed_key_symbols,
+              value,
+              output,
+              batch_size,
+              seq_len,
+              num_heads,
+              num_value_heads,
+              value_dim,
+              torch::Tensor(),
+              0,
+              batch_size * seq_len,
+              stream);
+        } else {
+          const size_t shared_bytes =
+              2 * kWarpsPerBlock * sizeof(int);
+          hard_forward_kernel<scalar_t, false><<<
+              symbol_rows,
+              kBlockThreads,
+              shared_bytes,
+              stream>>>(
+              packed_query_symbols.data_ptr<int32_t>(),
+              packed_key_symbols.data_ptr<int32_t>(),
+              value.data_ptr<scalar_t>(),
+              output.data_ptr<scalar_t>(),
+              seq_len,
+              num_heads,
+              num_value_heads,
+              value_dim,
+              nullptr,
+              0,
+              batch_size * seq_len);
+        }
       });
 
   C10_CUDA_KERNEL_LAUNCH_CHECK();
@@ -1883,24 +2151,41 @@ hard_forward_varlen_cuda(
             num_heads,
             symbol_dim,
             stream);
-        const size_t shared_bytes =
-            2 * kWarpsPerBlock * sizeof(int);
-        hard_forward_kernel<scalar_t, true><<<
-            symbol_rows,
-            kBlockThreads,
-            shared_bytes,
-            stream>>>(
-            packed_query_symbols.data_ptr<int32_t>(),
-            packed_key_symbols.data_ptr<int32_t>(),
-            value.data_ptr<scalar_t>(),
-            output.data_ptr<scalar_t>(),
-            0,
-            num_heads,
-            num_value_heads,
-            value_dim,
-            cu_seqlens.data_ptr<int32_t>(),
-            num_sequences,
-            total_tokens);
+        if (total_tokens >= kHardDiagonalMinSequenceLength) {
+          launch_hard_diagonal<scalar_t, true>(
+              packed_query_symbols,
+              packed_key_symbols,
+              value,
+              output,
+              1,
+              0,
+              num_heads,
+              num_value_heads,
+              value_dim,
+              cu_seqlens,
+              num_sequences,
+              total_tokens,
+              stream);
+        } else {
+          const size_t shared_bytes =
+              2 * kWarpsPerBlock * sizeof(int);
+          hard_forward_kernel<scalar_t, true><<<
+              symbol_rows,
+              kBlockThreads,
+              shared_bytes,
+              stream>>>(
+              packed_query_symbols.data_ptr<int32_t>(),
+              packed_key_symbols.data_ptr<int32_t>(),
+              value.data_ptr<scalar_t>(),
+              output.data_ptr<scalar_t>(),
+              0,
+              num_heads,
+              num_value_heads,
+              value_dim,
+              cu_seqlens.data_ptr<int32_t>(),
+              num_sequences,
+              total_tokens);
+        }
       });
 
   C10_CUDA_KERNEL_LAUNCH_CHECK();

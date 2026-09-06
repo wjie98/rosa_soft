@@ -5,6 +5,11 @@ dense-surrogate-backward implementation as the comparison baseline for future
 estimators. It is a reference implementation, not a claim that the surrogate
 is the exact derivative of discrete ROSA routing.
 
+This file describes that historical tag, not the current working tree. Current
+HEAD additionally exposes the separately named exact-unbounded surrogate and
+uses an exact unlimited diagonal-DP hard schedule for longer CUDA inputs; the
+tag's finite estimator and public defaults remain unchanged.
+
 ## Frozen contract
 
 - Forward uses binary `sign` symbols, exact causal latest-longest suffix

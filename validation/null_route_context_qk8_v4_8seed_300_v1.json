@@ -1,0 +1,983 @@
+{
+  "schema_version": 1,
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 3070",
+  "scale": 1.0,
+  "mismatch_scale": 3.0,
+  "sections": {
+    "context": {
+      "records": [
+        {
+          "seed": 0,
+          "estimator": "no_prior",
+          "training": {
+            "training_loss": 0.002763789612799883,
+            "first_train_exact_step": 215,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.0054710484068588505,
+            "mean_value_gradient_norm": 0.0095111698207135,
+            "step_ms": 38.25410086331734
+          },
+          "train": {
+            "loss": 0.002729643601924181,
+            "exact_accuracy": 0.998046875,
+            "bit_accuracy": 0.99951171875,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.8701171875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.9794921875,
+            "nonnull_route_fraction": 0.9794921875,
+            "paired_route_difference_fraction": 0.2421875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.06640625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.06640625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.008825333788990974,
+            "exact_accuracy": 0.9921875,
+            "bit_accuracy": 0.998046875,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.873046875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.978515625,
+            "nonnull_route_fraction": 0.978515625,
+            "paired_route_difference_fraction": 0.2421875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.078125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.078125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true,
+          "initial_competition": {
+            "top_two_mass": 0.5975608825683594,
+            "runner_up_share_of_rest": 0.13869142532348633,
+            "hard_soft_winner_agreement": 0.9609375,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.6054186820983887,
+            "runner_up_share_of_rest": 0.23033246397972107,
+            "hard_soft_winner_agreement": 0.021484375,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 0,
+          "estimator": "hard_null_gate",
+          "training": {
+            "training_loss": 0.0008146207546815276,
+            "first_train_exact_step": 81,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.0019135046538697983,
+            "mean_value_gradient_norm": 0.0026478043547831474,
+            "step_ms": 64.7849244333338
+          },
+          "train": {
+            "loss": 0.005692357197403908,
+            "exact_accuracy": 0.99609375,
+            "bit_accuracy": 0.9990234375,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.9970703125,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.01171875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.068359375,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.001203552121296525,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.994140625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.0234375,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.05078125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0703125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true,
+          "initial_competition": {
+            "top_two_mass": 0.5975608825683594,
+            "runner_up_share_of_rest": 0.13869142532348633,
+            "hard_soft_winner_agreement": 0.9609375,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.590791642665863,
+            "runner_up_share_of_rest": 0.19644811749458313,
+            "hard_soft_winner_agreement": 0.0,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 1,
+          "estimator": "no_prior",
+          "training": {
+            "training_loss": 0.01651868224143982,
+            "first_train_exact_step": 172,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.007163261551177129,
+            "mean_value_gradient_norm": 0.00630655082485949,
+            "step_ms": 50.43127030328227
+          },
+          "train": {
+            "loss": 0.01629912480711937,
+            "exact_accuracy": 0.990234375,
+            "bit_accuracy": 0.99658203125,
+            "payload_route_any_head_accuracy": 0.982421875,
+            "payload_route_head_fraction": 0.8037109375,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.41015625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.072265625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0703125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.1035936176776886,
+            "exact_accuracy": 0.92578125,
+            "bit_accuracy": 0.97265625,
+            "payload_route_any_head_accuracy": 0.9765625,
+            "payload_route_head_fraction": 0.791015625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.4765625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.078125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0546875,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": false,
+          "initial_competition": {
+            "top_two_mass": 0.5912125110626221,
+            "runner_up_share_of_rest": 0.138417586684227,
+            "hard_soft_winner_agreement": 0.875,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.5939964652061462,
+            "runner_up_share_of_rest": 0.26055043935775757,
+            "hard_soft_winner_agreement": 0.02734375,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 1,
+          "estimator": "hard_null_gate",
+          "training": {
+            "training_loss": 0.005968100391328335,
+            "first_train_exact_step": 254,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.007608901431085542,
+            "mean_value_gradient_norm": 0.01146481987903826,
+            "step_ms": 37.29306936652089
+          },
+          "train": {
+            "loss": 0.011931219138205051,
+            "exact_accuracy": 0.994140625,
+            "bit_accuracy": 0.9970703125,
+            "payload_route_any_head_accuracy": 0.927734375,
+            "payload_route_head_fraction": 0.7138671875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.947265625,
+            "nonnull_route_fraction": 0.947265625,
+            "paired_route_difference_fraction": 0.375,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.076171875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.05078125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.029246900230646133,
+            "exact_accuracy": 0.97265625,
+            "bit_accuracy": 0.9931640625,
+            "payload_route_any_head_accuracy": 0.9453125,
+            "payload_route_head_fraction": 0.72265625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.94921875,
+            "nonnull_route_fraction": 0.94921875,
+            "paired_route_difference_fraction": 0.34375,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0703125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": false,
+          "initial_competition": {
+            "top_two_mass": 0.5912125110626221,
+            "runner_up_share_of_rest": 0.138417586684227,
+            "hard_soft_winner_agreement": 0.875,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.5924168229103088,
+            "runner_up_share_of_rest": 0.2845950126647949,
+            "hard_soft_winner_agreement": 0.150390625,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 2,
+          "estimator": "no_prior",
+          "training": {
+            "training_loss": 0.0013659322867169976,
+            "first_train_exact_step": 192,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.004215904638573799,
+            "mean_value_gradient_norm": 0.005949076935648918,
+            "step_ms": 35.09382757668694
+          },
+          "train": {
+            "loss": 0.001350983278825879,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 0.908203125,
+            "payload_route_head_fraction": 0.7041015625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.9453125,
+            "nonnull_route_fraction": 0.9453125,
+            "paired_route_difference_fraction": 0.4140625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.056640625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0546875,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.01845283806324005,
+            "exact_accuracy": 0.9765625,
+            "bit_accuracy": 0.9931640625,
+            "payload_route_any_head_accuracy": 0.90625,
+            "payload_route_head_fraction": 0.703125,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.951171875,
+            "nonnull_route_fraction": 0.951171875,
+            "paired_route_difference_fraction": 0.40625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.07421875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0703125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": false,
+          "initial_competition": {
+            "top_two_mass": 0.5864078998565674,
+            "runner_up_share_of_rest": 0.13636724650859833,
+            "hard_soft_winner_agreement": 0.9833984375,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.6029723882675171,
+            "runner_up_share_of_rest": 0.25900590419769287,
+            "hard_soft_winner_agreement": 0.048828125,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 2,
+          "estimator": "hard_null_gate",
+          "training": {
+            "training_loss": 0.0014392700977623463,
+            "first_train_exact_step": 175,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.003215493358244809,
+            "mean_value_gradient_norm": 0.0069073446669790425,
+            "step_ms": 43.43527343667423
+          },
+          "train": {
+            "loss": 0.0014251645188778639,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 0.939453125,
+            "payload_route_head_fraction": 0.5947265625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.9384765625,
+            "nonnull_route_fraction": 0.9384765625,
+            "paired_route_difference_fraction": 0.62109375,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.052734375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.02373497188091278,
+            "exact_accuracy": 0.98046875,
+            "bit_accuracy": 0.9951171875,
+            "payload_route_any_head_accuracy": 0.9296875,
+            "payload_route_head_fraction": 0.58984375,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.935546875,
+            "nonnull_route_fraction": 0.935546875,
+            "paired_route_difference_fraction": 0.640625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.05859375,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.03125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": false,
+          "initial_competition": {
+            "top_two_mass": 0.5864078998565674,
+            "runner_up_share_of_rest": 0.13636724650859833,
+            "hard_soft_winner_agreement": 0.9833984375,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.5906941890716553,
+            "runner_up_share_of_rest": 0.2625894248485565,
+            "hard_soft_winner_agreement": 0.0703125,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 3,
+          "estimator": "no_prior",
+          "training": {
+            "training_loss": 0.0008851980092003942,
+            "first_train_exact_step": 99,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.0030684379704810755,
+            "mean_value_gradient_norm": 0.00245223356179243,
+            "step_ms": 35.23256610341681
+          },
+          "train": {
+            "loss": 0.000888100010342896,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.982421875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.0703125,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0546875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.04296875,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.0009193859877996147,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.984375,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.0625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.046875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.05859375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true,
+          "initial_competition": {
+            "top_two_mass": 0.5940274000167847,
+            "runner_up_share_of_rest": 0.13622020184993744,
+            "hard_soft_winner_agreement": 1.0,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.5977970361709595,
+            "runner_up_share_of_rest": 0.21725933253765106,
+            "hard_soft_winner_agreement": 0.0,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 3,
+          "estimator": "hard_null_gate",
+          "training": {
+            "training_loss": 0.0012741722166538239,
+            "first_train_exact_step": 93,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.0030714642189074463,
+            "mean_value_gradient_norm": 0.002907577809552701,
+            "step_ms": 35.4848677967675
+          },
+          "train": {
+            "loss": 0.000910639762878418,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 0.998046875,
+            "payload_route_head_fraction": 0.921875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.28515625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.06640625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.068359375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.004244981333613396,
+            "exact_accuracy": 0.99609375,
+            "bit_accuracy": 0.9990234375,
+            "payload_route_any_head_accuracy": 0.9921875,
+            "payload_route_head_fraction": 0.916015625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.3203125,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.04296875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true,
+          "initial_competition": {
+            "top_two_mass": 0.5940274000167847,
+            "runner_up_share_of_rest": 0.13622020184993744,
+            "hard_soft_winner_agreement": 1.0,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.6030616760253906,
+            "runner_up_share_of_rest": 0.23916099965572357,
+            "hard_soft_winner_agreement": 0.0,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 4,
+          "estimator": "no_prior",
+          "training": {
+            "training_loss": 0.0011533207725733519,
+            "first_train_exact_step": 69,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.0016426132334163412,
+            "mean_value_gradient_norm": 0.004088670330723593,
+            "step_ms": 34.71748281328473
+          },
+          "train": {
+            "loss": 0.001160462386906147,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.98046875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.078125,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.052734375,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.052734375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.0012805574806407094,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.97265625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.109375,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0703125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.03515625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true,
+          "initial_competition": {
+            "top_two_mass": 0.5951575040817261,
+            "runner_up_share_of_rest": 0.12919187545776367,
+            "hard_soft_winner_agreement": 1.0,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.5735732913017273,
+            "runner_up_share_of_rest": 0.21773900091648102,
+            "hard_soft_winner_agreement": 0.0,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 4,
+          "estimator": "hard_null_gate",
+          "training": {
+            "training_loss": 0.0019063684158027172,
+            "first_train_exact_step": 122,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.004423414108314319,
+            "mean_value_gradient_norm": 0.006133801908484505,
+            "step_ms": 35.05159888668762
+          },
+          "train": {
+            "loss": 0.0018886770121753216,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 0.95703125,
+            "payload_route_head_fraction": 0.6103515625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.15234375,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0390625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.064453125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.044772323220968246,
+            "exact_accuracy": 0.984375,
+            "bit_accuracy": 0.994140625,
+            "payload_route_any_head_accuracy": 0.9609375,
+            "payload_route_head_fraction": 0.6171875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.1875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.05078125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0546875,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": false,
+          "initial_competition": {
+            "top_two_mass": 0.5951575040817261,
+            "runner_up_share_of_rest": 0.12919187545776367,
+            "hard_soft_winner_agreement": 1.0,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.5275969505310059,
+            "runner_up_share_of_rest": 0.26942700147628784,
+            "hard_soft_winner_agreement": 0.28125,
+            "top_two_value_collision": 0.0234375
+          }
+        },
+        {
+          "seed": 5,
+          "estimator": "no_prior",
+          "training": {
+            "training_loss": 0.0012325095012784004,
+            "first_train_exact_step": 77,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.001651977457877365,
+            "mean_value_gradient_norm": 0.003188880415254971,
+            "step_ms": 36.072985246622316
+          },
+          "train": {
+            "loss": 0.001201421720907092,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 0.998046875,
+            "payload_route_head_fraction": 0.9873046875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.046875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.064453125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.052734375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.0012085759080946445,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.986328125,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.0546875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.05859375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true,
+          "initial_competition": {
+            "top_two_mass": 0.587425708770752,
+            "runner_up_share_of_rest": 0.13088545203208923,
+            "hard_soft_winner_agreement": 1.0,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.6006128191947937,
+            "runner_up_share_of_rest": 0.2163025140762329,
+            "hard_soft_winner_agreement": 0.0,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 5,
+          "estimator": "hard_null_gate",
+          "training": {
+            "training_loss": 0.0008844723924994469,
+            "first_train_exact_step": 75,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.0013407437080240924,
+            "mean_value_gradient_norm": 0.002425196461408632,
+            "step_ms": 35.114810916711576
+          },
+          "train": {
+            "loss": 0.0008693077834323049,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.9638671875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.14453125,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.056640625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.07421875,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.0011440818198025227,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.96875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.1171875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.05859375,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.05859375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": true,
+          "initial_competition": {
+            "top_two_mass": 0.587425708770752,
+            "runner_up_share_of_rest": 0.13088545203208923,
+            "hard_soft_winner_agreement": 1.0,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.5880036950111389,
+            "runner_up_share_of_rest": 0.207988902926445,
+            "hard_soft_winner_agreement": 0.0,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 6,
+          "estimator": "no_prior",
+          "training": {
+            "training_loss": 0.0010808869265019894,
+            "first_train_exact_step": 85,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.0018885135852178792,
+            "mean_value_gradient_norm": 0.00308948948130516,
+            "step_ms": 47.672738266604334
+          },
+          "train": {
+            "loss": 0.001074557425454259,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.9716796875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.11328125,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.06640625,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.037114620208740234,
+            "exact_accuracy": 0.9765625,
+            "bit_accuracy": 0.9912109375,
+            "payload_route_any_head_accuracy": 1.0,
+            "payload_route_head_fraction": 0.966796875,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 1.0,
+            "nonnull_route_fraction": 1.0,
+            "paired_route_difference_fraction": 0.1328125,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0546875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.08984375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": false,
+          "initial_competition": {
+            "top_two_mass": 0.6003807783126831,
+            "runner_up_share_of_rest": 0.13846735656261444,
+            "hard_soft_winner_agreement": 0.962890625,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.6005606651306152,
+            "runner_up_share_of_rest": 0.21919041872024536,
+            "hard_soft_winner_agreement": 0.0,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 6,
+          "estimator": "hard_null_gate",
+          "training": {
+            "training_loss": 0.0013232347555458546,
+            "first_train_exact_step": 130,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.003387833022425184,
+            "mean_value_gradient_norm": 0.005565467077200689,
+            "step_ms": 36.52124210319016
+          },
+          "train": {
+            "loss": 0.0019088408444076777,
+            "exact_accuracy": 0.998046875,
+            "bit_accuracy": 0.99951171875,
+            "payload_route_any_head_accuracy": 0.98046875,
+            "payload_route_head_fraction": 0.8642578125,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.912109375,
+            "nonnull_route_fraction": 0.912109375,
+            "paired_route_difference_fraction": 0.16015625,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.064453125,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0703125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.02241339534521103,
+            "exact_accuracy": 0.984375,
+            "bit_accuracy": 0.9931640625,
+            "payload_route_any_head_accuracy": 0.96484375,
+            "payload_route_head_fraction": 0.853515625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.91796875,
+            "nonnull_route_fraction": 0.91796875,
+            "paired_route_difference_fraction": 0.1953125,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.05859375,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.08203125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": false,
+          "initial_competition": {
+            "top_two_mass": 0.6003807783126831,
+            "runner_up_share_of_rest": 0.13846735656261444,
+            "hard_soft_winner_agreement": 0.962890625,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.6033470630645752,
+            "runner_up_share_of_rest": 0.2298326939344406,
+            "hard_soft_winner_agreement": 0.08203125,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 7,
+          "estimator": "no_prior",
+          "training": {
+            "training_loss": 0.007276876363903284,
+            "first_train_exact_step": 239,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.007995068622500792,
+            "mean_value_gradient_norm": 0.0042437208924578345,
+            "step_ms": 40.286030396819115
+          },
+          "train": {
+            "loss": 0.007208840921521187,
+            "exact_accuracy": 0.998046875,
+            "bit_accuracy": 0.99951171875,
+            "payload_route_any_head_accuracy": 0.966796875,
+            "payload_route_head_fraction": 0.7333984375,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.9931640625,
+            "nonnull_route_fraction": 0.9931640625,
+            "paired_route_difference_fraction": 0.48828125,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.048828125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.0426395907998085,
+            "exact_accuracy": 0.96875,
+            "bit_accuracy": 0.9921875,
+            "payload_route_any_head_accuracy": 0.953125,
+            "payload_route_head_fraction": 0.7265625,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.984375,
+            "nonnull_route_fraction": 0.984375,
+            "paired_route_difference_fraction": 0.4921875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.046875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.0546875,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": false,
+          "initial_competition": {
+            "top_two_mass": 0.5964987874031067,
+            "runner_up_share_of_rest": 0.12522992491722107,
+            "hard_soft_winner_agreement": 1.0,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.6060358285903931,
+            "runner_up_share_of_rest": 0.25252360105514526,
+            "hard_soft_winner_agreement": 0.0234375,
+            "top_two_value_collision": 0.0
+          }
+        },
+        {
+          "seed": 7,
+          "estimator": "hard_null_gate",
+          "training": {
+            "training_loss": 0.0012058732099831104,
+            "first_train_exact_step": 216,
+            "qk_zero_gradient_fraction": 0.0,
+            "mean_qk_gradient_norm": 0.004678073594501863,
+            "mean_value_gradient_norm": 0.004429410583810143,
+            "step_ms": 50.15545629993236
+          },
+          "train": {
+            "loss": 0.001198978628963232,
+            "exact_accuracy": 1.0,
+            "bit_accuracy": 1.0,
+            "payload_route_any_head_accuracy": 0.974609375,
+            "payload_route_head_fraction": 0.64453125,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.9755859375,
+            "nonnull_route_fraction": 0.9755859375,
+            "paired_route_difference_fraction": 0.69921875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.0625,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.05859375,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "validation": {
+            "loss": 0.026997122913599014,
+            "exact_accuracy": 0.98828125,
+            "bit_accuracy": 0.99609375,
+            "payload_route_any_head_accuracy": 0.98046875,
+            "payload_route_head_fraction": 0.646484375,
+            "historical_route_any_head_accuracy": 1.0,
+            "historical_route_head_fraction": 0.9765625,
+            "nonnull_route_fraction": 0.9765625,
+            "paired_route_difference_fraction": 0.6796875,
+            "paired_routed_value_difference_fraction": 1.0,
+            "zero_route_exact_accuracy": 0.04296875,
+            "zero_route_bit_accuracy": 0.5,
+            "current_value_exact_accuracy": 0.078125,
+            "current_value_bit_accuracy": 0.5,
+            "query_residual_max_difference": 0.0
+          },
+          "passed": false,
+          "initial_competition": {
+            "top_two_mass": 0.5964987874031067,
+            "runner_up_share_of_rest": 0.12522992491722107,
+            "hard_soft_winner_agreement": 1.0,
+            "top_two_value_collision": 0.0
+          },
+          "final_competition": {
+            "top_two_mass": 0.6098541617393494,
+            "runner_up_share_of_rest": 0.26828083395957947,
+            "hard_soft_winner_agreement": 0.0546875,
+            "top_two_value_collision": 0.0
+          }
+        }
+      ],
+      "summary": {
+        "no_prior": {
+          "passed": 4,
+          "runs": 8,
+          "mean_validation_exact": 0.97998046875,
+          "minimum_validation_exact": 0.92578125,
+          "median_first_train_exact_step": 135.5,
+          "mean_step_ms": 39.72012519625423,
+          "mean_final_top_two_mass": 0.5976208969950676,
+          "mean_final_runner_share": 0.2341129593551159,
+          "mean_final_hard_soft_agreement": 0.01513671875,
+          "mean_final_top_two_value_collision": 0.0
+        },
+        "hard_null_gate": {
+          "passed": 3,
+          "runs": 8,
+          "mean_validation_exact": 0.98828125,
+          "minimum_validation_exact": 0.97265625,
+          "median_first_train_exact_step": 126.0,
+          "mean_step_ms": 42.23015540497727,
+          "mean_final_top_two_mass": 0.5882207751274109,
+          "mean_final_runner_share": 0.24479037337005138,
+          "mean_final_hard_soft_agreement": 0.079833984375,
+          "mean_final_top_two_value_collision": 0.0029296875
+        }
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # RosaSoft CUDA Optimization Record
 
-This document records the 2026-07-30 through 2026-08-06 CUDA optimization
+This document records the 2026-07-30 through 2026-09-06 CUDA optimization
 passes.
 It distinguishes production changes from rejected experiments so old branches
 and benchmark artifacts do not become accidental design requirements.
@@ -19,6 +19,11 @@ dense causal candidate set. The final retained set was remeasured on an idle
 card with five alternating-order rounds, 30 warmups, and 200 timed iterations
 per sample; the tables below report medians of those rounds.
 
+The 2026-09-05 unbounded replay decisions were independently rechecked after
+unrelated GPU1 load was discovered. Only seven-round rotating-order idle-card
+measurements in `PERSISTENT_MACRO_TILE_VJP.md` govern those decisions; older
+absolute latency tables remain historical evidence for the finite operator.
+
 ## 2. Decision Matrix
 
 | Step | Mechanism | Decision | Reason |
@@ -33,7 +38,7 @@ per sample; the tables below report medians of those rounds.
 | 8 | Global 64/128/256-thread CTA choice | Keep 128 | 64 and 256 have conflicting dense/packed wins; a ladder needs brittle heuristics. |
 | 9 | Cancellation-resistant local diagonal adjoint | Keep as oracle | Removes full-diagonal cancellation and passes long exact-match FP32 stress. |
 | 10 | Multi-stage factorized diagonal CUDA VJP | Archived | Parity passed, but cross-GPU mean latency was `1.30x` production and scratch was quadratic; removed from the frozen build. |
-| 11 | Exact hard diagonal run-length index | Archived | Bit-exact and up to `12x` faster on collapsed all-match codes, but random codes regressed; removed from the frozen build. |
+| 11 | Exact unlimited hard diagonal DP | Promoted | Bit-exact, `O(BHT)` state, quadratic worst-case work; selected at T>=512 after repeated inputs improved by over `160x` at T=4096. |
 | 12 | Offline cross-GPU promotion gate | Keep | Rejects candidates with any material regression, parity failure, or excessive workspace. |
 | 13 | Exact tiled-streaming dense VJP | Keep for fixed `T >= 4096` | Preserves every candidate without quadratic state and cuts long SM75 QKV latency by about `2.8x..2.9x`. |
 | 14 | Local-gate adjoint aggregation | Keep | Contracts each shared gate with Q/K bits once; gives about `2x` over the first streaming kernel. |
@@ -41,20 +46,35 @@ per sample; the tables below report medians of those rounds.
 | 16 | Exact rolling diagonal suffix recurrence | Reject | Exact, but serial diagonal dependence and low active-thread count regress common shapes. |
 | 17 | First-sweep online value carrier | Reject | Small wide-value wins do not clear the mean gate and narrow values regress. |
 | 18 | Coarse gradient-mask template classes | Reject | A small Q/K-only win costs about 81% binary growth and no useful QKV gain. |
-| 19 | Row-log hoist and mismatch-gate LUT | Reject | Compiler already removes the row invariant; LUT gains are sub-threshold and shape-dependent. |
+| 19 | Finite-window row-log hoist and mismatch-gate LUT | Reject in that kernel | Compiler already removes the bounded-loop row invariant; LUT gains are sub-threshold and shape-dependent there. The unbounded grouped path is covered separately below. |
 | 20 | Sparse-tail warp suffix ownership | Keep as research primitive | Wins when only 1-2 queries survive and no recurrence state exists; full-VJP integration is neutral and raises registers. |
 | 21 | `32 x 32` block-diagonal tiles | Reject | Higher residency loses to doubled halo, synchronization, reverse, and atomic boundary work. |
 | 22 | Sequential TF32 high/low fragments | Reject | NVCC already reuses the registers; aggregate change is noise with a 2.1% worst regression. |
 | 23 | Named-barrier warp-specialized double buffer | Keep for research | Exact first-sweep overlap gives a 3.9% integrated mean win on sm_86, but does not clear the 5% production gate. |
+| 24 | Exact unbounded diagonal-slab replay | Promoted as separate operator | Visits every causal candidate, has no suffix cap, and keeps live workspace `O(BHT)` with a private bounded slab. |
+| 25 | FP16 fused statistics and reverse utility | Keep, gated | Removes the materialized utility slab and improves clean H=4/H=8 long-sequence controls by roughly 39-44% over the selected unfused plan. |
+| 26 | FP16 tensor dV plus tiled Q/K owners | Keep, gated | Tensor dV wins `Dv=64` at sufficient work; tiled symbols win reliably from D=4 and remain scalar at D=1/2. |
+| 27 | Shape-aware slab up to 8192 under 1 GiB | Keep | Large slabs remove repeated launches; capacity gains flatten with head count, so the fixed budget selects the tradeoff without a public knob. |
+| 28 | 64/128 macro tiles and persistent/paired diagonal queues | Reject | Clean sm75 recheck leaves 32 fastest; hardware scheduling remains 2-17% ahead of tested explicit schedules. |
+| 29 | CTA-local complementary diagonal packing | Implemented in macro prototype; isolated A/B pending | `packed_diagonal_lane()` maps 63 local segments to 32 warp itineraries with segmented carry reset. It should not complicate slab replay absent measured tail waste. |
+| 30 | Multi-warp fused-statistics score scan | Reject | Padded diagonal-major shared storage is exact, but clean production-relevant results range from 1.7% faster to 0.5% slower and become neutral at 8K. |
+| 31 | Retain the last forward score slab | Reject | The removable score pre-scan is only 4.2% of H=4,T=8K VJP time; cross-pass lifetime coupling does not clear the complexity gate. |
+| 32 | Occupancy-bounded grouped checkpoint reverse | Keep, gated | Complete 32-diagonal ownership needs no inter-CTA progress protocol, stores only `O(GT)` boundaries, and cuts 4K/8K live memory by 10.7-21.3x. Static long/short pairing, gate LUT, row-prior hoist, max-then-exp reduction, warp affine scans, and WMMA utility/dV are retained. |
+| 33 | Move utility/WMMA phase storage from shared memory to L2 | Reject | Shared storage fell by 8 KiB, but registers rose from 85 to 101. Forcing three CTAs introduced spills, materially regressed 4K, and did not give a stable long-sequence win. |
 
 ## 3. Rejected Local Changes
 
-### 3.1 Mismatch LUT
+### 3.1 Finite-Window Mismatch LUT
 
 The tested QKV times for `T=128/256/512/1024` were
 `0.426/0.857/2.998/11.566 ms`, versus
 `0.402/0.862/2.956/11.412 ms` without the LUT. The result changes sign across
 shapes and does not justify a shared table.
+
+This result does not apply to the later unbounded grouped kernel, where the
+same gate is otherwise recomputed across stats, checkpoint, and replay passes.
+That path retains one 33-entry table per CTA; see
+`GROUPED_CHECKPOINT_VJP.md`.
 
 ### 3.2 Warp-Per-Route Suffix Scan
 
@@ -413,28 +433,28 @@ tests were removed when `rosa-soft-dense-reference-v1` was frozen. The later
 single-kernel tiled-streaming schedule removed the quadratic gate matrix and
 extra launches without reviving this architecture.
 
-## 8. Exact Hard Suffix Index
+## 8. Exact Hard Diagonal DP
 
-The former exact hard diagonal prototype assigned one warp to one Q/K
-diagonal. For each 32-position group it computed the nearest preceding
-mismatch with an inclusive prefix maximum; the exact suffix length is the
-distance to that mismatch, capped by `W`. A 64-bit atomic maximum encodes
-`(length, route)` so longest-first and latest-on-tie semantics are unchanged.
+The maintained hard diagonal path assigns one warp to one complete Q/K
+diagonal. For each 32-position chunk it computes the nearest preceding
+mismatch with an inclusive prefix maximum; the exact unlimited suffix length
+is the distance to that mismatch. A 64-bit atomic maximum encodes
+`(length, successor_route)`, preserving longest-first and latest-on-tie
+semantics without a hard suffix window.
 
-The prototype compared every causal Q/K endpoint pair once. It was not a
-bounded candidate lookup, probabilistic hash, or sparse-gradient mechanism.
-Tests and the calibration matrix covered random, all-match, periodic,
-singleton, partial-warp, FP32, FP16, BF16, `W=1..300`, and `T=1..1024`;
-output and both packed symbol tensors are bit-exact with the production scan.
+The path compares every causal Q/K endpoint pair once. It is not a bounded
+candidate lookup, probabilistic hash, or sparse-gradient mechanism. It needs
+one `O(BHT)` winner array and has a deterministic `O(BHT^2)` work bound,
+including repetitive inputs where the direct early-exit route scan becomes
+cubic. Dense and packed-varlen implementations are selected from T=512; the
+direct scan remains the low-overhead short-input fallback.
 
-Performance depended on hard-code entropy. On the 2080 Ti with
-`T=4096,W=128`, all-match latency fell from about `6.69 ms` to `0.56 ms`, a
-roughly `12x` speedup. Random codes made the indexed path about `1.1x..1.8x`
-slower because the production route scan usually exits after its first symbol.
-No input-independent `T/D/W` rule distinguished these states, so this path was
-removed from the frozen build. The checkpoint codebook diagnostics in
-`benchmarks/pretraining_codebook.py` provide the missing collapse/entropy
-signal for future model-level dispatch work.
+On the RTX 3070 at `B=1,H=4,D=8,Hv=2,Dv=64,T=4096`, FP16 production DP takes
+about `0.268/0.345/0.673 ms` for random/periodic-64/all-equal symbols. The
+former direct scan measured `0.188/64.88/108.28 ms`. All tested outputs are
+bit-exact with the compact SAM. Random input pays a small absolute overhead in
+exchange for removing the pattern-dependent worst case. Compute Sanitizer
+memcheck, racecheck, and synccheck pass for dense and empty-segment varlen.
 
 ## 9. Cross-GPU Promotion Gate
 
@@ -643,3 +663,87 @@ race hazards.
 The detailed algorithm, stability and exactness proofs, workspace accounting,
 negative controls, and raw evidence are in
 [EXACT_HARD_RESTART_AND_OCCURRENCE_INDEX.md](EXACT_HARD_RESTART_AND_OCCURRENCE_INDEX.md).
+
+## 15. Unlimited Grouped-Checkpoint Cleanup
+
+The production unlimited dense VJP received a final scalar/shared-memory
+cleanup without changing candidate coverage, suffix extent, hard-forward
+semantics, or estimator equations. The retained changes are:
+
+- direct inverse-normalizer row state, eliminating one kernel and hot-path
+  division;
+- a padded 32x33 score tile to remove warp endpoint bank conflicts;
+- `half2` gradient/value movement and 16-byte probability clears;
+- one persistent gradient tile with value/probability lifetime overlay;
+- packed-query and row-stat hoisting outside diagonal rounds;
+- register reuse of each replay gate by the reverse affine scan.
+
+On the idle RTX 2080 Ti with FP16
+`B=1,H=4,Hv=2,D=8,Dv=64`, full Q/K/V latency changed from
+`9.43/37.97 ms` at 4K/8K to `7.59/30.57 ms`, about a 20% reduction. The final
+stats/reverse kernels use 64/86 registers and 24,836 bytes shared memory with
+zero spills. Operator workspace remains 24.2 MiB at 4K, 48.4 MiB at 8K, and
+64.8 MiB at 16K.
+
+Complete hard-forward-plus-backward latency is 7.85/31.28 ms at 4K/8K. The
+same-process xFormers CUTLASS D64 control is 1.70/5.41 ms, leaving a
+4.63x/5.78x gap on sm_75. This GPU cannot execute the current PyTorch
+FlashAttention backend, so those figures must not be relabeled as FA1.
+
+The later locally compiled official FlashAttention 1.0.9 control measures
+0.874/3.280 ms at 4K/8K and 13.167 ms at 16K. Complete RosaSoft is therefore
+9.01x/9.50x/9.85x FA1, while exact hard-only forward remains 1.4-1.6x faster
+than FA1 forward. This supersedes CUTLASS as the sm75 FlashAttention baseline;
+see [FLASH_ATTENTION1_SM75_COMPARISON.md](FLASH_ATTENTION1_SM75_COMPARISON.md).
+
+Several plausible occupancy and traffic optimizations were rejected after
+exact parity and timing: compact three-CTA staging, reciprocal-square-root
+utility, warp-owner symbol reduction, full score register caching, and global
+dV carry. Their common failure was replacing regular on-chip work with extra
+unpacking, shuffles, register pressure, or global scratch. The complete suite
+passes with `3679 passed, 589 skipped`; Compute Sanitizer reports zero memory,
+race, and synchronization findings. Full execution details and raw measurements
+are in [GROUPED_CHECKPOINT_VJP.md](GROUPED_CHECKPOINT_VJP.md) and
+`validation/grouped_checkpoint_vjp_sm75.json`.
+
+## 16. Dense Backward Reorganization
+
+The next production pass retained the same 32-diagonal recurrence ownership
+and reorganized the work after exact reverse replay. The route-credit tile is
+now contracted with binary Q/K signs through compensated FP16 WMMA where that
+mapping is profitable. Credits are split into FP16 high and residual parts,
+the signs are represented exactly, and both products accumulate into FP32.
+For K-bearing optimized instances, four warps replay suffix scores while four
+warps stage `dO` and V; all eight then converge for utility, reverse, dV, and
+symbol credit.
+
+The private production matrix uses Tensor-K at D8 and Tensor-QK at D16/D32
+when both gradients are needed. Narrower symbols and unprofitable one-sided
+cases retain scalar accumulation. There are no new public knobs, candidates,
+losses, windows, or quadratic activations.
+
+On the idle RTX 2080 Ti at `B=1,H=4,Hv=2,D=8,Dv=64,FP16,QKV`, production
+latency moved from `7.57/30.32/128.26 ms` to
+`7.21/28.81/121.40 ms` at 4K/8K/16K. Reverse alone improved from
+`5.22/21.01/85.35 ms` to `4.86/19.45/78.25 ms`. The compensated contractions
+pass the explicit scalar-oracle production matrix at `rtol=3e-4` and
+`atol=5e-5`.
+
+Three exact reorganizations were measured and rejected:
+
+- 64/96-diagonal stats macro tiles reduced partial-stat storage but made 8K
+  stats 19%/30% slower;
+- byte mismatch checkpoints reduced shared memory without changing occupancy
+  and made reverse 0.4-0.8% slower;
+- a four-scan/four-loader stats split was increasingly slower with sequence
+  length because scan, rather than input staging, became the critical path.
+
+The post-change official FA1 ratios are 8.59x/8.92x/9.30x at 4K/8K/16K.
+This is a measurable reduction but does not alter the architectural result:
+exact suffix recurrence remains the dominant scalar/synchronization pipeline.
+Raw evidence is in `validation/dense_backward_reorganized_production_sm75.json`,
+`validation/reorganized_reverse_width_ablation_sm75.json`,
+`validation/macro_stats_ablation_sm75.json`,
+`validation/replay_mismatch_compaction_sm75.json`,
+`validation/stats_warp_specialization_sm75.json`, and
+`validation/flash_attention1_comparison_sm75_reorganized.json`.

@@ -63,6 +63,27 @@ __device__ __forceinline__ float local_match_gate(
       inverse_symbol_dim);
 }
 
+__device__ __forceinline__ void initialize_mismatch_gate_lut(
+    float* __restrict__ gate_lut,
+    int symbol_dim,
+    float mismatch_unit) {
+  for (int mismatch = threadIdx.x;
+       mismatch <= symbol_dim;
+       mismatch += blockDim.x) {
+    gate_lut[mismatch] =
+        __expf(-mismatch_unit * static_cast<float>(mismatch));
+  }
+  __syncthreads();
+}
+
+__device__ __forceinline__ float mismatch_gate_from_lut(
+    uint32_t query_word,
+    uint32_t key_word,
+    uint32_t symbol_mask,
+    const float* __restrict__ gate_lut) {
+  return gate_lut[__popc((query_word ^ key_word) & symbol_mask)];
+}
+
 __device__ __forceinline__ uint32_t hash_dropout_counter(uint32_t state) {
   state ^= state >> 16;
   state *= 0x7feb352du;
@@ -152,6 +173,33 @@ __device__ __forceinline__ SoftmaxStats warp_reduce_stats(
     }
   }
   return stats;
+}
+
+// Reduce independent candidates with one exponential per active lane. The
+// generic merge above remains useful for already-normalized partial groups,
+// but applying it to 32 singleton candidates performs redundant SFU work.
+__device__ __forceinline__ SoftmaxStats warp_reduce_candidates(
+    float logit,
+    float utility,
+    bool active) {
+  float maximum = active ? logit : -FLT_MAX;
+#pragma unroll
+  for (int offset = 16; offset > 0; offset >>= 1) {
+    maximum = fmaxf(
+        maximum,
+        __shfl_down_sync(0xffffffffu, maximum, offset));
+  }
+  maximum = __shfl_sync(0xffffffffu, maximum, 0);
+
+  float weight = active ? __expf(logit - maximum) : 0.0f;
+  float weighted_utility = weight * utility;
+#pragma unroll
+  for (int offset = 16; offset > 0; offset >>= 1) {
+    weight += __shfl_down_sync(0xffffffffu, weight, offset);
+    weighted_utility +=
+        __shfl_down_sync(0xffffffffu, weighted_utility, offset);
+  }
+  return {maximum, weight, weighted_utility};
 }
 
 struct ScoreTransform {

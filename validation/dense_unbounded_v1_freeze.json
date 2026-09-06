@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "reference_id": "rosa-soft-dense-unbounded-v1",
+  "freeze_date": "2026-09-04",
+  "base_commit": "01c9b0b",
+  "entry_point": "benchmarks.dense_unbounded_v1:rosa_soft_dense_unbounded_v1",
+  "fixed_controls": {
+    "scale": 1.0,
+    "mismatch_scale": 3.0,
+    "null_route_score": 0.5,
+    "dropout_p": 0.0,
+    "max_suffix_length": "unlimited"
+  },
+  "semantics": {
+    "forward": "exact hard latest-longest ROSA with latest tie break",
+    "backward": "full-horizon dense discovery carrier",
+    "candidate_pruning": false,
+    "stochasticity": false,
+    "soft_forward_leakage": false
+  },
+  "content_sha256": {
+    "benchmarks/dense_unbounded_v1.py": "c7e79c4bde7caeb881543297f7f28dfc4d1de57757fed530ed586a3bdaf9c849",
+    "tests/test_dense_unbounded_v1.py": "97f2f35c1ac13d9346d28bccfdb07690eb573bcab58c3d39fcdd2bcbd143acd3"
+  },
+  "verification": {
+    "cpu_related_tests": {
+      "passed": 97,
+      "torch": "2.11.0+cu128"
+    },
+    "gpu0": {
+      "name": "NVIDIA GeForce RTX 3070",
+      "compute_capability": "8.6",
+      "output_exact": {
+        "float32": true,
+        "float16": true,
+        "bfloat16": true
+      },
+      "max_abs_gradient_error": {
+        "float32": 4.470348358154297e-08,
+        "float16": 0.0,
+        "bfloat16": 0.0
+      },
+      "all_gradients_finite": true
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "compute_capability": [7, 5],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "common": {
+    "batch": 1,
+    "bits": 8,
+    "value_dim": 64,
+    "dtype": "float16",
+    "tile_size": 32,
+    "scale": 1.0,
+    "dropout_p": 0.0,
+    "mismatch_scale": 3.0,
+    "gradient_mask": 7
+  },
+  "layouts": {
+    "compact": "one int32 monotone counter per macro row",
+    "padded": "one counter per 32-byte L2 sector",
+    "embedded": "one sign-bit phase token in each tile checkpoint padding word"
+  },
+  "h4_quick_latency_ms": {
+    "config": {"heads": 4, "value_heads": 2, "warmup": 2, "repeats": 3, "rounds": 5},
+    "4096": {
+      "compact": {"stats": 48.461411, "vjp": 164.384084},
+      "padded": {"stats": 48.571650, "vjp": 164.407155},
+      "embedded": {"stats": 48.455724, "vjp": 164.424367}
+    },
+    "8192": {
+      "compact": {"stats": 163.597493, "vjp": 487.489299},
+      "padded": {"stats": 163.229696, "vjp": 487.173136},
+      "embedded": {"stats": 163.247213, "vjp": 488.158732}
+    }
+  },
+  "h1_stress_latency_ms": {
+    "config": {"heads": 1, "value_heads": 1, "warmup": 3, "repeats": 5, "rounds": 7},
+    "4096": {
+      "compact": {"score": 3.006054, "stats": 32.696472, "vjp": 125.494128},
+      "padded": {"score": 3.004826, "stats": 32.699597, "vjp": 125.505945},
+      "embedded": {"score": 3.010099, "stats": 32.711475, "vjp": 125.424146}
+    },
+    "8192": {
+      "compact": {"score": 6.292147, "stats": 73.639117, "vjp": 273.162988},
+      "padded": {"score": 6.407251, "stats": 73.968433, "vjp": 274.773462},
+      "embedded": {"score": 6.453191, "stats": 73.998395, "vjp": 275.708325}
+    }
+  },
+  "h1_t8192_ncu_score": {
+    "compact": {
+      "kernel_ms": 8.57,
+      "dram_mbyte": 142.56,
+      "l2_lookup_hit_sectors": 35232466,
+      "l2_lookup_miss_sectors": 4616,
+      "long_scoreboard_pct": 11.84,
+      "membar_pct": 1.26,
+      "wait_pct": 36.27
+    },
+    "padded": {
+      "kernel_ms": 8.56,
+      "dram_mbyte": 143.27,
+      "l2_lookup_hit_sectors": 35252112,
+      "l2_lookup_miss_sectors": 3904,
+      "long_scoreboard_pct": 11.40,
+      "membar_pct": 1.25,
+      "wait_pct": 36.27
+    },
+    "embedded": {
+      "kernel_ms": 8.56,
+      "dram_mbyte": 142.58,
+      "l2_lookup_hit_sectors": 35173204,
+      "l2_lookup_miss_sectors": 5342,
+      "long_scoreboard_pct": 11.68,
+      "membar_pct": 1.22,
+      "wait_pct": 36.14
+    },
+    "atomic_sector_note": "atomic_ref load/store compiled into memory-ordering loads/stores; op_atom counters were zero for all layouts"
+  },
+  "validation": {
+    "experimental_matrix_pytest": "1129 passed",
+    "final_compact_pytest": "753 passed",
+    "compute_sanitizer_memcheck": "0 errors",
+    "compute_sanitizer_racecheck": "0 hazards, 0 errors, 0 warnings",
+    "compute_sanitizer_synccheck": "0 errors"
+  },
+  "final_compact_rerun_latency_ms": {
+    "h1": {
+      "4096": {"score": 3.014989, "stats": 32.638977, "vjp": 125.153015},
+      "8192": {"score": 6.315443, "stats": 73.671118, "vjp": 272.690796},
+      "source": "row_signal_compact_final_h1_sm75.json"
+    },
+    "h4": {
+      "4096": {"score": 3.507328, "stats": 48.602849, "vjp": 164.107788},
+      "8192": {"score": 8.474997, "stats": 162.892273, "vjp": 486.170166},
+      "source": "row_signal_compact_final_h4_sm75.json"
+    }
+  },
+  "decision": {
+    "retained": "compact",
+    "rejected": ["padded", "embedded"],
+    "reason": "no stable end-to-end gain; compact had the best H=1 8K score and VJP while keeping the smallest synchronization working set and simplest phase semantics"
+  }
+}

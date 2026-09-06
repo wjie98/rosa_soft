@@ -1,0 +1,199 @@
+{
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "compute_capability": [7, 5],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "config": {
+    "batch": 1,
+    "heads": 4,
+    "value_heads": 2,
+    "bits": 8,
+    "value_dim": 64,
+    "dtype": "float16",
+    "scale": 1.0,
+    "dropout_p": 0.0,
+    "mismatch_scale": 3.0,
+    "gradient_mask": 7,
+    "warmup": 2,
+    "repeats": 3,
+    "rounds": 5,
+    "seed": 58123
+  },
+  "rows": [
+    {
+      "seq_len": 256,
+      "latency_ms": {
+        "slabbed": 0.217771,
+        "unbounded_replay_g256": 0.296160,
+        "folded_l32": 0.839680,
+        "persistent_rows_l32": 9.135530
+      },
+      "peak_operator_mib": {
+        "slabbed": 2.199219,
+        "unbounded_replay_g256": 2.199219,
+        "folded_l32": 0.238281,
+        "persistent_rows_l32": 0.238770
+      },
+      "slabbed_declared_live_state_mib": 2.011719,
+      "slabbed_replay_max_abs_errors": [4.470348e-8, 8.940697e-8, 3.576279e-7]
+    },
+    {
+      "seq_len": 512,
+      "latency_ms": {
+        "slabbed": 0.309931,
+        "unbounded_replay_g256": 0.832853,
+        "folded_l32": 0.961291,
+        "persistent_rows_l32": 14.929237
+      },
+      "peak_operator_mib": {
+        "slabbed": 8.398438,
+        "unbounded_replay_g256": 4.398438,
+        "folded_l32": 0.539063,
+        "persistent_rows_l32": 0.539551
+      },
+      "slabbed_declared_live_state_mib": 8.023438,
+      "slabbed_replay_max_abs_errors": [3.352761e-8, 2.086163e-7, 7.413328e-7]
+    },
+    {
+      "seq_len": 1024,
+      "latency_ms": {
+        "slabbed": 1.003499,
+        "unbounded_replay_g256": 2.988896,
+        "folded_l32": 2.910453,
+        "persistent_rows_l32": 30.790988
+      },
+      "peak_operator_mib": {
+        "slabbed": 16.796875,
+        "unbounded_replay_g256": 8.796875,
+        "folded_l32": 1.351563,
+        "persistent_rows_l32": 1.328613
+      },
+      "slabbed_declared_live_state_mib": 16.046875,
+      "slabbed_replay_max_abs_errors": [3.725290e-8, 2.086163e-7, 1.192093e-7]
+    },
+    {
+      "seq_len": 2048,
+      "latency_ms": {
+        "slabbed": 3.611307,
+        "unbounded_replay_g256": 12.056576,
+        "folded_l32": 11.323968,
+        "persistent_rows_l32": 67.762136
+      },
+      "peak_operator_mib": {
+        "slabbed": 33.593750,
+        "unbounded_replay_g256": 17.593750,
+        "folded_l32": 5.203125,
+        "persistent_rows_l32": 3.657227
+      },
+      "slabbed_declared_live_state_mib": 32.093750,
+      "slabbed_replay_max_abs_errors": [3.911555e-8, 2.980232e-7, 1.192093e-7]
+    },
+    {
+      "seq_len": 4096,
+      "latency_ms": {
+        "slabbed": 14.541482,
+        "unbounded_replay_g256": 46.738093,
+        "folded_l32": 43.952810,
+        "persistent_rows_l32": 163.587087
+      },
+      "peak_operator_mib": {
+        "slabbed": 67.187500,
+        "unbounded_replay_g256": 35.187500,
+        "folded_l32": 20.406250,
+        "persistent_rows_l32": 11.314453
+      },
+      "slabbed_declared_live_state_mib": 64.187500,
+      "slabbed_replay_max_abs_errors": [2.980232e-8, 3.278255e-7, 1.192093e-7]
+    },
+    {
+      "seq_len": 8192,
+      "latency_ms": {
+        "slabbed": 57.720652,
+        "unbounded_replay_g256": 185.680847,
+        "folded_l32": 176.295146,
+        "persistent_rows_l32": 485.969238
+      },
+      "peak_operator_mib": {
+        "slabbed": 134.375000,
+        "unbounded_replay_g256": 70.375000,
+        "folded_l32": 80.812500,
+        "persistent_rows_l32": 39.126953
+      },
+      "slabbed_declared_live_state_mib": 128.375000,
+      "slabbed_replay_max_abs_errors": [2.793968e-8, 1.788139e-7, 1.192093e-7]
+    }
+  ],
+  "ablations": {
+    "previous_paired_slabbed_latency_ms": {
+      "256": 0.417878,
+      "512": 1.011933,
+      "1024": 3.324749,
+      "2048": 13.119322,
+      "4096": 54.426501
+    },
+    "optimized_qk_only_latency_ms": {
+      "512": 0.491930,
+      "1024": 1.201107,
+      "2048": 4.440662,
+      "4096": 16.862323
+    },
+    "optimized_value_only_latency_ms": {
+      "512": 0.181248,
+      "1024": 0.398541,
+      "2048": 1.296013,
+      "4096": 5.130240
+    },
+    "value_only_without_cached_candidate_base_ms": {
+      "512": 0.352090,
+      "1024": 0.754739,
+      "2048": 2.562733,
+      "4096": 10.301498
+    },
+    "slab_diagonal_capacity_latency_ms": {
+      "128": {"4096": 18.183, "8192": 70.372},
+      "256": {"4096": 15.806, "8192": 61.578},
+      "512": {"4096": 14.542, "8192": 57.404},
+      "1024": {"4096": 14.199, "8192": 56.877}
+    },
+    "utility_shared_padding_ncu": {
+      "unpadded_excessive_wavefront_percent": 64.0,
+      "padded_excessive_wavefront_percent": 7.0,
+      "unpadded_kernel_us": 960.99,
+      "padded_kernel_us": 526.43
+    },
+    "persistent_queue_pending_slots_score_ms_t8192": {
+      "one_slot": 69.18,
+      "eight_slots": 65.25,
+      "multilaunch": 10.56
+    },
+    "persistent_row_stream_score_ms": {
+      "4096": {"row_stream": 3.36, "multilaunch": 4.08},
+      "8192": {"row_stream": 8.39, "multilaunch": 10.61},
+      "16384": {"row_stream": 33.07, "multilaunch": 74.50}
+    },
+    "row_progress_compression": {
+      "state_before": "B * H * N * (N + 1) / 2 int32 tile flags",
+      "state_after": "B * H * N int32 monotone row counters",
+      "peak_mib_before": {"4096": 11.438477, "8192": 39.126953},
+      "peak_mib_after": {"4096": 11.314453, "8192": 38.628906},
+      "latency_result": "neutral within run-to-run variance"
+    },
+    "rejected_variants": [
+      "packed triangular utility-grid decoder",
+      "32/64-wide feature chunks",
+      "eight-warp score CTA",
+      "subwarp Q/K owners",
+      "two-route dV owner",
+      "1024-diagonal slab capacity"
+    ]
+  },
+  "validation": {
+    "combined_pytest": "791 passed",
+    "macro_wavefront_pytest": "753 passed",
+    "slabbed_pytest": "21 passed",
+    "build_contract_pytest": "17 passed",
+    "compute_sanitizer_memcheck": "0 errors",
+    "compute_sanitizer_racecheck": "0 hazards, 0 errors, 0 warnings",
+    "compute_sanitizer_synccheck": "0 errors"
+  }
+}

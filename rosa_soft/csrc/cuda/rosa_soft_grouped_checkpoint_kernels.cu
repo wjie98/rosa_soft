@@ -1,0 +1,1401 @@
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAException.h>
+#include <torch/extension.h>
+
+#include <algorithm>
+#include <cfloat>
+#include <cstdint>
+#include <cuda_fp16.h>
+#include <mma.h>
+#include <tuple>
+
+#include "rosa_soft_vjp_common.cuh"
+
+
+using namespace rosa_soft::cuda;
+
+
+torch::Tensor rosa_soft_grouped_checkpoint_stats_cuda(
+    const torch::Tensor& value,
+    const torch::Tensor& grad_output,
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
+    const torch::Tensor& dropout_seed,
+    int symbol_dim,
+    float scale,
+    float dropout_p,
+    float mismatch_scale);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+rosa_soft_unbounded_replay_vjp_cuda(
+    const torch::Tensor& query,
+    const torch::Tensor& key,
+    const torch::Tensor& value,
+    const torch::Tensor& grad_output,
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
+    const torch::Tensor& dropout_seed,
+    int64_t requested_slab_size,
+    float scale,
+    float dropout_p,
+    float mismatch_scale,
+    int gradient_mask);
+
+
+namespace {
+
+namespace wmma = nvcuda::wmma;
+
+constexpr int kRows = 32;
+constexpr int kDiagonals = 32;
+constexpr int kRouteCount = 64;
+constexpr int kValueDim = 64;
+constexpr int kTensorTile = 16;
+constexpr int kWarps = 8;
+constexpr int kThreads = kWarps * kWarpSize;
+constexpr int kDiagonalRounds = kDiagonals / kWarps;
+constexpr int kScoreStride = kRows + 1;
+constexpr int kRowStatsWidth = 3;
+constexpr int kRowMaximum = 0;
+constexpr int kRowInverseNormalizer = 1;
+constexpr int kRowUtility = 2;
+constexpr int kMismatchGateCount = 33;
+
+
+struct __align__(16) ProbabilityStorage {
+  __half probability_high[kRouteCount * kRows];
+  __half probability_low[kRouteCount * kRows];
+};
+
+
+union RouteHalfStorage {
+  __half value[kRouteCount * kValueDim];
+  ProbabilityStorage probability;
+};
+
+
+struct HalfPhaseStorage {
+  // The same output gradient is consumed by utility and dV, so keep it outside
+  // the value/probability overlay instead of loading it twice per row block.
+  __half grad[kRows * kValueDim];
+  RouteHalfStorage route;
+};
+
+
+union FloatPhaseStorage {
+  float utility[kRows * kRouteCount];
+  float mma_output[kWarps * kTensorTile * kTensorTile];
+};
+
+
+__device__ __forceinline__ uint32_t symbol_mask(int symbol_dim) {
+  return symbol_dim == 32
+      ? 0xffffffffu
+      : (1u << symbol_dim) - 1u;
+}
+
+
+__device__ __forceinline__ __half2 binary_sign_half2(__half2 values) {
+  const __half2 positive = __hgt2(values, __float2half2_rn(0.0f));
+  return __hfma2(
+      positive,
+      __float2half2_rn(2.0f),
+      __float2half2_rn(-1.0f));
+}
+
+
+__device__ __forceinline__ void warp_forward_affine_scan(
+    float& coefficient,
+    float& bias) {
+  const int lane = threadIdx.x & (kWarpSize - 1);
+#pragma unroll
+  for (int offset = 1; offset < kWarpSize; offset <<= 1) {
+    const float left_coefficient = __shfl_up_sync(
+        0xffffffffu, coefficient, offset);
+    const float left_bias = __shfl_up_sync(
+        0xffffffffu, bias, offset);
+    if (lane >= offset) {
+      bias = fmaf(coefficient, left_bias, bias);
+      coefficient *= left_coefficient;
+    }
+  }
+}
+
+
+__device__ __forceinline__ void warp_reverse_affine_scan(
+    float& coefficient,
+    float& bias,
+    int active_count) {
+  const int lane = threadIdx.x & (kWarpSize - 1);
+#pragma unroll
+  for (int offset = 1; offset < kWarpSize; offset <<= 1) {
+    const float right_coefficient = __shfl_down_sync(
+        0xffffffffu, coefficient, offset);
+    const float right_bias = __shfl_down_sync(
+        0xffffffffu, bias, offset);
+    if (lane + offset < active_count) {
+      bias = fmaf(coefficient, right_bias, bias);
+      coefficient *= right_coefficient;
+    }
+  }
+}
+
+
+__global__ void initialize_row_prior_kernel(
+    float* __restrict__ row_prior,
+    int seq_len) {
+  const int row = blockIdx.x * blockDim.x + threadIdx.x;
+  if (row < seq_len) {
+    row_prior[row] = row > 0 ? logf(static_cast<float>(row)) : 0.0f;
+  }
+}
+
+
+template <int TensorSymbolMask, bool SpecializedReplay>
+__global__ void grouped_checkpoint_reverse_fp16_kernel(
+    const c10::Half* __restrict__ grad_output,
+    const c10::Half* __restrict__ value,
+    const int32_t* __restrict__ packed_query,
+    const int32_t* __restrict__ packed_key,
+    const int64_t* __restrict__ dropout_seed,
+    const float* __restrict__ row_prior,
+    const float* __restrict__ row_stats,
+    float* __restrict__ checkpoints,
+    float* __restrict__ grad_query,
+    float* __restrict__ grad_key,
+    float* __restrict__ grad_value,
+    int series_count,
+    int seq_len,
+    int num_heads,
+    int num_value_heads,
+    int symbol_dim,
+    int row_block_count,
+    int diagonal_tile_count,
+    float mismatch_unit,
+    float symbol_scale,
+    float scale,
+    float dropout_p,
+    float inverse_keep_probability,
+    int gradient_mask) {
+#if __CUDA_ARCH__ >= 700
+  __shared__ HalfPhaseStorage half_phase;
+  __shared__ FloatPhaseStorage float_phase;
+  __shared__ float score_tile[kDiagonals * kScoreStride];
+  __shared__ float replay_gate_tile[kDiagonals * kScoreStride];
+  __shared__ float gate_lut[kMismatchGateCount];
+
+  const int thread = threadIdx.x;
+  const int warp = thread / kWarpSize;
+  const int lane = thread & (kWarpSize - 1);
+  const uint32_t mask = symbol_mask(symbol_dim);
+  const int task_pairs_per_series = (diagonal_tile_count + 1) / 2;
+  const int task_pair_count = series_count * task_pairs_per_series;
+  const int worker_stride = gridDim.x;
+  const int64_t checkpoint_block_stride =
+      static_cast<int64_t>(row_block_count) * kDiagonals;
+  float* const block_checkpoints =
+      checkpoints + static_cast<int64_t>(blockIdx.x) *
+          checkpoint_block_stride;
+
+  initialize_mismatch_gate_lut(gate_lut, symbol_dim, mismatch_unit);
+
+  for (int pair_ordinal = blockIdx.x;
+       pair_ordinal < task_pair_count;
+       pair_ordinal += worker_stride) {
+    const int series = pair_ordinal / task_pairs_per_series;
+    const int pair_index =
+        pair_ordinal - series * task_pairs_per_series;
+    const int tasks_in_pair =
+        pair_index != diagonal_tile_count - 1 - pair_index
+        ? 2
+        : 1;
+    for (int pair_side = 0;
+         pair_side < tasks_in_pair;
+         ++pair_side) {
+      // Reverse the pair on alternating workers to dephase atomic updates.
+      const int ordered_side = tasks_in_pair == 2
+          ? pair_side ^ (blockIdx.x & 1)
+          : 0;
+      const int diagonal_tile = ordered_side == 0
+          ? pair_index
+          : diagonal_tile_count - 1 - pair_index;
+      const int diagonal_start = 1 + diagonal_tile * kDiagonals;
+      const int tile_width = min(kDiagonals, seq_len - diagonal_start);
+      const int first_row_block = diagonal_start / kRows;
+      const int head = series % num_heads;
+      const int batch = series / num_heads;
+      const int value_head = head / (num_heads / num_value_heads);
+      const int64_t series_offset = static_cast<int64_t>(series) * seq_len;
+      float score_carry[kDiagonalRounds] = {};
+
+      // Save only the incoming state of each 32-row replay interval. Scratch is
+      // private to the physical CTA and reused for every logical task it owns.
+      for (int row_block = first_row_block;
+           row_block < row_block_count;
+           ++row_block) {
+        const int row_start = row_block * kRows;
+        const int row = row_start + lane;
+        const bool lane_has_row = row < seq_len;
+        const uint32_t query_word = lane_has_row
+            ? static_cast<uint32_t>(packed_query[series_offset + row])
+            : 0u;
+#pragma unroll
+        for (int round = 0; round < kDiagonalRounds; ++round) {
+          const int diagonal_offset = round * kWarps + warp;
+          const int delta = diagonal_start + diagonal_offset;
+          if (lane == 0) {
+            block_checkpoints[
+                static_cast<int64_t>(row_block) * kDiagonals +
+                diagonal_offset] = score_carry[round];
+          }
+          const bool active = diagonal_offset < tile_width &&
+              lane_has_row && delta <= row;
+          const float gate = active
+              ? mismatch_gate_from_lut(
+                    query_word,
+                    static_cast<uint32_t>(
+                        packed_key[series_offset + row - delta]),
+                    mask,
+                    gate_lut)
+              : 1.0f;
+          float coefficient = gate;
+          float bias = active ? gate : 0.0f;
+          warp_forward_affine_scan(coefficient, bias);
+          const float score =
+              fmaf(coefficient, score_carry[round], bias);
+          score_carry[round] =
+              __shfl_sync(0xffffffffu, score, kRows - 1);
+        }
+      }
+      __syncthreads();
+
+      float successor_adjoint[kDiagonalRounds] = {};
+      float successor_gate[kDiagonalRounds] = {};
+      for (int row_block = row_block_count - 1;
+           row_block >= first_row_block;
+           --row_block) {
+        const int row_start = row_block * kRows;
+        const int row_count = min(kRows, seq_len - row_start);
+        const int route_start =
+            row_start - diagonal_start - (kDiagonals - 1) + 1;
+        const int row = row_start + lane;
+        const bool lane_has_row = lane < row_count;
+        const uint32_t query_word = lane_has_row
+            ? static_cast<uint32_t>(packed_query[series_offset + row])
+            : 0u;
+        const int64_t stats_index = (series_offset + row) * kRowStatsWidth;
+        const float prior = lane_has_row ? row_prior[row] : 0.0f;
+        const float row_maximum = lane_has_row
+            ? row_stats[stats_index + kRowMaximum]
+            : 0.0f;
+        const float row_inverse_normalizer = lane_has_row
+            ? row_stats[stats_index + kRowInverseNormalizer]
+            : 0.0f;
+        const float row_utility = lane_has_row
+            ? row_stats[stats_index + kRowUtility]
+            : 0.0f;
+        float replay_gate[kDiagonalRounds];
+
+        constexpr int kValuePairs = kValueDim / 2;
+        if constexpr (SpecializedReplay) {
+          constexpr int kProducerWarps = kWarps / 2;
+          constexpr int kProducerThreads = kProducerWarps * kWarpSize;
+          if (warp < kProducerWarps) {
+#pragma unroll
+            for (int round = 0;
+                 round < kDiagonals / kProducerWarps;
+                 ++round) {
+              const int diagonal_offset =
+                  round * kProducerWarps + warp;
+              const int delta = diagonal_start + diagonal_offset;
+              const float incoming = block_checkpoints[
+                  static_cast<int64_t>(row_block) * kDiagonals +
+                  diagonal_offset];
+              const bool active = diagonal_offset < tile_width &&
+                  lane_has_row && delta <= row;
+              const float gate = active
+                  ? mismatch_gate_from_lut(
+                        query_word,
+                        static_cast<uint32_t>(
+                            packed_key[series_offset + row - delta]),
+                        mask,
+                        gate_lut)
+                  : 1.0f;
+              float coefficient = gate;
+              float bias = active ? gate : 0.0f;
+              warp_forward_affine_scan(coefficient, bias);
+              const float score = fmaf(coefficient, incoming, bias);
+              score_tile[diagonal_offset * kScoreStride + lane] =
+                  active ? score : 0.0f;
+              replay_gate_tile[
+                  diagonal_offset * kScoreStride + lane] =
+                  active ? gate : 0.0f;
+            }
+          } else {
+            const int loader_thread = thread - kProducerThreads;
+            for (int pair = loader_thread;
+                 pair < kRows * kValuePairs;
+                 pair += kProducerThreads) {
+              const int row_offset = pair / kValuePairs;
+              const int feature = (pair - row_offset * kValuePairs) * 2;
+              const int source_row = row_start + row_offset;
+              __half2 gradient = __float2half2_rn(0.0f);
+              if (row_offset < row_count) {
+                const int64_t source =
+                    ((static_cast<int64_t>(batch) * seq_len + source_row) *
+                         num_heads +
+                     head) * kValueDim + feature;
+                gradient = *reinterpret_cast<const __half2*>(
+                    grad_output + source);
+              }
+              reinterpret_cast<__half2*>(half_phase.grad)[pair] = gradient;
+            }
+            for (int pair = loader_thread;
+                 pair < kRouteCount * kValuePairs;
+                 pair += kProducerThreads) {
+              const int route_offset = pair / kValuePairs;
+              const int feature = (pair - route_offset * kValuePairs) * 2;
+              const int route = route_start + route_offset;
+              __half2 value_sign = __float2half2_rn(0.0f);
+              if (route >= 1 && route < seq_len) {
+                const int64_t source =
+                    ((static_cast<int64_t>(batch) * seq_len + route) *
+                         num_value_heads +
+                     value_head) * kValueDim + feature;
+                value_sign = binary_sign_half2(
+                    *reinterpret_cast<const __half2*>(value + source));
+              }
+              reinterpret_cast<__half2*>(half_phase.route.value)[pair] =
+                  value_sign;
+            }
+          }
+        } else {
+#pragma unroll
+          for (int round = 0; round < kDiagonalRounds; ++round) {
+            const int diagonal_offset = round * kWarps + warp;
+            const int delta = diagonal_start + diagonal_offset;
+            const float incoming = block_checkpoints[
+                static_cast<int64_t>(row_block) * kDiagonals +
+                diagonal_offset];
+            const bool active = diagonal_offset < tile_width &&
+                lane_has_row && delta <= row;
+            const float gate = active
+                ? mismatch_gate_from_lut(
+                      query_word,
+                      static_cast<uint32_t>(
+                          packed_key[series_offset + row - delta]),
+                      mask,
+                      gate_lut)
+                : 1.0f;
+            float coefficient = gate;
+            float bias = active ? gate : 0.0f;
+            warp_forward_affine_scan(coefficient, bias);
+            const float score = fmaf(coefficient, incoming, bias);
+            score_tile[diagonal_offset * kScoreStride + lane] =
+                active ? score : 0.0f;
+            replay_gate[round] = active ? gate : 0.0f;
+          }
+          for (int pair = thread;
+               pair < kRows * kValuePairs;
+               pair += blockDim.x) {
+            const int row_offset = pair / kValuePairs;
+            const int feature = (pair - row_offset * kValuePairs) * 2;
+            const int source_row = row_start + row_offset;
+            __half2 gradient = __float2half2_rn(0.0f);
+            if (row_offset < row_count) {
+              const int64_t source =
+                  ((static_cast<int64_t>(batch) * seq_len + source_row) *
+                       num_heads +
+                   head) * kValueDim + feature;
+              gradient = *reinterpret_cast<const __half2*>(
+                  grad_output + source);
+            }
+            reinterpret_cast<__half2*>(half_phase.grad)[pair] = gradient;
+          }
+          for (int pair = thread;
+               pair < kRouteCount * kValuePairs;
+               pair += blockDim.x) {
+            const int route_offset = pair / kValuePairs;
+            const int feature = (pair - route_offset * kValuePairs) * 2;
+            const int route = route_start + route_offset;
+            __half2 value_sign = __float2half2_rn(0.0f);
+            if (route >= 1 && route < seq_len) {
+              const int64_t source =
+                  ((static_cast<int64_t>(batch) * seq_len + route) *
+                       num_value_heads +
+                   value_head) * kValueDim + feature;
+              value_sign = binary_sign_half2(
+                  *reinterpret_cast<const __half2*>(value + source));
+            }
+            reinterpret_cast<__half2*>(half_phase.route.value)[pair] =
+                value_sign;
+          }
+        }
+        __syncthreads();
+
+        constexpr int kUtilityRouteTiles = kRouteCount / kTensorTile;
+        const int utility_row =
+            (warp / kUtilityRouteTiles) * kTensorTile;
+        const int utility_route =
+            (warp % kUtilityRouteTiles) * kTensorTile;
+        wmma::fragment<
+            wmma::accumulator,
+            kTensorTile,
+            kTensorTile,
+            kTensorTile,
+            float>
+            utility_accumulator;
+        wmma::fill_fragment(utility_accumulator, 0.0f);
+#pragma unroll
+        for (int feature_start = 0;
+             feature_start < kValueDim;
+             feature_start += kTensorTile) {
+          wmma::fragment<
+              wmma::matrix_a,
+              kTensorTile,
+              kTensorTile,
+              kTensorTile,
+              __half,
+              wmma::row_major>
+              gradient;
+          wmma::fragment<
+              wmma::matrix_b,
+              kTensorTile,
+              kTensorTile,
+              kTensorTile,
+              __half,
+              wmma::col_major>
+              signed_value;
+          wmma::load_matrix_sync(
+              gradient,
+              half_phase.grad +
+                  utility_row * kValueDim + feature_start,
+              kValueDim);
+          wmma::load_matrix_sync(
+              signed_value,
+              half_phase.route.value +
+                  utility_route * kValueDim + feature_start,
+              kValueDim);
+          wmma::mma_sync(
+              utility_accumulator,
+              gradient,
+              signed_value,
+              utility_accumulator);
+        }
+        wmma::store_matrix_sync(
+            float_phase.utility +
+                utility_row * kRouteCount + utility_route,
+            utility_accumulator,
+            kRouteCount,
+            wmma::mem_row_major);
+        __syncthreads();
+
+        if ((gradient_mask & kGradValue) != 0) {
+          constexpr int kProbabilityBytes = sizeof(ProbabilityStorage);
+          constexpr int kZeroWords = kProbabilityBytes / sizeof(uint4);
+          uint4* const probability_words = reinterpret_cast<uint4*>(
+              &half_phase.route.probability);
+          for (int index = thread;
+               index < kZeroWords;
+               index += blockDim.x) {
+            probability_words[index] = make_uint4(0u, 0u, 0u, 0u);
+          }
+          __syncthreads();
+        }
+
+#pragma unroll
+        for (int round = 0; round < kDiagonalRounds; ++round) {
+          const int diagonal_offset = round * kWarps + warp;
+          const int delta = diagonal_start + diagonal_offset;
+          const bool active = diagonal_offset < tile_width &&
+              lane_has_row && delta <= row;
+          const float gate = SpecializedReplay
+              ? replay_gate_tile[
+                    diagonal_offset * kScoreStride + lane]
+              : replay_gate[round];
+          const float next_lane_gate =
+              __shfl_down_sync(0xffffffffu, gate, 1);
+          float coefficient = 1.0f;
+          float direct_vjp = 0.0f;
+          float raw_score = 0.0f;
+          if (active) {
+            coefficient = lane + 1 < row_count
+                ? next_lane_gate
+                : successor_gate[round];
+            raw_score = score_tile[
+                diagonal_offset * kScoreStride + lane];
+            const ScoreTransform transformed = transform_score(raw_score);
+            const float probability = __expf(
+                transformed.route_score * scale - prior - row_maximum) *
+                row_inverse_normalizer;
+            const int route_offset =
+                lane - diagonal_offset + kDiagonals - 1;
+            const int route = route_start + route_offset;
+            const float dropout_scale = attention_dropout_scale(
+                dropout_seed,
+                dropout_p,
+                inverse_keep_probability,
+                batch,
+                head,
+                row,
+                route);
+            if ((gradient_mask & kGradValue) != 0) {
+              const int probability_index = route_offset * kRows + lane;
+              const float dropped_probability = probability * dropout_scale;
+              const __half high = __float2half_rn(dropped_probability);
+              half_phase.route.probability.probability_high[
+                  probability_index] = high;
+              half_phase.route.probability.probability_low[
+                  probability_index] = __float2half_rn(
+                      dropped_probability - __half2float(high));
+            }
+            if ((gradient_mask & (kGradQuery | kGradKey)) != 0) {
+              direct_vjp = scale * probability *
+                  (dropout_scale * float_phase.utility[
+                       lane * kRouteCount + route_offset] -
+                   row_utility) *
+                  transformed.raw_vjp_multiplier;
+            }
+          }
+          warp_reverse_affine_scan(coefficient, direct_vjp, row_count);
+          const float score_vjp = fmaf(
+              coefficient, successor_adjoint[round], direct_vjp);
+          score_tile[diagonal_offset * kScoreStride + lane] =
+              active ? raw_score * score_vjp : 0.0f;
+          successor_adjoint[round] =
+              __shfl_sync(0xffffffffu, score_vjp, 0);
+          successor_gate[round] =
+              __shfl_sync(0xffffffffu, gate, 0);
+        }
+        __syncthreads();
+
+        if constexpr ((TensorSymbolMask & kGradQuery) == 0) {
+          if ((gradient_mask & kGradQuery) != 0) {
+            const int output_count = row_count * symbol_dim;
+            for (int output = thread;
+                 output < output_count;
+                 output += blockDim.x) {
+              const int row_offset = output / symbol_dim;
+              const int bit = output - row_offset * symbol_dim;
+              const int row = row_start + row_offset;
+              float contribution = 0.0f;
+              for (int diagonal_offset = 0;
+                   diagonal_offset < tile_width;
+                   ++diagonal_offset) {
+                const int delta = diagonal_start + diagonal_offset;
+                if (delta <= row) {
+                  const uint32_t key_word = static_cast<uint32_t>(
+                      packed_key[series_offset + row - delta]);
+                  contribution = fmaf(
+                      score_tile[
+                          diagonal_offset * kScoreStride + row_offset],
+                      static_cast<float>(sign_from_bit(key_word, bit)),
+                      contribution);
+                }
+              }
+              const int64_t target =
+                  ((static_cast<int64_t>(batch) * seq_len + row) *
+                       num_heads +
+                   head) * symbol_dim + bit;
+              atomicAdd(grad_query + target, symbol_scale * contribution);
+            }
+          }
+        }
+
+        if constexpr ((TensorSymbolMask & kGradKey) == 0) {
+          if ((gradient_mask & kGradKey) != 0) {
+            const int output_count =
+                (kRows + kDiagonals - 1) * symbol_dim;
+            for (int output = thread;
+                 output < output_count;
+                 output += blockDim.x) {
+              const int route_offset = output / symbol_dim;
+              const int bit = output - route_offset * symbol_dim;
+              const int key_position = route_start + route_offset - 1;
+              if (key_position < 0 || key_position >= seq_len) {
+                continue;
+              }
+              float contribution = 0.0f;
+              for (int diagonal_offset = 0;
+                   diagonal_offset < tile_width;
+                   ++diagonal_offset) {
+                const int row_offset =
+                    route_offset + diagonal_offset - (kDiagonals - 1);
+                if (row_offset >= 0 && row_offset < row_count) {
+                  const int row = row_start + row_offset;
+                  const int delta = diagonal_start + diagonal_offset;
+                  if (delta <= row) {
+                    const uint32_t query_word = static_cast<uint32_t>(
+                        packed_query[series_offset + row]);
+                    contribution = fmaf(
+                        score_tile[
+                            diagonal_offset * kScoreStride + row_offset],
+                        static_cast<float>(sign_from_bit(query_word, bit)),
+                        contribution);
+                  }
+                }
+              }
+              const int64_t target =
+                  ((static_cast<int64_t>(batch) * seq_len + key_position) *
+                       num_heads +
+                   head) * symbol_dim + bit;
+              atomicAdd(grad_key + target, symbol_scale * contribution);
+            }
+          }
+        }
+        if ((gradient_mask & kGradValue) != 0) {
+#pragma unroll
+          for (int output_round = 0; output_round < 2; ++output_round) {
+            const int output_tile = output_round * kWarps + warp;
+            const int output_route =
+                (output_tile / (kValueDim / kTensorTile)) * kTensorTile;
+            const int output_feature =
+                (output_tile % (kValueDim / kTensorTile)) * kTensorTile;
+            wmma::fragment<
+                wmma::accumulator,
+                kTensorTile,
+                kTensorTile,
+                kTensorTile,
+                float>
+                value_accumulator;
+            wmma::fill_fragment(value_accumulator, 0.0f);
+#pragma unroll
+            for (int query_offset = 0;
+                 query_offset < kRows;
+                 query_offset += kTensorTile) {
+              wmma::fragment<
+                  wmma::matrix_a,
+                  kTensorTile,
+                  kTensorTile,
+                  kTensorTile,
+                  __half,
+                  wmma::row_major>
+                  probability;
+              wmma::fragment<
+                  wmma::matrix_b,
+                  kTensorTile,
+                  kTensorTile,
+                  kTensorTile,
+                  __half,
+                  wmma::row_major>
+                  gradient;
+              wmma::load_matrix_sync(
+                  probability,
+                  half_phase.route.probability.probability_high +
+                      output_route * kRows + query_offset,
+                  kRows);
+              wmma::load_matrix_sync(
+                  gradient,
+                  half_phase.grad +
+                      query_offset * kValueDim + output_feature,
+                  kValueDim);
+              wmma::mma_sync(
+                  value_accumulator,
+                  probability,
+                  gradient,
+                  value_accumulator);
+              wmma::load_matrix_sync(
+                  probability,
+                  half_phase.route.probability.probability_low +
+                      output_route * kRows + query_offset,
+                  kRows);
+              wmma::mma_sync(
+                  value_accumulator,
+                  probability,
+                  gradient,
+                  value_accumulator);
+            }
+            float* const warp_output =
+                float_phase.mma_output + warp * kTensorTile * kTensorTile;
+            wmma::store_matrix_sync(
+                warp_output,
+                value_accumulator,
+                kTensorTile,
+                wmma::mem_row_major);
+            __syncwarp();
+            for (int output = lane;
+                 output < kTensorTile * kTensorTile;
+                 output += kWarpSize) {
+              const int route_offset =
+                  output_route + output / kTensorTile;
+              const int feature =
+                  output_feature + output % kTensorTile;
+              const int route = route_start + route_offset;
+              if (route >= 1 && route < seq_len) {
+                const int64_t target =
+                    ((static_cast<int64_t>(batch) * seq_len + route) *
+                         num_value_heads +
+                     value_head) * kValueDim + feature;
+                atomicAdd(grad_value + target, warp_output[output]);
+              }
+            }
+            __syncwarp();
+          }
+        }
+        __syncthreads();
+
+        if constexpr (TensorSymbolMask != 0) {
+          constexpr int kSymbolStride = 32;
+          __half* const symbol_tile =
+              reinterpret_cast<__half*>(float_phase.utility);
+          constexpr int kProbabilityElements = kRouteCount * kRows;
+          if ((gradient_mask & kGradValue) == 0) {
+            for (int index = thread;
+                 index < kProbabilityElements;
+                 index += blockDim.x) {
+              half_phase.route.probability.probability_high[index] =
+                  __float2half_rn(0.0f);
+              half_phase.route.probability.probability_low[index] =
+                  __float2half_rn(0.0f);
+            }
+            __syncthreads();
+          }
+
+          for (int cell = thread;
+               cell < kRows * kDiagonals;
+               cell += blockDim.x) {
+            const int diagonal_offset = cell / kRows;
+            const int row_offset = cell - diagonal_offset * kRows;
+            const int candidate_row = row_start + row_offset;
+            const bool active = row_offset < row_count &&
+                diagonal_offset < tile_width &&
+                diagonal_start + diagonal_offset <= candidate_row;
+            if (active) {
+              const int route_offset =
+                  row_offset - diagonal_offset + kDiagonals - 1;
+              const float credit = score_tile[
+                  diagonal_offset * kScoreStride + row_offset];
+              const int credit_index = route_offset * kRows + row_offset;
+              const __half high = __float2half_rn(credit);
+              half_phase.route.probability.probability_high[credit_index] =
+                  high;
+              half_phase.route.probability.probability_low[credit_index] =
+                  __float2half_rn(credit - __half2float(high));
+            }
+          }
+          __syncthreads();
+
+          // Signs are exactly representable in FP16. Splitting each FP32
+          // credit into high and residual halves keeps Tensor Core
+          // contractions close to the scalar FP32 accumulation.
+          if constexpr ((TensorSymbolMask & kGradKey) != 0) {
+            if ((gradient_mask & kGradKey) != 0) {
+              for (int index = thread;
+                   index < kRows * kSymbolStride;
+                   index += blockDim.x) {
+                const int row_offset = index / kSymbolStride;
+                const int bit = index - row_offset * kSymbolStride;
+                __half sign = __float2half_rn(0.0f);
+                if (row_offset < row_count && bit < symbol_dim) {
+                  const uint32_t word = static_cast<uint32_t>(
+                      packed_query[
+                          series_offset + row_start + row_offset]);
+                  sign = __int2half_rn(sign_from_bit(word, bit));
+                }
+                symbol_tile[index] = sign;
+              }
+              __syncthreads();
+
+              const int bit_tile_count =
+                  (symbol_dim + kTensorTile - 1) / kTensorTile;
+              const int output_tile_count =
+                  (kRouteCount / kTensorTile) * bit_tile_count;
+              const bool owns_output = warp < output_tile_count;
+              const int output_route = owns_output
+                  ? (warp / bit_tile_count) * kTensorTile
+                  : 0;
+              const int output_bit = owns_output
+                  ? (warp % bit_tile_count) * kTensorTile
+                  : 0;
+              wmma::fragment<
+                  wmma::accumulator,
+                  kTensorTile,
+                  kTensorTile,
+                  kTensorTile,
+                  float>
+                  key_accumulator;
+              wmma::fill_fragment(key_accumulator, 0.0f);
+              if (owns_output) {
+#pragma unroll
+                for (int query_start = 0;
+                     query_start < kRows;
+                     query_start += kTensorTile) {
+                  wmma::fragment<
+                      wmma::matrix_a,
+                      kTensorTile,
+                      kTensorTile,
+                      kTensorTile,
+                      __half,
+                      wmma::row_major>
+                      credit;
+                  wmma::fragment<
+                      wmma::matrix_b,
+                      kTensorTile,
+                      kTensorTile,
+                      kTensorTile,
+                      __half,
+                      wmma::row_major>
+                      query_sign;
+                  wmma::load_matrix_sync(
+                      query_sign,
+                      symbol_tile + query_start * kSymbolStride + output_bit,
+                      kSymbolStride);
+                  wmma::load_matrix_sync(
+                      credit,
+                      half_phase.route.probability.probability_high +
+                          output_route * kRows + query_start,
+                      kRows);
+                  wmma::mma_sync(
+                      key_accumulator,
+                      credit,
+                      query_sign,
+                      key_accumulator);
+                  wmma::load_matrix_sync(
+                      credit,
+                      half_phase.route.probability.probability_low +
+                          output_route * kRows + query_start,
+                      kRows);
+                  wmma::mma_sync(
+                      key_accumulator,
+                      credit,
+                      query_sign,
+                      key_accumulator);
+                }
+              }
+              __syncthreads();
+              float* const warp_output =
+                  float_phase.mma_output + warp * kTensorTile * kTensorTile;
+              if (owns_output) {
+                wmma::store_matrix_sync(
+                    warp_output,
+                    key_accumulator,
+                    kTensorTile,
+                    wmma::mem_row_major);
+              }
+              __syncthreads();
+              if (owns_output) {
+                for (int output = lane;
+                     output < kTensorTile * kTensorTile;
+                     output += kWarpSize) {
+                  const int route_offset =
+                      output_route + output / kTensorTile;
+                  const int bit = output_bit + output % kTensorTile;
+                  const int key_position = route_start + route_offset - 1;
+                  if (bit < symbol_dim && key_position >= 0 &&
+                      key_position < seq_len) {
+                    const int64_t target =
+                        ((static_cast<int64_t>(batch) * seq_len +
+                          key_position) * num_heads + head) * symbol_dim + bit;
+                    atomicAdd(
+                        grad_key + target,
+                        symbol_scale * warp_output[output]);
+                  }
+                }
+              }
+              __syncthreads();
+            }
+          }
+
+          if constexpr ((TensorSymbolMask & kGradQuery) != 0) {
+            if ((gradient_mask & kGradQuery) != 0) {
+              for (int index = thread;
+                   index < kRouteCount * kSymbolStride;
+                   index += blockDim.x) {
+                const int route_offset = index / kSymbolStride;
+                const int bit = index - route_offset * kSymbolStride;
+                const int key_position = route_start + route_offset - 1;
+                __half sign = __float2half_rn(0.0f);
+                if (bit < symbol_dim && key_position >= 0 &&
+                    key_position < seq_len) {
+                  const uint32_t word = static_cast<uint32_t>(
+                      packed_key[series_offset + key_position]);
+                  sign = __int2half_rn(sign_from_bit(word, bit));
+                }
+                symbol_tile[index] = sign;
+              }
+              __syncthreads();
+
+              const int bit_tile_count =
+                  (symbol_dim + kTensorTile - 1) / kTensorTile;
+              const int output_tile_count =
+                  (kRows / kTensorTile) * bit_tile_count;
+              const bool owns_output = warp < output_tile_count;
+              const int output_row = owns_output
+                  ? (warp / bit_tile_count) * kTensorTile
+                  : 0;
+              const int output_bit = owns_output
+                  ? (warp % bit_tile_count) * kTensorTile
+                  : 0;
+              wmma::fragment<
+                  wmma::accumulator,
+                  kTensorTile,
+                  kTensorTile,
+                  kTensorTile,
+                  float>
+                  query_accumulator;
+              wmma::fill_fragment(query_accumulator, 0.0f);
+              if (owns_output) {
+#pragma unroll
+                for (int route_offset = 0;
+                     route_offset < kRouteCount;
+                     route_offset += kTensorTile) {
+                  wmma::fragment<
+                      wmma::matrix_a,
+                      kTensorTile,
+                      kTensorTile,
+                      kTensorTile,
+                      __half,
+                      wmma::col_major>
+                      credit;
+                  wmma::fragment<
+                      wmma::matrix_b,
+                      kTensorTile,
+                      kTensorTile,
+                      kTensorTile,
+                      __half,
+                      wmma::row_major>
+                      key_sign;
+                  wmma::load_matrix_sync(
+                      key_sign,
+                      symbol_tile + route_offset * kSymbolStride + output_bit,
+                      kSymbolStride);
+                  wmma::load_matrix_sync(
+                      credit,
+                      half_phase.route.probability.probability_high +
+                          route_offset * kRows + output_row,
+                      kRows);
+                  wmma::mma_sync(
+                      query_accumulator,
+                      credit,
+                      key_sign,
+                      query_accumulator);
+                  wmma::load_matrix_sync(
+                      credit,
+                      half_phase.route.probability.probability_low +
+                          route_offset * kRows + output_row,
+                      kRows);
+                  wmma::mma_sync(
+                      query_accumulator,
+                      credit,
+                      key_sign,
+                      query_accumulator);
+                }
+              }
+              __syncthreads();
+              float* const warp_output =
+                  float_phase.mma_output + warp * kTensorTile * kTensorTile;
+              if (owns_output) {
+                wmma::store_matrix_sync(
+                    warp_output,
+                    query_accumulator,
+                    kTensorTile,
+                    wmma::mem_row_major);
+              }
+              __syncthreads();
+              if (owns_output) {
+                for (int output = lane;
+                     output < kTensorTile * kTensorTile;
+                     output += kWarpSize) {
+                  const int row_offset = output_row + output / kTensorTile;
+                  const int bit = output_bit + output % kTensorTile;
+                  if (row_offset < row_count && bit < symbol_dim) {
+                    const int64_t target =
+                        ((static_cast<int64_t>(batch) * seq_len +
+                          row_start + row_offset) * num_heads + head) *
+                            symbol_dim + bit;
+                    atomicAdd(
+                        grad_query + target,
+                        symbol_scale * warp_output[output]);
+                  }
+                }
+              }
+              __syncthreads();
+            }
+          }
+        }
+      }
+    }
+  }
+#endif
+}
+
+
+__global__ void finalize_grouped_gradients_kernel(
+    const c10::Half* __restrict__ query,
+    const c10::Half* __restrict__ key,
+    const c10::Half* __restrict__ value,
+    float* __restrict__ grad_query,
+    float* __restrict__ grad_key,
+    float* __restrict__ grad_value,
+    int64_t query_elements,
+    int64_t key_elements,
+    int64_t value_elements) {
+  const int64_t total =
+      query_elements + key_elements + value_elements;
+  for (int64_t index =
+           static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+       index < total;
+       index += static_cast<int64_t>(gridDim.x) * blockDim.x) {
+    if (index < query_elements) {
+      grad_query[index] *=
+          softsign_derivative(read_float(query, index));
+    } else if (index < query_elements + key_elements) {
+      const int64_t key_index = index - query_elements;
+      grad_key[key_index] *=
+          softsign_derivative(read_float(key, key_index));
+    } else {
+      const int64_t value_index =
+          index - query_elements - key_elements;
+      grad_value[value_index] *=
+          softsign_derivative(read_float(value, value_index));
+    }
+  }
+}
+
+}  // namespace
+
+
+template <int TensorSymbolMask, bool SpecializedReplay>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+grouped_checkpoint_reverse_impl(
+    const torch::Tensor& query,
+    const torch::Tensor& key,
+    const torch::Tensor& value,
+    const torch::Tensor& grad_output,
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
+    const torch::Tensor& dropout_seed,
+    const torch::Tensor& row_stats,
+    float scale,
+    float dropout_p,
+    float mismatch_scale,
+    int gradient_mask) {
+  const c10::cuda::CUDAGuard device_guard(query.device());
+  const int batch_size = query.size(0);
+  const int seq_len = query.size(1);
+  const int num_heads = query.size(2);
+  const int symbol_dim = query.size(3);
+  const int num_value_heads = value.size(2);
+  const int series_count = batch_size * num_heads;
+  const auto float_options = query.options().dtype(torch::kFloat32);
+  torch::Tensor grad_query = (gradient_mask & kGradQuery) != 0
+      ? torch::zeros(query.sizes(), float_options)
+      : torch::empty({0}, float_options);
+  torch::Tensor grad_key = (gradient_mask & kGradKey) != 0
+      ? torch::zeros(key.sizes(), float_options)
+      : torch::empty({0}, float_options);
+  torch::Tensor grad_value = (gradient_mask & kGradValue) != 0
+      ? torch::zeros(value.sizes(), float_options)
+      : torch::empty({0}, float_options);
+  if (seq_len <= 1) {
+    return std::make_tuple(grad_query, grad_key, grad_value);
+  }
+
+  const int row_block_count = (seq_len + kRows - 1) / kRows;
+  const int diagonal_tile_count =
+      (seq_len - 1 + kDiagonals - 1) / kDiagonals;
+  const int task_pair_count =
+      series_count * ((diagonal_tile_count + 1) / 2);
+  int blocks_per_sm = 1;
+  C10_CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      &blocks_per_sm,
+      grouped_checkpoint_reverse_fp16_kernel<
+          TensorSymbolMask,
+          SpecializedReplay>,
+      kThreads,
+      0));
+  const int multiprocessors =
+      at::cuda::getCurrentDeviceProperties()->multiProcessorCount;
+  const int resident_blocks =
+      std::max(1, blocks_per_sm * multiprocessors);
+  const int grid_count = std::min(
+      task_pair_count, resident_blocks);
+  torch::Tensor checkpoints = torch::empty(
+      {grid_count, row_block_count, kDiagonals}, float_options);
+  torch::Tensor row_prior = torch::empty({seq_len}, float_options);
+  const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+  initialize_row_prior_kernel<<<
+      (seq_len + kThreads - 1) / kThreads,
+      kThreads,
+      0,
+      stream>>>(row_prior.data_ptr<float>(), seq_len);
+
+  grouped_checkpoint_reverse_fp16_kernel<
+      TensorSymbolMask,
+      SpecializedReplay><<<
+      grid_count, kThreads, 0, stream>>>(
+      grad_output.data_ptr<c10::Half>(),
+      value.data_ptr<c10::Half>(),
+      packed_query_symbols.data_ptr<int32_t>(),
+      packed_key_symbols.data_ptr<int32_t>(),
+      dropout_seed.data_ptr<int64_t>(),
+      row_prior.data_ptr<float>(),
+      row_stats.data_ptr<float>(),
+      checkpoints.data_ptr<float>(),
+      grad_query.numel() != 0 ? grad_query.data_ptr<float>() : nullptr,
+      grad_key.numel() != 0 ? grad_key.data_ptr<float>() : nullptr,
+      grad_value.numel() != 0 ? grad_value.data_ptr<float>() : nullptr,
+      series_count,
+      seq_len,
+      num_heads,
+      num_value_heads,
+      symbol_dim,
+      row_block_count,
+      diagonal_tile_count,
+      mismatch_scale / static_cast<float>(symbol_dim),
+      0.5f * mismatch_scale / static_cast<float>(symbol_dim),
+      scale,
+      dropout_p,
+      1.0f / (1.0f - dropout_p),
+      gradient_mask);
+
+  const int64_t query_elements = grad_query.numel();
+  const int64_t key_elements = grad_key.numel();
+  const int64_t value_elements = grad_value.numel();
+  const int64_t final_elements =
+      query_elements + key_elements + value_elements;
+  if (final_elements != 0) {
+    finalize_grouped_gradients_kernel<<<
+        std::min<int64_t>(
+            65535, (final_elements + kThreads - 1) / kThreads),
+        kThreads,
+        0,
+        stream>>>(
+        query.data_ptr<c10::Half>(),
+        key.data_ptr<c10::Half>(),
+        value.data_ptr<c10::Half>(),
+        grad_query.numel() != 0 ? grad_query.data_ptr<float>() : nullptr,
+        grad_key.numel() != 0 ? grad_key.data_ptr<float>() : nullptr,
+        grad_value.numel() != 0 ? grad_value.data_ptr<float>() : nullptr,
+        query_elements,
+        key_elements,
+        value_elements);
+  }
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+  return std::make_tuple(grad_query, grad_key, grad_value);
+}
+
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+rosa_soft_grouped_checkpoint_reverse_cuda(
+    const torch::Tensor& query,
+    const torch::Tensor& key,
+    const torch::Tensor& value,
+    const torch::Tensor& grad_output,
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
+    const torch::Tensor& dropout_seed,
+    const torch::Tensor& row_stats,
+    float scale,
+    float dropout_p,
+    float mismatch_scale,
+    int gradient_mask) {
+  const int symbol_dim = query.size(3);
+  const bool needs_query = (gradient_mask & kGradQuery) != 0;
+  const bool needs_key = (gradient_mask & kGradKey) != 0;
+  if (symbol_dim >= 16 && needs_query && needs_key) {
+    return grouped_checkpoint_reverse_impl<
+        kGradQuery | kGradKey,
+        true>(
+        query,
+        key,
+        value,
+        grad_output,
+        packed_query_symbols,
+        packed_key_symbols,
+        dropout_seed,
+        row_stats,
+        scale,
+        dropout_p,
+        mismatch_scale,
+        gradient_mask);
+  }
+  if (symbol_dim >= 8 && needs_key) {
+    return grouped_checkpoint_reverse_impl<kGradKey, true>(
+        query,
+        key,
+        value,
+        grad_output,
+        packed_query_symbols,
+        packed_key_symbols,
+        dropout_seed,
+        row_stats,
+        scale,
+        dropout_p,
+        mismatch_scale,
+        gradient_mask);
+  }
+  if (symbol_dim >= 16 && needs_query) {
+    return grouped_checkpoint_reverse_impl<kGradQuery, false>(
+        query,
+        key,
+        value,
+        grad_output,
+        packed_query_symbols,
+        packed_key_symbols,
+        dropout_seed,
+        row_stats,
+        scale,
+        dropout_p,
+        mismatch_scale,
+        gradient_mask);
+  }
+  return grouped_checkpoint_reverse_impl<0, false>(
+      query,
+      key,
+      value,
+      grad_output,
+      packed_query_symbols,
+      packed_key_symbols,
+      dropout_seed,
+      row_stats,
+      scale,
+      dropout_p,
+      mismatch_scale,
+      gradient_mask);
+}
+
+
+#ifdef ROSA_SOFT_BENCHMARK_COMPAT
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+rosa_soft_grouped_checkpoint_reverse_tensor_symbols_cuda(
+    const torch::Tensor& query,
+    const torch::Tensor& key,
+    const torch::Tensor& value,
+    const torch::Tensor& grad_output,
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
+    const torch::Tensor& dropout_seed,
+    const torch::Tensor& row_stats,
+    float scale,
+    float dropout_p,
+    float mismatch_scale,
+    int gradient_mask,
+    int tensor_symbol_mask,
+    int specialized_replay) {
+#define LAUNCH_TENSOR_SYMBOLS(MASK)                                      \
+  return grouped_checkpoint_reverse_impl<MASK, false>(                  \
+      query, key, value, grad_output, packed_query_symbols,             \
+      packed_key_symbols, dropout_seed, row_stats, scale, dropout_p,    \
+      mismatch_scale, gradient_mask)
+  if (specialized_replay != 0) {
+    TORCH_CHECK(
+        tensor_symbol_mask == 0 || tensor_symbol_mask == kGradKey ||
+            tensor_symbol_mask == (kGradQuery | kGradKey),
+        "unsupported tensor-symbol mask for specialized replay");
+    if (tensor_symbol_mask == (kGradQuery | kGradKey)) {
+      return grouped_checkpoint_reverse_impl<
+          kGradQuery | kGradKey,
+          true>(
+          query,
+          key,
+          value,
+          grad_output,
+          packed_query_symbols,
+          packed_key_symbols,
+          dropout_seed,
+          row_stats,
+          scale,
+          dropout_p,
+          mismatch_scale,
+          gradient_mask);
+    }
+    if (tensor_symbol_mask == kGradKey) {
+      return grouped_checkpoint_reverse_impl<kGradKey, true>(
+          query,
+          key,
+          value,
+          grad_output,
+          packed_query_symbols,
+          packed_key_symbols,
+          dropout_seed,
+          row_stats,
+          scale,
+          dropout_p,
+          mismatch_scale,
+          gradient_mask);
+    }
+    return grouped_checkpoint_reverse_impl<0, true>(
+        query,
+        key,
+        value,
+        grad_output,
+        packed_query_symbols,
+        packed_key_symbols,
+        dropout_seed,
+        row_stats,
+        scale,
+        dropout_p,
+        mismatch_scale,
+        gradient_mask);
+  }
+  switch (tensor_symbol_mask) {
+    case 0:
+      LAUNCH_TENSOR_SYMBOLS(0);
+    case kGradQuery:
+      LAUNCH_TENSOR_SYMBOLS(kGradQuery);
+    case kGradKey:
+      LAUNCH_TENSOR_SYMBOLS(kGradKey);
+    case kGradQuery | kGradKey:
+      LAUNCH_TENSOR_SYMBOLS(kGradQuery | kGradKey);
+    default:
+      TORCH_CHECK(false, "tensor_symbol_mask must be 1, 2, or 3");
+  }
+#undef LAUNCH_TENSOR_SYMBOLS
+}
+#endif
+
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+rosa_soft_grouped_checkpoint_vjp_cuda(
+    const torch::Tensor& query,
+    const torch::Tensor& key,
+    const torch::Tensor& value,
+    const torch::Tensor& grad_output,
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
+    const torch::Tensor& dropout_seed,
+    float scale,
+    float dropout_p,
+    float mismatch_scale,
+    int gradient_mask) {
+  const c10::cuda::CUDAGuard device_guard(query.device());
+  if (at::cuda::getCurrentDeviceProperties()->major < 7) {
+    return rosa_soft_unbounded_replay_vjp_cuda(
+        query,
+        key,
+        value,
+        grad_output,
+        packed_query_symbols,
+        packed_key_symbols,
+        dropout_seed,
+        0,
+        scale,
+        dropout_p,
+        mismatch_scale,
+        gradient_mask);
+  }
+  torch::Tensor row_stats = rosa_soft_grouped_checkpoint_stats_cuda(
+      value,
+      grad_output,
+      packed_query_symbols,
+      packed_key_symbols,
+      dropout_seed,
+      query.size(3),
+      scale,
+      dropout_p,
+      mismatch_scale);
+  return rosa_soft_grouped_checkpoint_reverse_cuda(
+      query,
+      key,
+      value,
+      grad_output,
+      packed_query_symbols,
+      packed_key_symbols,
+      dropout_seed,
+      row_stats,
+      scale,
+      dropout_p,
+      mismatch_scale,
+      gradient_mask);
+}

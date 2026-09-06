@@ -59,6 +59,12 @@ The public controls are exactly:
 - `dropout_p=0.0`;
 - `mismatch_scale=3.0`.
 
+`rosa_soft_unbounded` is the separately named unlimited-horizon form of the
+same estimator. It changes only the suffix recurrence horizon; the hard
+forward, score transform, null route, candidate prior, dropout semantics, and
+Q/K/value credit remain the same. Do not silently replace the finite default
+or alias the two operators.
+
 `dropout_p` follows PyTorch attention semantics: it is the probability of
 dropping a post-softmax route weight, with inverted scaling on retained
 weights. It affects backward only. With `dropout_p=0`, no RNG state is drawn.
@@ -88,10 +94,39 @@ score/VJP workspace. The PyTorch reference may materialize quadratic tensors
 because it is an oracle. A kernel may underflow a route numerically, but it may
 not structurally omit that route.
 
+The unbounded VJP has two exact internal schedules. Eligible fixed-length
+FP16 `Dv=64` workloads may use complete 32-diagonal tasks, a 64 MiB-budgeted
+row-statistics pass, and CTA-private score checkpoints every 32 query rows.
+Checkpoint state must remain `O(G*T)` for occupancy-bounded resident grid
+size `G`; it may not become one checkpoint array per logical diagonal task.
+Other shapes may replay a private slab of
+`S=min(T-1,8192,memory_budget/(BHT))` diagonals under the existing bounded
+budget. `S` is never a suffix window: every slab and every complete-diagonal
+task is eventually visited in both passes.
+
+The grouped FP16 path may map the already-computed dense route-credit tile to
+compensated Tensor Core Q/K contractions. FP32 credit is split into FP16 high
+and residual terms, binary signs remain exact, and accumulation is FP32. Keep
+the explicit scalar contraction available as the semantic oracle, and gate
+Tensor variants by measured symbol width and gradient mask; do not expose
+these scheduling choices in the public API.
+
+For exact reverse mode, complete row softmax statistics must be available
+before diagonal adjoints are consumed. Do not fuse phases by dropping this
+dependency, and do not add a global ready queue or progress spin protocol
+unless it demonstrates a reproducible end-to-end gain over independent
+complete-diagonal ownership.
+
 Training hard forward remains an exact unlimited CUDA implementation. It is
 allowed to be quadratic because this package does not claim to provide the
 long-context inference runtime. Do not add an approximate inference index to
 the training build graph.
+
+The maintained hard CUDA dispatch may choose the direct route scan or the
+diagonal mismatch-prefix DP. Both schedules must remain unlimited and
+bit-exact; the DP winner reduction encodes longest length first and latest
+route second. Never add a hard suffix-window argument or reuse the surrogate
+`max_suffix_length` in either schedule.
 
 The fixed-length production VJP currently has row-owned, tiled-streaming, and
 one gated SM80+ block/Tensor-Core schedule. Their selection is private. Do not

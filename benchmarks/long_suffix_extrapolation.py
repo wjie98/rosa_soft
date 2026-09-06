@@ -37,6 +37,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from benchmarks import temporal_quadratic_proxy  # noqa: E402
+from benchmarks.dual_score_reference import (  # noqa: E402
+    DEFAULT_EVIDENCE_POWER,
+    final_query_score_carrier,
+)
 from benchmarks.fast_weight_proxy import (  # noqa: E402
     _count_sketch,
     _count_sketch_map,
@@ -68,6 +72,7 @@ ESTIMATORS = (
     "exact_relevant_bitflip",
     "state_quadratic_attention",
 )
+DUAL_SCORE_ESTIMATORS = ("information", "dual")
 TEMPORAL_ESTIMATOR = "temporal_quadratic_attention"
 SUFFIX_KERNEL_ESTIMATORS = {
     "suffix_sketch_raw_attention": "raw",
@@ -79,7 +84,7 @@ EXACT_SUFFIX_KERNEL_ESTIMATORS = {
     "exact_suffix_quadratic_attention": "quadratic",
     "exact_suffix_level_quadratic_attention": "level_quadratic",
 }
-ESTIMATOR_CHOICES = ESTIMATORS + (TEMPORAL_ESTIMATOR,) + tuple(
+ESTIMATOR_CHOICES = ESTIMATORS + DUAL_SCORE_ESTIMATORS + (TEMPORAL_ESTIMATOR,) + tuple(
     SUFFIX_KERNEL_ESTIMATORS
 ) + tuple(EXACT_SUFFIX_KERNEL_ESTIMATORS)
 VALUE_MODES = ("balanced_binary", "coherent_negative")
@@ -906,6 +911,8 @@ def hard_forward_with_proxy(
     logit_margin: float,
     scale: float,
     mismatch_scale: float,
+    evidence_power: float = DEFAULT_EVIDENCE_POWER,
+    information_weight: float = 0.5,
     temporal_state_dim: int = TEMPORAL_DEFAULT_STATE_DIM,
     temporal_context: Optional[TemporalQuadraticContext] = None,
     suffix_sketch_dim: int = 32,
@@ -929,6 +936,20 @@ def hard_forward_with_proxy(
             scale=scale,
             mismatch_scale=mismatch_scale,
         )
+    elif estimator in ("information", "dual"):
+        carrier, probabilities = final_query_score_carrier(
+            query_logits,
+            context.key_signs,
+            context.values,
+            score_mode=estimator,
+            scale=scale,
+            mismatch_scale=mismatch_scale,
+            evidence_power=evidence_power,
+            information_weight=information_weight,
+        )
+        target_weight = probabilities.gather(
+            1, context.target_positions.view(-1, 1)
+        ).squeeze(1)
     elif estimator == "state_quadratic_attention":
         carrier, target_weight = _quadratic_attention_carrier(
             query_logits,
@@ -1012,6 +1033,8 @@ def train_condition(
     scale: float,
     mismatch_scale: float,
     gradient_stall_tolerance: float,
+    evidence_power: float = DEFAULT_EVIDENCE_POWER,
+    information_weight: float = 0.5,
     temporal_state_dim: int = TEMPORAL_DEFAULT_STATE_DIM,
     suffix_sketch_dim: int = 32,
     suffix_sketch_count: int = 2,
@@ -1065,6 +1088,8 @@ def train_condition(
             logit_margin=logit_margin,
             scale=scale,
             mismatch_scale=mismatch_scale,
+            evidence_power=evidence_power,
+            information_weight=information_weight,
             temporal_state_dim=temporal_state_dim,
             temporal_context=temporal_context,
             suffix_sketch_dim=suffix_sketch_dim,
@@ -1350,6 +1375,10 @@ def run_matrix(args: argparse.Namespace) -> dict[str, object]:
                     scale=args.scale,
                     mismatch_scale=args.mismatch_scale,
                     gradient_stall_tolerance=args.gradient_stall_tolerance,
+                    evidence_power=getattr(
+                        args, "evidence_power", DEFAULT_EVIDENCE_POWER
+                    ),
+                    information_weight=getattr(args, "information_weight", 0.5),
                     temporal_state_dim=getattr(
                         args,
                         "temporal_state_dim",
@@ -1417,6 +1446,10 @@ def run_matrix(args: argparse.Namespace) -> dict[str, object]:
         "logit_margin": args.logit_margin,
         "scale": args.scale,
         "mismatch_scale": args.mismatch_scale,
+        "evidence_power": getattr(
+            args, "evidence_power", DEFAULT_EVIDENCE_POWER
+        ),
+        "information_weight": getattr(args, "information_weight", 0.5),
         "temporal_state_dim": getattr(
             args,
             "temporal_state_dim",
@@ -1476,6 +1509,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=ROSA_SOFT_DEFAULT_MISMATCH_SCALE,
     )
+    parser.add_argument(
+        "--evidence-power", type=float, default=DEFAULT_EVIDENCE_POWER
+    )
+    parser.add_argument("--information-weight", type=float, default=0.5)
     parser.add_argument(
         "--temporal-state-dim",
         type=int,

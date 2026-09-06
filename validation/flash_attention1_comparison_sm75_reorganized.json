@@ -1,0 +1,195 @@
+{
+  "comparison_contract": {
+    "caveat": "The operators have different Q/K widths, value-head counts, forward semantics, and backward equations.",
+    "flash_attention_1": "unpadded QKV-packed B*T,3,Hq,head_dim",
+    "rosa": "B,T,Hq,D=bits Q/K; B,T,Hv,Dv=head_dim V",
+    "shared": "FP16, causal, dropout_p=0, same output shape"
+  },
+  "compute_capability": [
+    7,
+    5
+  ],
+  "config": {
+    "batch": 1,
+    "bits": 8,
+    "head_dim": 64,
+    "heads": 4,
+    "lengths": [
+      4096,
+      8192,
+      16384
+    ],
+    "mismatch_scale": 3.0,
+    "output": "validation/flash_attention1_comparison_sm75_reorganized.json",
+    "repeats": 7,
+    "rounds": 5,
+    "scale": 1.0,
+    "seed": 73123,
+    "value_heads": 2,
+    "warmup": 5
+  },
+  "cuda": "12.8",
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "flash1_numeric_check": {
+    "all_finite": true,
+    "gradient_max_abs_error": 0.0014293193817138672,
+    "gradient_mean_abs_error": 4.227405588608235e-05,
+    "output_max_abs_error": 0.0009937286376953125,
+    "output_mean_abs_error": 4.5513159420806915e-05,
+    "seq_len": 127
+  },
+  "flash_attn": "1.0.9",
+  "rows": [
+    {
+      "forward": {
+        "flash_attention_1": {
+          "latency_ms": 0.32152226993015837,
+          "latency_samples_ms": [
+            0.32025143078395296,
+            0.3185920034136091,
+            0.32152226993015837,
+            0.3243977001735142,
+            0.32200227464948383
+          ]
+        },
+        "rosa_hard": {
+          "latency_ms": 0.2053851400102888,
+          "latency_samples_ms": [
+            0.19939657620021276,
+            0.19571656840188162,
+            0.2053851400102888,
+            0.20722743443080358,
+            0.20568227767944336
+          ]
+        }
+      },
+      "seq_len": 4096,
+      "train": {
+        "flash_attention_1": {
+          "latency_ms": 0.8806217057364327,
+          "latency_samples_ms": [
+            0.8727405411856515,
+            0.9488868713378906,
+            0.8866148676191058,
+            0.872260570526123,
+            0.8806217057364327
+          ],
+          "peak_operator_mib": 6.12548828125
+        },
+        "rosa_unbounded": {
+          "latency_ms": 7.561375754220145,
+          "latency_samples_ms": [
+            11.004489353724889,
+            7.545490264892578,
+            7.561375754220145,
+            7.551872253417969,
+            7.584621974400112
+          ],
+          "peak_operator_mib": 24.828125
+        }
+      },
+      "train_latency_ratio_rosa_over_flash1": 8.586406291106389
+    },
+    {
+      "forward": {
+        "flash_attention_1": {
+          "latency_ms": 1.1541942868913924,
+          "latency_samples_ms": [
+            1.182445662362235,
+            1.165334837777274,
+            1.1541942868913924,
+            1.1389622688293457,
+            1.1359634399414062
+          ]
+        },
+        "rosa_hard": {
+          "latency_ms": 0.7179703031267438,
+          "latency_samples_ms": [
+            0.7342628751482282,
+            0.7539748464311872,
+            0.7179703031267438,
+            0.710578305380685,
+            0.7045303072248187
+          ]
+        }
+      },
+      "seq_len": 8192,
+      "train": {
+        "flash_attention_1": {
+          "latency_ms": 3.327195303780692,
+          "latency_samples_ms": [
+            3.291154316493443,
+            3.3311544145856584,
+            3.327195303780692,
+            3.331711905343192,
+            3.309568132672991
+          ],
+          "peak_operator_mib": 12.25048828125
+        },
+        "rosa_unbounded": {
+          "latency_ms": 29.678643362862722,
+          "latency_samples_ms": [
+            29.64477757045201,
+            29.605028424944198,
+            29.751135689871653,
+            29.776602608816965,
+            29.678643362862722
+          ],
+          "peak_operator_mib": 49.65625
+        }
+      },
+      "train_latency_ratio_rosa_over_flash1": 8.920018409841731
+    },
+    {
+      "forward": {
+        "flash_attention_1": {
+          "latency_ms": 4.336964470999582,
+          "latency_samples_ms": [
+            4.34790393284389,
+            4.336964470999582,
+            4.320562362670898,
+            4.321467535836356,
+            4.337947300502232
+          ]
+        },
+        "rosa_hard": {
+          "latency_ms": 2.760594231741769,
+          "latency_samples_ms": [
+            2.815122331891741,
+            2.760594231741769,
+            2.7626195635114397,
+            2.7410193852015903,
+            2.7455313546316966
+          ]
+        }
+      },
+      "seq_len": 16384,
+      "train": {
+        "flash_attention_1": {
+          "latency_ms": 13.327469961983818,
+          "latency_samples_ms": [
+            13.327469961983818,
+            13.315374101911273,
+            13.384109497070312,
+            13.322322300502233,
+            13.371131896972656
+          ],
+          "peak_operator_mib": 24.50048828125
+        },
+        "rosa_unbounded": {
+          "latency_ms": 123.92421177455357,
+          "latency_samples_ms": [
+            123.92421177455357,
+            123.81224714006696,
+            123.91217041015625,
+            124.01247732979911,
+            123.98854282924107
+          ],
+          "peak_operator_mib": 67.3125
+        }
+      },
+      "train_latency_ratio_rosa_over_flash1": 9.298404883150623
+    }
+  ],
+  "torch": "2.11.0+cu128"
+}

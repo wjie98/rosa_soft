@@ -1,0 +1,80 @@
+{
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "device_capability": [
+    7,
+    5
+  ],
+  "torch": "2.11.0+cu128",
+  "config": {
+    "lengths": [
+      4096,
+      8192
+    ],
+    "tile_sizes": [
+      32
+    ],
+    "plans": [
+      "persistent_rows"
+    ],
+    "batch": 1,
+    "heads": 4,
+    "value_heads": 2,
+    "bits": 8,
+    "value_dim": 64,
+    "dtype": "float16",
+    "scale": 1.0,
+    "dropout_p": 0.0,
+    "mismatch_scale": 3.0,
+    "gradient_mask": 7,
+    "include_scores": true,
+    "include_unbounded_replay": false,
+    "replay_group_size": 256,
+    "seed": 8123,
+    "warmup": 2,
+    "repeats": 3,
+    "rounds": 5,
+    "output": "validation/row_signal_compact_final_h4_sm75.json"
+  },
+  "cases": [
+    {
+      "sequence_length": 4096,
+      "operators": {
+        "persistent_rows_l32_scores": {
+          "latency_ms": 3.5073280334472656,
+          "baseline_ratio": 0.021372099851901,
+          "peak_operator_mib": 264.126953125
+        },
+        "persistent_rows_l32_stats": {
+          "latency_ms": 48.60284932454427,
+          "baseline_ratio": 0.29616418508482156,
+          "peak_operator_mib": 8.314453125
+        },
+        "persistent_rows_l32_vjp": {
+          "latency_ms": 164.1077880859375,
+          "baseline_ratio": 1.0,
+          "peak_operator_mib": 11.314453125
+        }
+      }
+    },
+    {
+      "sequence_length": 8192,
+      "operators": {
+        "persistent_rows_l32_scores": {
+          "latency_ms": 8.474997202555338,
+          "baseline_ratio": 0.017432162224209704,
+          "peak_operator_mib": 1056.25390625
+        },
+        "persistent_rows_l32_stats": {
+          "latency_ms": 162.89227294921875,
+          "baseline_ratio": 0.33505197220181454,
+          "peak_operator_mib": 32.62890625
+        },
+        "persistent_rows_l32_vjp": {
+          "latency_ms": 486.170166015625,
+          "baseline_ratio": 1.0,
+          "peak_operator_mib": 38.62890625
+        }
+      }
+    }
+  ]
+}

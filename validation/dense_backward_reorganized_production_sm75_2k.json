@@ -1,0 +1,111 @@
+{
+  "compute_capability": [
+    7,
+    5
+  ],
+  "config": {
+    "batch": 1,
+    "bits": 8,
+    "checkpoint_stats_group_size": null,
+    "dropout_p": 0.0,
+    "dtype": "float16",
+    "gradient_mask": 7,
+    "group_sizes": [
+      2048
+    ],
+    "heads": 4,
+    "include_components": true,
+    "include_finite_controls": false,
+    "lengths": [
+      2048
+    ],
+    "macro_stats": [],
+    "mismatch_scale": 3.0,
+    "output": "validation/dense_backward_reorganized_production_sm75_2k.json",
+    "repeats": 10,
+    "rounds": 5,
+    "scale": 1.0,
+    "seed": 58123,
+    "specialized_replay": false,
+    "tensor_symbol_mask": 3,
+    "tensor_symbols": false,
+    "value_dim": 64,
+    "value_heads": 2,
+    "warmup": 5
+  },
+  "cuda": "12.8",
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "rows": [
+    {
+      "operators": {
+        "grouped_checkpoint": {
+          "latency_ms": 2.125017547607422,
+          "latency_samples_ms": [
+            3.1182079315185547,
+            2.125017547607422,
+            2.177897644042969,
+            2.107833671569824,
+            2.1139455795288087
+          ],
+          "peak_operator_mib": 6.1015625,
+          "unbounded_max_abs_errors": [
+            7.450580596923828e-09,
+            1.043081283569336e-07,
+            3.5762786865234375e-07
+          ]
+        },
+        "grouped_reverse": {
+          "latency_ms": 1.2900351524353026,
+          "latency_samples_ms": [
+            1.8278688430786132,
+            1.2900351524353026,
+            1.2471839904785156,
+            1.3178367614746094,
+            1.2525407791137695
+          ],
+          "peak_operator_mib": 2.5078125
+        },
+        "production_auto": {
+          "latency_ms": 2.179897689819336,
+          "latency_samples_ms": [
+            3.123139190673828,
+            2.212166404724121,
+            2.179897689819336,
+            2.112873649597168,
+            2.176278305053711
+          ],
+          "peak_operator_mib": 6.1015625
+        },
+        "selected_s2048": {
+          "latency_ms": 2.9034496307373048,
+          "latency_samples_ms": [
+            4.032860946655274,
+            2.9034496307373048,
+            2.874697685241699,
+            2.903059196472168,
+            2.922198486328125
+          ],
+          "peak_operator_mib": 129.6015625,
+          "unbounded_max_abs_errors": [
+            4.470348358154297e-08,
+            4.7124922275543213e-07,
+            2.7060508728027344e-05
+          ]
+        },
+        "stats_s2048": {
+          "latency_ms": 0.8833024024963378,
+          "latency_samples_ms": [
+            1.281430435180664,
+            0.8851584434509278,
+            0.861081600189209,
+            0.8833024024963378,
+            0.8600192070007324
+          ],
+          "peak_operator_mib": 6.1015625
+        }
+      },
+      "seq_len": 2048
+    }
+  ],
+  "torch": "2.11.0+cu128"
+}

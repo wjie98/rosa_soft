@@ -41,6 +41,8 @@ ROSA_CUDA_SOURCES = [
     "cuda/rosa_soft_kernels.cu",
     "cuda/rosa_soft_streaming_kernels.cu",
     "cuda/rosa_soft_block_diagonal_kernels.cu",
+    "cuda/rosa_soft_unbounded_kernels.cu",
+    "cuda/rosa_soft_grouped_checkpoint_kernels.cu",
 ]
 
 

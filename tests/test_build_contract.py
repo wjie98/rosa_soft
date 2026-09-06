@@ -68,6 +68,8 @@ def test_default_cuda_build_contains_only_core_translation_units():
         "cuda/rosa_soft_kernels.cu",
         "cuda/rosa_soft_streaming_kernels.cu",
         "cuda/rosa_soft_block_diagonal_kernels.cu",
+        "cuda/rosa_soft_unbounded_kernels.cu",
+        "cuda/rosa_soft_grouped_checkpoint_kernels.cu",
     ]
     assert BUILD_SETUP.define_macros_for(config) == [
         ("ROSA_WITH_CUDA", "1"),
@@ -83,6 +85,8 @@ def test_frozen_cuda_schema_contains_only_production_operators():
         "hard_forward_varlen",
         "surrogate_vjp_masked",
         "surrogate_vjp_varlen_masked",
+        "surrogate_vjp_unbounded_masked",
+        "surrogate_vjp_unbounded_varlen_masked",
     ]
     assert "research_" not in export_source
 
@@ -91,6 +95,8 @@ def test_frozen_cuda_schema_contains_only_production_operators():
         "cuda/rosa_soft_kernels.cu",
         "cuda/rosa_soft_streaming_kernels.cu",
         "cuda/rosa_soft_block_diagonal_kernels.cu",
+        "cuda/rosa_soft_unbounded_kernels.cu",
+        "cuda/rosa_soft_grouped_checkpoint_kernels.cu",
     ):
         source = (ROOT / "rosa_soft" / "csrc" / source_name).read_text()
         assert "research_" not in source
@@ -152,6 +158,10 @@ def test_training_hard_forward_uses_the_unlimited_scan():
     assert "rosa_soft_hard_index_cuda" not in hard_source
     assert "query_codes" not in hard_source
     assert "hard_forward_kernel<scalar_t, false>" in hard_source
+    assert "kHardDiagonalMinSequenceLength = 512" in hard_source
+    assert "hard_diagonal_winner_kernel" in hard_source
+    assert "launch_hard_diagonal<scalar_t, false>" in hard_source
+    assert "launch_hard_diagonal<scalar_t, true>" in hard_source
 
 
 def test_packed_symbol_shape_contracts_are_explicit_without_cuda():
@@ -242,6 +252,8 @@ def test_get_extensions_is_configuration_only(monkeypatch):
         "rosa_soft_kernels.cu",
         "rosa_soft_streaming_kernels.cu",
         "rosa_soft_block_diagonal_kernels.cu",
+        "rosa_soft_unbounded_kernels.cu",
+        "rosa_soft_grouped_checkpoint_kernels.cu",
     ]
     assert captured["kwargs"]["define_macros"] == [
         ("ROSA_WITH_CUDA", "1"),
@@ -365,6 +377,8 @@ def test_public_capabilities_and_placeholders_are_stable():
         "rosa_hard_varlen_reference",
         "rosa_soft",
         "rosa_soft_reference",
+        "rosa_soft_unbounded",
+        "rosa_soft_unbounded_varlen",
         "rosa_soft_varlen",
         "rosa_soft_varlen_reference",
     ]
@@ -426,9 +440,15 @@ def test_partial_cuda_registration_is_rejected():
         "hard_forward_varlen",
         "surrogate_vjp_masked",
         "surrogate_vjp_varlen_masked",
+        "surrogate_vjp_unbounded_masked",
+        "surrogate_vjp_unbounded_varlen_masked",
     )
-    assert not rosa_soft._require_complete_cuda_registration(False, False)
-    assert rosa_soft._require_complete_cuda_registration(True, True)
+    assert not rosa_soft._require_complete_cuda_registration(
+        False, False, False, False, False, False
+    )
+    assert rosa_soft._require_complete_cuda_registration(
+        True, True, True, True, True, True
+    )
     with pytest.raises(RuntimeError, match="incomplete CUDA operator"):
         rosa_soft._require_complete_cuda_registration(True, False)
     with pytest.raises(RuntimeError, match="incomplete CUDA operator"):

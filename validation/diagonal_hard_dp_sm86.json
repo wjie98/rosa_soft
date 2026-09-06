@@ -1,0 +1,199 @@
+{
+  "device": "NVIDIA GeForce RTX 3070",
+  "compute_capability": [
+    8,
+    6
+  ],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "settings": {
+    "lengths": [
+      128,
+      512,
+      1024
+    ],
+    "patterns": [
+      "random",
+      "aligned",
+      "periodic64",
+      "periodic4",
+      "equal",
+      "mismatch"
+    ],
+    "batch": 1,
+    "heads": 4,
+    "value_heads": 2,
+    "bits": 8,
+    "value_dim": 64,
+    "dtype": "float16",
+    "warmup": 2,
+    "repeats": 5,
+    "rounds": 3,
+    "seed": 9471,
+    "output": "validation/diagonal_hard_dp_sm86.json"
+  },
+  "rows": [
+    {
+      "tokens": 128,
+      "pattern": "random",
+      "production_ms": 0.03247359991073608,
+      "diagonal_route_ms": 0.04254080057144165,
+      "diagonal_full_ms": 0.06185600161552429,
+      "full_ratio": 1.9048088843107938,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 128,
+      "pattern": "aligned",
+      "production_ms": 0.030924800038337707,
+      "diagonal_route_ms": 0.0421887993812561,
+      "diagonal_full_ms": 0.055852800607681274,
+      "full_ratio": 1.8060844544973658,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 128,
+      "pattern": "periodic64",
+      "production_ms": 0.031014400720596313,
+      "diagonal_route_ms": 0.045414400100708005,
+      "diagonal_full_ms": 0.05529599785804749,
+      "full_ratio": 1.782913632805616,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 128,
+      "pattern": "periodic4",
+      "production_ms": 0.029286399483680725,
+      "diagonal_route_ms": 0.043007999658584595,
+      "diagonal_full_ms": 0.0577023983001709,
+      "full_ratio": 1.9702796969741683,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 128,
+      "pattern": "equal",
+      "production_ms": 0.030720001459121703,
+      "diagonal_route_ms": 0.04423039853572845,
+      "diagonal_full_ms": 0.05592319965362549,
+      "full_ratio": 1.8204165689263074,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 128,
+      "pattern": "mismatch",
+      "production_ms": 0.03250559866428375,
+      "diagonal_route_ms": 0.04345600008964538,
+      "diagonal_full_ms": 0.05980160236358643,
+      "full_ratio": 1.8397323790653568,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 512,
+      "pattern": "random",
+      "production_ms": 0.030099201202392577,
+      "diagonal_route_ms": 0.04281600117683411,
+      "diagonal_full_ms": 0.05687040090560913,
+      "full_ratio": 1.889432231878915,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 512,
+      "pattern": "aligned",
+      "production_ms": 0.11550719738006592,
+      "diagonal_route_ms": 0.04134399890899658,
+      "diagonal_full_ms": 0.057792001962661745,
+      "full_ratio": 0.500332475148734,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 512,
+      "pattern": "periodic64",
+      "production_ms": 0.18776960372924806,
+      "diagonal_route_ms": 0.04480000138282776,
+      "diagonal_full_ms": 0.060211199522018435,
+      "full_ratio": 0.32066531710233137,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 512,
+      "pattern": "periodic4",
+      "production_ms": 0.34727039337158205,
+      "diagonal_route_ms": 0.04449920058250427,
+      "diagonal_full_ms": 0.055622398853302,
+      "full_ratio": 0.16017028780736167,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 512,
+      "pattern": "equal",
+      "production_ms": 0.35163519382476804,
+      "diagonal_route_ms": 0.0442111998796463,
+      "diagonal_full_ms": 0.058815997838973996,
+      "full_ratio": 0.1672642524749216,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 512,
+      "pattern": "mismatch",
+      "production_ms": 0.031116798520088196,
+      "diagonal_route_ms": 0.04395520091056824,
+      "diagonal_full_ms": 0.05734400153160095,
+      "full_ratio": 1.8428631562010196,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 1024,
+      "pattern": "random",
+      "production_ms": 0.03522560000419617,
+      "diagonal_route_ms": 0.04362240135669708,
+      "diagonal_full_ms": 0.0588096022605896,
+      "full_ratio": 1.669513145371095,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 1024,
+      "pattern": "aligned",
+      "production_ms": 0.3586047887802124,
+      "diagonal_route_ms": 0.04318720102310181,
+      "diagonal_full_ms": 0.06098560094833374,
+      "full_ratio": 0.17006354308813093,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 1024,
+      "pattern": "periodic64",
+      "production_ms": 1.2146431922912597,
+      "diagonal_route_ms": 0.04710400104522705,
+      "diagonal_full_ms": 0.056729602813720706,
+      "full_ratio": 0.046704746853854257,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 1024,
+      "pattern": "periodic4",
+      "production_ms": 2.1727231979370116,
+      "diagonal_route_ms": 0.04689919948577881,
+      "diagonal_full_ms": 0.05728639960289002,
+      "full_ratio": 0.02636617478806464,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 1024,
+      "pattern": "equal",
+      "production_ms": 2.2065151214599608,
+      "diagonal_route_ms": 0.06471679806709289,
+      "diagonal_full_ms": 0.07022079825401306,
+      "full_ratio": 0.03182429958039482,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 1024,
+      "pattern": "mismatch",
+      "production_ms": 0.03785600066184998,
+      "diagonal_route_ms": 0.043136000633239746,
+      "diagonal_full_ms": 0.058271998167037965,
+      "full_ratio": 1.5393067716675775,
+      "max_abs_error": 0.0
+    }
+  ]
+}

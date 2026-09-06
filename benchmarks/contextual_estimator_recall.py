@@ -26,6 +26,10 @@ from benchmarks.stochastic_hard_vjp import (  # noqa: E402
 from benchmarks.estimator_fit_ablation import (  # noqa: E402
     rosa_soft_exact_bitflip,
 )
+from benchmarks.dual_score_reference import (  # noqa: E402
+    DEFAULT_EVIDENCE_POWER,
+    rosa_dual_score_reference,
+)
 from benchmarks.fast_weight_proxy import rosa_fast_weight_proxy  # noqa: E402
 from benchmarks.suffix_proxy_ablation import (  # noqa: E402
     rosa_soft_suffix_proxy,
@@ -62,6 +66,12 @@ ESTIMATORS = (
     "state_cubic_attention",
     "state_full_linear_attention",
 )
+DUAL_SCORE_ESTIMATORS = (
+    "discovery_unbounded",
+    "information_unbounded",
+    "dual_unbounded",
+)
+ESTIMATOR_CHOICES = ESTIMATORS + DUAL_SCORE_ESTIMATORS
 
 _STATE_PROXIES = {
     "state_linear_delta": "state_linear_delta",
@@ -84,6 +94,8 @@ class EstimatorResetRnnRosaLM(ResetRnnRosaLM):
         antithetic_pairs: int,
         bitflip_gradient_scale: float = 1.0,
         context_depth: int = 1,
+        evidence_power: float = DEFAULT_EVIDENCE_POWER,
+        information_weight: float = 0.5,
         **kwargs,
     ) -> None:
         if isinstance(context_depth, bool) or not isinstance(context_depth, int):
@@ -91,13 +103,15 @@ class EstimatorResetRnnRosaLM(ResetRnnRosaLM):
         if context_depth < 1:
             raise ValueError("context_depth must be >= 1")
         super().__init__(**kwargs)
-        if estimator not in ESTIMATORS:
-            raise ValueError(f"estimator must be one of {ESTIMATORS}")
+        if estimator not in ESTIMATOR_CHOICES:
+            raise ValueError(f"estimator must be one of {ESTIMATOR_CHOICES}")
         self.estimator = estimator
         self.bit_temperature = float(bit_temperature)
         self.antithetic_pairs = int(antithetic_pairs)
         self.bitflip_gradient_scale = float(bitflip_gradient_scale)
         self.context_depth = context_depth
+        self.evidence_power = float(evidence_power)
+        self.information_weight = float(information_weight)
         self.extra_recurrent = torch.nn.ModuleList(
             torch.nn.GRUCell(
                 self.embedding.embedding_dim,
@@ -164,6 +178,23 @@ class EstimatorResetRnnRosaLM(ResetRnnRosaLM):
                 max_suffix_length=1,
                 scale=self.scale,
                 mismatch_scale=self.mismatch_scale,
+            )
+        unbounded_mode = {
+            "discovery_unbounded": "discovery",
+            "information_unbounded": "information",
+            "dual_unbounded": "dual",
+        }.get(self.estimator)
+        if unbounded_mode is not None:
+            return rosa_dual_score_reference(
+                query,
+                key,
+                value,
+                score_mode=unbounded_mode,
+                scale=self.scale,
+                dropout_p=0.0,
+                mismatch_scale=self.mismatch_scale,
+                evidence_power=self.evidence_power,
+                information_weight=self.information_weight,
             )
         common = {
             "bit_temperature": self.bit_temperature,
@@ -303,6 +334,8 @@ def run_seed(args: argparse.Namespace, seed: int) -> Dict[str, object]:
         antithetic_pairs=args.antithetic_pairs,
         bitflip_gradient_scale=args.bitflip_gradient_scale,
         context_depth=args.context_depth,
+        evidence_power=args.evidence_power,
+        information_weight=args.information_weight,
     ).to(device)
 
     residual_model = copy.deepcopy(initial_model)
@@ -455,6 +488,8 @@ def run_benchmark(args: argparse.Namespace) -> Dict[str, object]:
         "antithetic_pairs": args.antithetic_pairs,
         "bitflip_gradient_scale": args.bitflip_gradient_scale,
         "dropout_p": args.dropout_p,
+        "evidence_power": args.evidence_power,
+        "information_weight": args.information_weight,
         "runs": runs,
         "summary": {
             estimator: _summarize_estimator(runs, estimator)
@@ -474,7 +509,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--estimators",
         nargs="+",
-        choices=ESTIMATORS,
+        choices=ESTIMATOR_CHOICES,
         default=[estimator for estimator in ESTIMATORS if estimator != "bitflip"],
     )
     parser.add_argument(
@@ -500,6 +535,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bit-temperature", type=float, default=0.5)
     parser.add_argument("--antithetic-pairs", type=int, default=4)
     parser.add_argument("--bitflip-gradient-scale", type=float, default=1.0)
+    parser.add_argument(
+        "--evidence-power", type=float, default=DEFAULT_EVIDENCE_POWER
+    )
+    parser.add_argument("--information-weight", type=float, default=0.5)
     parser.add_argument("--scale", type=float, default=ROSA_SOFT_DEFAULT_SCALE)
     parser.add_argument("--dropout-p", type=float, default=0.1)
     parser.add_argument(

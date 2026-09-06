@@ -24,6 +24,51 @@ orthogonal indexes are post-v1 experiments.
   at Q/K-width-matched and output-width-matched head dimensions. The current
   production integration decision is recorded in
   `docs/research/PRODUCTION_INTEGRATION_AUDIT.md`.
+- `flash_attention1_comparison.py` compares exact unlimited RosaSoft against
+  the official FlashAttention 1.0.9 QKV-packed kernel on Turing. It measures
+  complete forward/backward, forward-only latency, peak operator memory, and
+  a small FP32 numerical check. FA1 is an optional external dependency, not a
+  package requirement; the local sm75 build and comparison contract are in
+  `docs/research/FLASH_ATTENTION1_SM75_COMPARISON.md`.
+- `persistent_wavefront_vjp.py` is the benchmark-only exact diagonal replay
+  implementation behind the unbounded-VJP study. Its profiler, sanitizer
+  smoke test, and Nsight trace driver are
+  `persistent_wavefront_vjp_profile.py`,
+  `persistent_wavefront_vjp_sanitizer_smoke.py`, and
+  `unbounded_replay_trace.py`. The promoted dense implementation is
+  split between `rosa_soft/csrc/cuda/rosa_soft_unbounded_kernels.cu` and the
+  fixed-length FP16/Dv64 specialization in
+  `rosa_soft/csrc/cuda/rosa_soft_grouped_checkpoint_kernels.cu`; packed varlen
+  retains the exact segment-local fallback. The final grouped design and SM75
+  results are in `docs/research/GROUPED_CHECKPOINT_VJP.md`.
+- `slabbed_checkpoint_replay.py` is the original fixed-512 research control
+  for the linear-workspace continuation of the macro-wavefront study. The
+  generic production fallback chooses a private slab up to 8192 under a fixed
+  workspace budget. The grouped production specialization instead keeps one
+  checkpoint stream per resident CTA and uses a 64 MiB-budgeted statistics
+  slab. Every variant visits every diagonal exactly and restricts row/value
+  owners to the causal domain. The historical control's profiler and Compute
+  Sanitizer driver are
+  `slabbed_checkpoint_replay_profile.py` and
+  `slabbed_checkpoint_replay_sanitizer_smoke.py`.
+- `macro_wavefront_vjp.py` also retains `persistent_rows` as an exact
+  synchronization control. Each occupancy-bounded persistent CTA owns four
+  logical macro rows and switches rows when a local predecessor signal is not
+  ready. This validates latency hiding for device-scope release/acquire progress
+  counters; it is not the default VJP because slabbed replay remains faster.
+  Padded counters and checkpoint-embedded phase tokens were exact but not
+  faster, so only the compact row counter remains. Results are in
+  `validation/row_signal_layout_ablation_sm75.json`; the profiler's
+  `--include-scores` flag isolates the synchronization-heavy score path.
+- `persistent_diagonal_schedule.py` isolates hardware CTA queuing, serial
+  long/short pairing, fixed workers, an atomic persistent queue, and balanced
+  fixed workers without changing the diagonal result. The measurements in
+  `persistent_diagonal_schedule_profile.py` are scheduling controls, not
+  alternate public operators.
+- `diagonal_hard_dp_profile.py` compares the former unlimited direct scan,
+  the exact diagonal hard-DP research control, and the production dispatch on
+  random and repetitive inputs. `production_hard_dp_sanitizer_smoke.py`
+  covers the promoted dense and packed-varlen kernels under Compute Sanitizer.
 - `discrete_gradient_alignment.py` exhaustively compares the surrogate VJP
   direction with exact hard Q/K sign-bit flips on small CPU problems.
 - `suffix_proxy_ablation.py` keeps exact hard forward while comparing Hamming
@@ -491,6 +536,81 @@ CUDA_VISIBLE_DEVICES=0 python -m benchmarks.hard_forward_profile \
   --seed 7000 --warmup 7 --repeats 21 \
   --output validation/unlimited_hard_period_sweep_final_v2_sm86.json
 
+CUDA_VISIBLE_DEVICES=0 python -m benchmarks.diagonal_hard_dp_profile \
+  --lengths 512 1024 2048 4096 \
+  --patterns random aligned periodic64 periodic4 equal mismatch \
+  --output validation/diagonal_hard_dp_production_sm86.json
+
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. compute-sanitizer --tool memcheck \
+  python -m benchmarks.production_hard_dp_sanitizer_smoke
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. compute-sanitizer --tool racecheck \
+  python -m benchmarks.production_hard_dp_sanitizer_smoke
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. compute-sanitizer --tool synccheck \
+  python -m benchmarks.production_hard_dp_sanitizer_smoke
+
+CUDA_VISIBLE_DEVICES=0 python -m benchmarks.unbounded_replay_vjp_profile \
+  --lengths 512 1024 2048 4096 --group-sizes 256 512 1024 \
+  --rounds 7 --output validation/unbounded_replay_vjp_sm86.json
+
+# Production grouped-checkpoint dispatch, component timing, and exact
+# low-memory slab control on the RTX 2080 Ti.
+CUDA_VISIBLE_DEVICES=1 TORCH_CUDA_ARCH_LIST=7.5 \
+  python -m benchmarks.unbounded_replay_vjp_profile \
+  --lengths 2048 4096 8192 --group-sizes 512 --include-components \
+  --output validation/grouped_checkpoint_vjp_sm75.json
+
+CUDA_VISIBLE_DEVICES=1 PYTHONPATH=. compute-sanitizer --tool memcheck \
+  python -m benchmarks.production_unbounded_sanitizer_smoke
+CUDA_VISIBLE_DEVICES=1 PYTHONPATH=. compute-sanitizer --tool racecheck \
+  python -m benchmarks.production_unbounded_sanitizer_smoke
+CUDA_VISIBLE_DEVICES=1 PYTHONPATH=. compute-sanitizer --tool synccheck \
+  python -m benchmarks.production_unbounded_sanitizer_smoke
+
+CUDA_VISIBLE_DEVICES=0 python -m benchmarks.persistent_diagonal_schedule_profile \
+  --lengths 1024 4096 8192 --heads 1 4 \
+  --patterns random equal periodic \
+  --output validation/persistent_diagonal_schedule_sm86.json
+
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. compute-sanitizer --tool memcheck \
+  python -m benchmarks.persistent_wavefront_vjp_sanitizer_smoke
+
+# Exact unlimited macro checkpoints, statically folded short/long diagonals,
+# and fine-grained statistics/V tiles. Use physical GPU1 for this sm75 run.
+CUDA_VISIBLE_DEVICES=1 TORCH_CUDA_ARCH_LIST=7.5 \
+  python -m benchmarks.macro_wavefront_vjp_profile \
+  --lengths 256 512 1024 2048 4096 8192 --tile-sizes 32 64 128 \
+  --plans multilaunch persistent folded persistent_rows \
+  --include-scores \
+  --include-unbounded-replay \
+  --replay-group-size 256 \
+  --output validation/macro_wavefront_vjp_sm75.json
+
+CUDA_VISIBLE_DEVICES=1 TORCH_CUDA_ARCH_LIST=7.5 PYTHONPATH=. \
+  compute-sanitizer --tool memcheck \
+  python -m benchmarks.macro_wavefront_vjp_sanitizer_smoke
+CUDA_VISIBLE_DEVICES=1 TORCH_CUDA_ARCH_LIST=7.5 PYTHONPATH=. \
+  compute-sanitizer --tool racecheck \
+  python -m benchmarks.macro_wavefront_vjp_sanitizer_smoke
+CUDA_VISIBLE_DEVICES=1 TORCH_CUDA_ARCH_LIST=7.5 PYTHONPATH=. \
+  compute-sanitizer --tool synccheck \
+  python -m benchmarks.macro_wavefront_vjp_sanitizer_smoke
+
+# Exact fixed-capacity slab replay versus folded and maintained replay.
+CUDA_VISIBLE_DEVICES=1 TORCH_CUDA_ARCH_LIST=7.5 \
+  python -m benchmarks.slabbed_checkpoint_replay_profile \
+  --lengths 256 512 1024 2048 4096 8192 \
+  --warmup 2 --repeats 3 --rounds 5
+
+CUDA_VISIBLE_DEVICES=1 TORCH_CUDA_ARCH_LIST=7.5 PYTHONPATH=. \
+  compute-sanitizer --tool memcheck \
+  python -m benchmarks.slabbed_checkpoint_replay_sanitizer_smoke
+CUDA_VISIBLE_DEVICES=1 TORCH_CUDA_ARCH_LIST=7.5 PYTHONPATH=. \
+  compute-sanitizer --tool racecheck \
+  python -m benchmarks.slabbed_checkpoint_replay_sanitizer_smoke
+CUDA_VISIBLE_DEVICES=1 TORCH_CUDA_ARCH_LIST=7.5 PYTHONPATH=. \
+  compute-sanitizer --tool synccheck \
+  python -m benchmarks.slabbed_checkpoint_replay_sanitizer_smoke
+
 CUDA_VISIBLE_DEVICES=0 python -m benchmarks.indexed_hard_forward_profile \
   --sequence-lengths 4096 8192 16384 --windows 32 128 \
   --bits 1 2 4 8 \
@@ -566,4 +686,29 @@ python -m benchmarks.runtime_page_trace \
 CUDA_VISIBLE_DEVICES=0 python -m benchmarks.training_hard_fusion \
   --tokens 512 2048 --bits 1 4 8 --windows 1 2 4 8 32 \
   --patterns random skewed periodic64 all_match --device cuda:0
+
+# Official FlashAttention 1.0.9 sm75 comparison. This requires the optional
+# locally compiled FA1 package described in the corresponding research note.
+CUDA_VISIBLE_DEVICES=1 PYTHONPATH=. \
+  python -m benchmarks.flash_attention1_comparison \
+  --lengths 4096 8192 16384 \
+  --warmup 5 --repeats 7 --rounds 5 \
+  --output validation/flash_attention1_comparison_sm75_reorganized.json
+
+# Production dense-backward stage timing after route-credit reorganization.
+CUDA_VISIBLE_DEVICES=1 PYTHONPATH=. \
+  python -m benchmarks.unbounded_replay_vjp_profile \
+  --lengths 4096 8192 16384 --bits 8 --value-dim 64 \
+  --heads 4 --value-heads 2 --group-sizes 4096 --gradient-mask 7 \
+  --include-components --warmup 5 --repeats 10 --rounds 5 \
+  --output validation/dense_backward_reorganized_production_sm75.json
+
+# Experimental macro-stats and Tensor-symbol paths are exposed only by the
+# benchmark extension; they are not public operator parameters.
+CUDA_VISIBLE_DEVICES=1 PYTHONPATH=. \
+  python -m benchmarks.unbounded_replay_vjp_profile \
+  --lengths 4096 8192 --bits 8 --value-dim 64 \
+  --heads 4 --value-heads 2 --group-sizes 4096 --gradient-mask 7 \
+  --include-components --macro-stats 32 64 96 \
+  --output validation/macro_stats_ablation_sm75.json
 ```

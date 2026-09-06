@@ -1,0 +1,106 @@
+{
+  "device": "NVIDIA GeForce RTX 3070",
+  "compute_capability": [
+    8,
+    6
+  ],
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "settings": {
+    "lengths": [
+      512,
+      2048
+    ],
+    "patterns": [
+      "random",
+      "aligned",
+      "equal",
+      "mismatch"
+    ],
+    "batch": 1,
+    "heads": 4,
+    "value_heads": 2,
+    "bits": 4,
+    "value_dim": 64,
+    "dtype": "float16",
+    "warmup": 2,
+    "repeats": 5,
+    "rounds": 2,
+    "seed": 9471,
+    "output": "validation/diagonal_hard_dp_bits4_sm86.json"
+  },
+  "rows": [
+    {
+      "tokens": 512,
+      "pattern": "random",
+      "production_ms": 0.04000959992408752,
+      "diagonal_route_ms": 0.04488319903612137,
+      "diagonal_full_ms": 0.05765440165996552,
+      "full_ratio": 1.4410142008257139,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 512,
+      "pattern": "aligned",
+      "production_ms": 0.11571199893951416,
+      "diagonal_route_ms": 0.04925440102815628,
+      "diagonal_full_ms": 0.06103039979934692,
+      "full_ratio": 0.5274336314183734,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 512,
+      "pattern": "equal",
+      "production_ms": 0.35376319885253904,
+      "diagonal_route_ms": 0.0425024002790451,
+      "diagonal_full_ms": 0.058060798048973086,
+      "full_ratio": 0.1641233408033911,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 512,
+      "pattern": "mismatch",
+      "production_ms": 0.032143999636173246,
+      "diagonal_route_ms": 0.04873599857091904,
+      "diagonal_full_ms": 0.05877760052680969,
+      "full_ratio": 1.828571465657445,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 2048,
+      "pattern": "random",
+      "production_ms": 0.09825280010700226,
+      "diagonal_route_ms": 0.0990207999944687,
+      "diagonal_full_ms": 0.15319039821624755,
+      "full_ratio": 1.5591453683703211,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 2048,
+      "pattern": "aligned",
+      "production_ms": 1.291753625869751,
+      "diagonal_route_ms": 0.10739200115203856,
+      "diagonal_full_ms": 0.10526719987392426,
+      "full_ratio": 0.08149170071270112,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 2048,
+      "pattern": "equal",
+      "production_ms": 15.550678253173828,
+      "diagonal_route_ms": 0.17313600182533265,
+      "diagonal_full_ms": 0.1695743978023529,
+      "full_ratio": 0.01090463033454785,
+      "max_abs_error": 0.0
+    },
+    {
+      "tokens": 2048,
+      "pattern": "mismatch",
+      "production_ms": 0.06756480038166046,
+      "diagonal_route_ms": 0.07636480033397675,
+      "diagonal_full_ms": 0.07976640164852142,
+      "full_ratio": 1.1805910947407003,
+      "max_abs_error": 0.0
+    }
+  ]
+}

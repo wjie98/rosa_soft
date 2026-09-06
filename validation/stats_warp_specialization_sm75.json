@@ -1,0 +1,253 @@
+{
+  "compute_capability": [
+    7,
+    5
+  ],
+  "config": {
+    "batch": 1,
+    "bits": 8,
+    "checkpoint_stats_group_size": null,
+    "dropout_p": 0.0,
+    "dtype": "float16",
+    "gradient_mask": 7,
+    "group_sizes": [
+      4096
+    ],
+    "heads": 4,
+    "include_components": true,
+    "include_finite_controls": false,
+    "lengths": [
+      4096,
+      8192,
+      16384
+    ],
+    "macro_stats": [],
+    "mismatch_scale": 3.0,
+    "output": "validation/stats_warp_specialization_sm75.json",
+    "repeats": 10,
+    "rounds": 5,
+    "scale": 1.0,
+    "seed": 58123,
+    "specialized_replay": false,
+    "tensor_symbol_mask": 3,
+    "tensor_symbols": false,
+    "value_dim": 64,
+    "value_heads": 2,
+    "warmup": 5
+  },
+  "cuda": "12.8",
+  "device": "NVIDIA GeForce RTX 2080 Ti",
+  "rows": [
+    {
+      "operators": {
+        "grouped_checkpoint": {
+          "latency_ms": 7.2758018493652346,
+          "latency_samples_ms": [
+            8.150425720214844,
+            7.234559631347656,
+            7.2758018493652346,
+            7.234748840332031,
+            7.310537719726563
+          ],
+          "peak_operator_mib": 24.203125,
+          "unbounded_max_abs_errors": [
+            1.4901161193847656e-08,
+            2.086162567138672e-07,
+            4.470348358154297e-07
+          ]
+        },
+        "grouped_reverse": {
+          "latency_ms": 4.86890869140625,
+          "latency_samples_ms": [
+            4.841155242919922,
+            4.86890869140625,
+            4.861673736572266,
+            4.894704055786133,
+            4.876697540283203
+          ],
+          "peak_operator_mib": 5.140625
+        },
+        "production_auto": {
+          "latency_ms": 7.259327697753906,
+          "latency_samples_ms": [
+            10.656153869628906,
+            7.1794685363769535,
+            7.259327697753906,
+            7.260160064697265,
+            7.19787826538086
+          ],
+          "peak_operator_mib": 24.203125
+        },
+        "selected_s4096": {
+          "latency_ms": 8.04113311767578,
+          "latency_samples_ms": [
+            8.021810913085938,
+            8.034272003173829,
+            8.057625579833985,
+            8.046150207519531,
+            8.04113311767578
+          ],
+          "peak_operator_mib": 259.203125,
+          "unbounded_max_abs_errors": [
+            2.9802322387695312e-08,
+            6.705522537231445e-07,
+            4.792213439941406e-05
+          ]
+        },
+        "stats_s4096": {
+          "latency_ms": 2.3963647842407227,
+          "latency_samples_ms": [
+            2.4028064727783205,
+            2.391254425048828,
+            2.393587112426758,
+            2.3963647842407227,
+            2.4106592178344726
+          ],
+          "peak_operator_mib": 24.203125
+        }
+      },
+      "seq_len": 4096
+    },
+    {
+      "operators": {
+        "grouped_checkpoint": {
+          "latency_ms": 29.2223876953125,
+          "latency_samples_ms": [
+            29.180926513671874,
+            29.231939697265624,
+            29.2223876953125,
+            29.50361022949219,
+            29.20838317871094
+          ],
+          "peak_operator_mib": 48.40625,
+          "unbounded_max_abs_errors": [
+            7.450580596923828e-09,
+            2.5331974029541016e-07,
+            2.086162567138672e-07
+          ]
+        },
+        "grouped_reverse": {
+          "latency_ms": 19.470147705078126,
+          "latency_samples_ms": [
+            19.4538818359375,
+            19.471807861328124,
+            19.470147705078126,
+            19.481411743164063,
+            19.4577880859375
+          ],
+          "peak_operator_mib": 10.28125
+        },
+        "production_auto": {
+          "latency_ms": 28.792013549804686,
+          "latency_samples_ms": [
+            28.751425170898436,
+            28.792013549804686,
+            28.858914184570313,
+            28.80029296875,
+            28.771124267578124
+          ],
+          "peak_operator_mib": 48.40625
+        },
+        "selected_s4096": {
+          "latency_ms": 31.163803100585938,
+          "latency_samples_ms": [
+            31.137759399414062,
+            31.163803100585938,
+            31.216122436523438,
+            31.18262939453125,
+            31.156634521484374
+          ],
+          "peak_operator_mib": 518.40625,
+          "unbounded_max_abs_errors": [
+            4.470348358154297e-08,
+            9.532086551189423e-07,
+            3.921985626220703e-05
+          ]
+        },
+        "stats_s4096": {
+          "latency_ms": 9.76522216796875,
+          "latency_samples_ms": [
+            9.729302215576173,
+            9.781779479980468,
+            9.779888153076172,
+            9.764390563964843,
+            9.76522216796875
+          ],
+          "peak_operator_mib": 48.40625
+        }
+      },
+      "seq_len": 8192
+    },
+    {
+      "operators": {
+        "grouped_checkpoint": {
+          "latency_ms": 123.34036865234376,
+          "latency_samples_ms": [
+            122.30875244140626,
+            123.18978271484374,
+            123.34036865234376,
+            123.43314208984376,
+            123.61856689453126
+          ],
+          "peak_operator_mib": 64.8125,
+          "unbounded_max_abs_errors": [
+            1.1175870895385742e-08,
+            2.5331974029541016e-07,
+            4.76837158203125e-07
+          ]
+        },
+        "grouped_reverse": {
+          "latency_ms": 78.20476684570312,
+          "latency_samples_ms": [
+            78.015234375,
+            78.14369506835938,
+            78.20476684570312,
+            78.40404663085937,
+            78.49896240234375
+          ],
+          "peak_operator_mib": 20.5625
+        },
+        "production_auto": {
+          "latency_ms": 121.16505126953125,
+          "latency_samples_ms": [
+            120.2511962890625,
+            120.7884033203125,
+            121.16505126953125,
+            121.43663330078125,
+            121.6055908203125
+          ],
+          "peak_operator_mib": 64.8125
+        },
+        "selected_s4096": {
+          "latency_ms": 126.426904296875,
+          "latency_samples_ms": [
+            126.2731689453125,
+            126.426904296875,
+            126.41136474609375,
+            126.5947021484375,
+            126.67822265625
+          ],
+          "peak_operator_mib": 1036.8125,
+          "unbounded_max_abs_errors": [
+            2.9802322387695312e-08,
+            1.5273690223693848e-06,
+            5.435943603515625e-05
+          ]
+        },
+        "stats_s2720": {
+          "latency_ms": 44.720947265625,
+          "latency_samples_ms": [
+            44.372979736328126,
+            44.71175537109375,
+            44.75658264160156,
+            44.720947265625,
+            45.054769897460936
+          ],
+          "peak_operator_mib": 64.8125
+        }
+      },
+      "seq_len": 16384
+    }
+  ],
+  "torch": "2.11.0+cu128"
+}

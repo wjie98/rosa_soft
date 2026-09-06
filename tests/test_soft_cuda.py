@@ -108,6 +108,55 @@ def test_cuda_hard_forward_matches_beyond_surrogate_horizon():
     assert short[0, 4, 0, 0].item() == 1
 
 
+@pytest.mark.parametrize(
+    "pattern", ["random", "periodic", "equal", "mismatch"]
+)
+def test_diagonal_hard_dispatch_matches_compact_sam(pattern):
+    tokens = 513
+    generator = torch.Generator().manual_seed(8301)
+    query = torch.randn(1, tokens, 2, 4, generator=generator).sign()
+    key = torch.randn(1, tokens, 2, 4, generator=generator).sign()
+    if pattern == "equal":
+        query.fill_(1)
+        key.fill_(1)
+    elif pattern == "mismatch":
+        query.fill_(1)
+        key.fill_(-1)
+    elif pattern == "periodic":
+        motif = key[:, :7].clone()
+        positions = torch.arange(tokens) % motif.size(1)
+        query.copy_(motif[:, positions])
+        key.copy_(motif[:, positions])
+    value = torch.randn(1, tokens, 1, 3, generator=generator)
+    expected, _ = rosa_soft.rosa_hard_reference(query, key, value)
+    actual = torch.ops.rosa_soft.hard_forward(
+        query.cuda(), key.cuda(), value.cuda()
+    )[0]
+    assert torch.equal(actual.cpu(), expected)
+
+
+def test_varlen_diagonal_hard_dispatch_matches_compact_sam():
+    lengths = (257, 0, 263)
+    total_tokens = sum(lengths)
+    generator = torch.Generator().manual_seed(8302)
+    query = torch.randn(total_tokens, 2, 3, generator=generator).sign()
+    key = torch.randn(total_tokens, 2, 3, generator=generator).sign()
+    for start, length in ((0, lengths[0]), (lengths[0], lengths[2])):
+        motif = key[start : start + 5].clone()
+        positions = torch.arange(length) % motif.size(0)
+        query[start : start + length].copy_(motif[positions])
+        key[start : start + length].copy_(motif[positions])
+    value = torch.randn(total_tokens, 1, 2, generator=generator)
+    offsets = torch.tensor((0, 257, 257, 520), dtype=torch.int32)
+    expected, _ = rosa_soft.rosa_hard_varlen_reference(
+        query, key, value, offsets
+    )
+    actual = torch.ops.rosa_soft.hard_forward_varlen(
+        query.cuda(), key.cuda(), value.cuda(), offsets.cuda()
+    )[0]
+    assert torch.equal(actual.cpu(), expected)
+
+
 def test_raw_and_fake_packed_symbol_layout_contracts():
     query = _nonzero_randn((2, 5, 3, 4), seed=4)
     key = _nonzero_randn((2, 5, 3, 4), seed=5)

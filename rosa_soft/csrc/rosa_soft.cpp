@@ -68,6 +68,35 @@ rosa_soft_block_diagonal_vjp_cuda(
     int gradient_mask);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+rosa_soft_unbounded_replay_vjp_cuda(
+    const torch::Tensor& query,
+    const torch::Tensor& key,
+    const torch::Tensor& value,
+    const torch::Tensor& grad_output,
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
+    const torch::Tensor& dropout_seed,
+    int64_t requested_slab_size,
+    float scale,
+    float dropout_p,
+    float mismatch_scale,
+    int gradient_mask);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+rosa_soft_grouped_checkpoint_vjp_cuda(
+    const torch::Tensor& query,
+    const torch::Tensor& key,
+    const torch::Tensor& value,
+    const torch::Tensor& grad_output,
+    const torch::Tensor& packed_query_symbols,
+    const torch::Tensor& packed_key_symbols,
+    const torch::Tensor& dropout_seed,
+    float scale,
+    float dropout_p,
+    float mismatch_scale,
+    int gradient_mask);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
 surrogate_vjp_varlen_cuda(
     torch::Tensor query,
     torch::Tensor key,
@@ -92,6 +121,12 @@ constexpr int64_t kLegacyStreamingVjpMinSequenceLength = 4096;
 constexpr int64_t kAmpereStreamingVjpMinSequenceLength = 512;
 constexpr int64_t kAmpereValueOnlyStreamingVjpMinSequenceLength = 2048;
 constexpr int64_t kBlockDiagonalVjpMinSequenceLength = 4096;
+constexpr int64_t kGroupedCheckpointMinSequenceLength = 2048;
+constexpr int64_t kGroupedCheckpointMinSeriesTokens = 8192;
+constexpr int64_t kGroupedCheckpointSingleSeriesLength = 32768;
+// Zero selects the private sequence- and head-aware slab plan. It changes
+// replay granularity only; the suffix horizon and candidate set stay exact.
+constexpr int64_t kAutomaticUnboundedReplaySlab = 0;
 
 bool should_use_streaming_vjp(
     const torch::Tensor& query,
@@ -634,6 +669,130 @@ surrogate_vjp_varlen_masked_op(
 }
 
 
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+surrogate_vjp_unbounded_masked_op(
+    torch::Tensor query,
+    torch::Tensor key,
+    torch::Tensor value,
+    torch::Tensor grad_output,
+    torch::Tensor packed_query_symbols,
+    torch::Tensor packed_key_symbols,
+    torch::Tensor dropout_seed,
+    double scale,
+    double dropout_p,
+    double mismatch_scale,
+    int64_t gradient_mask) {
+  check_surrogate_vjp_inputs(
+      query,
+      key,
+      value,
+      grad_output,
+      packed_query_symbols,
+      packed_key_symbols,
+      query.size(1));
+  const auto surrogate_scalars = check_surrogate_scalars(
+      query.size(1),
+      scale,
+      dropout_p,
+      mismatch_scale);
+  check_dropout_seed(dropout_seed, query, dropout_p);
+  check_gradient_mask(gradient_mask);
+  at::globalContext().alertNotDeterministic(
+      "rosa_soft::surrogate_vjp_unbounded_masked");
+  const int64_t series_count = query.size(0) * query.size(2);
+  const bool grouped_workload =
+      (series_count >= 2 &&
+       series_count * query.size(1) >=
+           kGroupedCheckpointMinSeriesTokens) ||
+      query.size(1) >= kGroupedCheckpointSingleSeriesLength;
+  const bool use_grouped_checkpoint =
+      query.scalar_type() == torch::kFloat16 && value.size(3) == 64 &&
+      query.size(1) >= kGroupedCheckpointMinSequenceLength &&
+      grouped_workload &&
+      (gradient_mask & 3) != 0;
+  if (use_grouped_checkpoint) {
+    return rosa_soft_grouped_checkpoint_vjp_cuda(
+        query.contiguous(),
+        key.contiguous(),
+        value.contiguous(),
+        grad_output.contiguous(),
+        packed_query_symbols.contiguous(),
+        packed_key_symbols.contiguous(),
+        dropout_seed.contiguous(),
+        surrogate_scalars.scale,
+        surrogate_scalars.dropout_p,
+        surrogate_scalars.mismatch_scale,
+        static_cast<int>(gradient_mask));
+  }
+  return rosa_soft_unbounded_replay_vjp_cuda(
+      query.contiguous(),
+      key.contiguous(),
+      value.contiguous(),
+      grad_output.contiguous(),
+      packed_query_symbols.contiguous(),
+      packed_key_symbols.contiguous(),
+      dropout_seed.contiguous(),
+      kAutomaticUnboundedReplaySlab,
+      surrogate_scalars.scale,
+      surrogate_scalars.dropout_p,
+      surrogate_scalars.mismatch_scale,
+      static_cast<int>(gradient_mask));
+}
+
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+surrogate_vjp_unbounded_varlen_masked_op(
+    torch::Tensor query,
+    torch::Tensor key,
+    torch::Tensor value,
+    torch::Tensor cu_seqlens,
+    torch::Tensor grad_output,
+    torch::Tensor packed_query_symbols,
+    torch::Tensor packed_key_symbols,
+    torch::Tensor dropout_seed,
+    double scale,
+    double dropout_p,
+    double mismatch_scale,
+    int64_t gradient_mask) {
+  check_varlen_inputs(query, key, value, cu_seqlens);
+  TORCH_CHECK(
+      grad_output.is_cuda() && grad_output.device() == query.device(),
+      "grad_output must be on the same CUDA device as query");
+  TORCH_CHECK(
+      grad_output.scalar_type() == query.scalar_type(),
+      "grad_output dtype mismatch");
+  TORCH_CHECK(
+      grad_output.sizes() == torch::IntArrayRef(
+          {query.size(0), query.size(1), value.size(2)}),
+      "grad_output shape mismatch");
+  check_varlen_packed_symbols(
+      packed_query_symbols, query, "packed_query_symbols");
+  check_varlen_packed_symbols(
+      packed_key_symbols, query, "packed_key_symbols");
+  const auto surrogate_scalars = check_surrogate_scalars(
+      query.size(0), scale, dropout_p, mismatch_scale);
+  check_dropout_seed(dropout_seed, query, dropout_p);
+  check_gradient_mask(gradient_mask);
+  at::globalContext().alertNotDeterministic(
+      "rosa_soft::surrogate_vjp_unbounded_varlen_masked");
+  return surrogate_vjp_varlen_cuda(
+      query.contiguous(),
+      key.contiguous(),
+      value.contiguous(),
+      cu_seqlens.contiguous(),
+      grad_output.contiguous(),
+      packed_query_symbols.contiguous(),
+      packed_key_symbols.contiguous(),
+      dropout_seed.contiguous(),
+      query.size(0),
+      surrogate_scalars.scale,
+      surrogate_scalars.dropout_p,
+      surrogate_scalars.inverse_keep_probability,
+      surrogate_scalars.mismatch_scale,
+      static_cast<int>(gradient_mask));
+}
+
+
 TORCH_LIBRARY_IMPL(rosa_soft, CUDA, m) {
   m.impl("hard_forward", &hard_forward_op);
   m.impl("hard_forward_varlen", &hard_forward_varlen_op);
@@ -641,4 +800,10 @@ TORCH_LIBRARY_IMPL(rosa_soft, CUDA, m) {
   m.impl(
       "surrogate_vjp_varlen_masked",
       &surrogate_vjp_varlen_masked_op);
+  m.impl(
+      "surrogate_vjp_unbounded_masked",
+      &surrogate_vjp_unbounded_masked_op);
+  m.impl(
+      "surrogate_vjp_unbounded_varlen_masked",
+      &surrogate_vjp_unbounded_varlen_masked_op);
 }
