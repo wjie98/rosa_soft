@@ -1,76 +1,21 @@
 name: Build matrix
 
-on:
-  push:
-  pull_request:
+on: [push, pull_request]
 
 jobs:
-  pure-reference:
+  cpu:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install --upgrade pip
+      - run: python -m pip install --upgrade pip ninja
       - run: >-
-          python -m pip install
-          --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu
           torch==2.11.0
-      - name: Install without native extension
-        env:
-          ROSA_BUILD_EXTENSION: "0"
-        run: python -m pip install --no-build-isolation -e ".[test]"
-      - name: Assert reference capabilities
-        run: |
-          python - <<'PY'
-          import rosa_soft
-          capabilities = rosa_soft.BUILD_CAPABILITIES
-          assert capabilities.variant == "reference"
-          assert not capabilities.compiled_extension
-          assert not capabilities.rosa_runtime
-          assert not capabilities.rosa_soft_cuda
-          PY
-      - run: python -m pytest -q
-
-  cpu-runtime:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install --upgrade pip
-      - run: >-
-          python -m pip install
-          --index-url https://download.pytorch.org/whl/cpu
-          torch==2.11.0
-      - run: python -m pip install ninja
-      - name: Clean-build CPU runtime
+      - name: Build SAM-only extension
         env:
           USE_CUDA: "0"
-        run: python -m pip install --no-build-isolation -v -e ".[test]"
-      - name: Assert CPU-only registration
-        run: |
-          python - <<'PY'
-          import torch
-          import rosa_soft
-          capabilities = rosa_soft.BUILD_CAPABILITIES
-          assert capabilities.variant == "cpu-runtime"
-          assert capabilities.compiled_extension
-          assert capabilities.rosa_runtime
-          assert not capabilities.rosa_soft_cuda
-          for operator in (
-              "rosa_soft::hard_forward",
-              "rosa_soft::hard_forward_varlen",
-              "rosa_soft::surrogate_vjp",
-              "rosa_soft::surrogate_vjp_masked",
-              "rosa_soft::surrogate_vjp_varlen_masked",
-          ):
-              try:
-                  torch._C._dispatch_find_schema_or_throw(operator, "")
-              except RuntimeError:
-                  continue
-              raise AssertionError(f"unexpected CPU schema: {operator}")
-          PY
+        run: python -m pip install --no-build-isolation -e ".[test]"
       - run: python -m pytest -q

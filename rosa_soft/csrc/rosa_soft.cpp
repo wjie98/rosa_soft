@@ -1,809 +1,294 @@
 #include <ATen/Context.h>
-#include <ATen/cuda/CUDAContext.h>
 #include <torch/extension.h>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <tuple>
 
+using Tensors = std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>;
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> hard_forward_cuda(
-    torch::Tensor query,
-    torch::Tensor key,
-    torch::Tensor value);
+Tensors rosa_hard_cuda(
+    const torch::Tensor& q,
+    const torch::Tensor& k,
+    const torch::Tensor& v,
+    const torch::Tensor& cu);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-hard_forward_varlen_cuda(
-    torch::Tensor query,
-    torch::Tensor key,
-    torch::Tensor value,
-    torch::Tensor cu_seqlens);
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> surrogate_vjp_cuda(
-    torch::Tensor query,
-    torch::Tensor key,
-    torch::Tensor value,
-    torch::Tensor grad_output,
-    torch::Tensor packed_query_symbols,
-    torch::Tensor packed_key_symbols,
-    torch::Tensor dropout_seed,
-    int64_t max_suffix_length,
+Tensors rosa_soft_backward_cuda(
+    const torch::Tensor& q,
+    const torch::Tensor& k,
+    const torch::Tensor& v,
+    const torch::Tensor& dy,
+    const torch::Tensor& pq,
+    const torch::Tensor& pk,
+    const torch::Tensor& seed,
     float scale,
-    float dropout_p,
-    float inverse_keep_probability,
-    float mismatch_scale,
-    int gradient_mask);
+    float dropout,
+    float mismatch,
+    int mask);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-rosa_soft_streaming_vjp_cuda(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& grad_output,
-    const torch::Tensor& packed_query_symbols,
-    const torch::Tensor& packed_key_symbols,
-    const torch::Tensor& dropout_seed,
-    int64_t max_suffix_length,
+Tensors rosa_soft_backward_fp16_cuda(
+    const torch::Tensor& q,
+    const torch::Tensor& k,
+    const torch::Tensor& v,
+    const torch::Tensor& dy,
+    const torch::Tensor& pq,
+    const torch::Tensor& pk,
+    const torch::Tensor& seed,
     float scale,
-    float dropout_p,
-    float mismatch_scale,
-    int gradient_mask,
-    int query_tile_size);
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-rosa_soft_block_diagonal_vjp_cuda(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& grad_output,
-    const torch::Tensor& packed_query_symbols,
-    const torch::Tensor& packed_key_symbols,
-    const torch::Tensor& dropout_seed,
-    int64_t max_suffix_length,
-    float scale,
-    float dropout_p,
-    float mismatch_scale,
-    int gradient_mask);
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-rosa_soft_unbounded_replay_vjp_cuda(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& grad_output,
-    const torch::Tensor& packed_query_symbols,
-    const torch::Tensor& packed_key_symbols,
-    const torch::Tensor& dropout_seed,
-    int64_t requested_slab_size,
-    float scale,
-    float dropout_p,
-    float mismatch_scale,
-    int gradient_mask);
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-rosa_soft_grouped_checkpoint_vjp_cuda(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& grad_output,
-    const torch::Tensor& packed_query_symbols,
-    const torch::Tensor& packed_key_symbols,
-    const torch::Tensor& dropout_seed,
-    float scale,
-    float dropout_p,
-    float mismatch_scale,
-    int gradient_mask);
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-surrogate_vjp_varlen_cuda(
-    torch::Tensor query,
-    torch::Tensor key,
-    torch::Tensor value,
-    torch::Tensor cu_seqlens,
-    torch::Tensor grad_output,
-    torch::Tensor packed_query_symbols,
-    torch::Tensor packed_key_symbols,
-    torch::Tensor dropout_seed,
-    int64_t max_suffix_length,
-    float scale,
-    float dropout_p,
-    float inverse_keep_probability,
-    float mismatch_scale,
-    int gradient_mask);
-
+    float dropout,
+    float mismatch,
+    int mask);
 
 namespace {
 
-constexpr int64_t kKernelIndexSafetyMargin = 128;
-constexpr int64_t kLegacyStreamingVjpMinSequenceLength = 4096;
-constexpr int64_t kAmpereStreamingVjpMinSequenceLength = 512;
-constexpr int64_t kAmpereValueOnlyStreamingVjpMinSequenceLength = 2048;
-constexpr int64_t kBlockDiagonalVjpMinSequenceLength = 4096;
-constexpr int64_t kGroupedCheckpointMinSequenceLength = 2048;
-constexpr int64_t kGroupedCheckpointMinSeriesTokens = 8192;
-constexpr int64_t kGroupedCheckpointSingleSeriesLength = 32768;
-// Zero selects the private sequence- and head-aware slab plan. It changes
-// replay granularity only; the suffix horizon and candidate set stay exact.
-constexpr int64_t kAutomaticUnboundedReplaySlab = 0;
+constexpr int64_t kPad = 128;
 
-bool should_use_streaming_vjp(
-    const torch::Tensor& query,
-    int64_t gradient_mask,
-    int device_major) {
-  int64_t minimum_sequence_length =
-      kLegacyStreamingVjpMinSequenceLength;
-  if (device_major >= 8) {
-    minimum_sequence_length = gradient_mask == 4
-        ? kAmpereValueOnlyStreamingVjpMinSequenceLength
-        : kAmpereStreamingVjpMinSequenceLength;
-  }
-  return query.size(1) >= minimum_sequence_length;
+bool dtype_ok(c10::ScalarType t) {
+  return t == torch::kFloat || t == torch::kHalf ||
+      t == torch::kBFloat16;
 }
 
-bool should_use_block_diagonal_vjp(
-    const torch::Tensor& query,
-    const torch::Tensor& value,
-    int64_t max_suffix_length,
-    int device_major) {
-  return device_major >= 8 &&
-      query.size(1) >= kBlockDiagonalVjpMinSequenceLength &&
-      max_suffix_length == 32 &&
-      value.size(3) == 64;
-}
-
-bool is_supported_logit_dtype(c10::ScalarType dtype) {
-  return dtype == torch::kFloat32 ||
-      dtype == torch::kFloat16 ||
-      dtype == torch::kBFloat16;
-}
-
-float to_positive_normal_float(double value, const char* name) {
-  const float converted = static_cast<float>(value);
+float positive_float(double x, const char* name) {
+  const float y = static_cast<float>(x);
   TORCH_CHECK(
-      converted > 0.0f && std::isnormal(converted),
-      name,
-      " must be representable as a positive normal float32 value");
-  return converted;
+      std::isfinite(x) && y > 0.0f && std::isnormal(y),
+      name, " must be a positive normal float32 value");
+  return y;
 }
 
-struct SurrogateScalars {
+struct Args {
   float scale;
-  float dropout_p;
-  float inverse_keep_probability;
-  float mismatch_scale;
+  float dropout;
+  float mismatch;
 };
 
-SurrogateScalars check_surrogate_scalars(
-    int64_t effective_max_suffix_length,
-    double scale,
-    double dropout_p,
-    double mismatch_scale) {
+Args check_args(double scale, double dropout, double mismatch, int64_t n) {
   TORCH_CHECK(
-      std::isfinite(scale) && scale > 0.0,
-      "scale must be finite and > 0");
+      std::isfinite(dropout) && dropout >= 0.0 &&
+          dropout <= 1.0 - std::ldexp(1.0, -24),
+      "dropout_p must be in [0, 1 - 2^-24]");
+  const float s = positive_float(scale, "scale");
+  const float a = positive_float(mismatch, "mismatch_scale");
+  const float p = static_cast<float>(dropout);
+  const double fmax = std::numeric_limits<float>::max();
+  TORCH_CHECK(scale <= fmax / n, "sequence length * scale overflows float32");
   TORCH_CHECK(
-      std::isfinite(dropout_p) &&
-          dropout_p >= 0.0 &&
-          dropout_p <= 1.0 - std::ldexp(1.0, -24),
-      "dropout_p must be finite and in [0, 1 - 2^-24]");
-  TORCH_CHECK(
-      std::isfinite(mismatch_scale) && mismatch_scale > 0.0,
-      "mismatch_scale must be finite and > 0");
-
-  const float scale_f =
-      to_positive_normal_float(scale, "scale");
-  const float dropout_p_f = static_cast<float>(dropout_p);
-  const float inverse_keep_probability_f =
-      1.0f / (1.0f - dropout_p_f);
-  const double float_max =
-      static_cast<double>(std::numeric_limits<float>::max());
-  TORCH_CHECK(
-      scale <=
-          float_max /
-              static_cast<double>(effective_max_suffix_length),
-      "max_suffix_length * scale must fit in float32");
-
-  const float mismatch_scale_f =
-      to_positive_normal_float(mismatch_scale, "mismatch_scale");
-  const double scaled_horizon =
-      static_cast<double>(effective_max_suffix_length) *
-      scale;
-  TORCH_CHECK(
-      mismatch_scale <= float_max / scaled_horizon,
-      "mismatch_scale * max_suffix_length * scale "
-      "must fit in float32");
-  return {
-      scale_f,
-      dropout_p_f,
-      inverse_keep_probability_f,
-      mismatch_scale_f,
-  };
+      mismatch <= fmax / (n * scale),
+      "sequence length * scale * mismatch_scale overflows float32");
+  return {s, p, a};
 }
 
-void check_common_inputs(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value) {
-  TORCH_CHECK(query.is_cuda(), "query must be a CUDA tensor");
-  TORCH_CHECK(key.is_cuda(), "key must be a CUDA tensor");
-  TORCH_CHECK(value.is_cuda(), "value must be a CUDA tensor");
-  TORCH_CHECK(
-      query.device() == key.device(),
-      "query and key must be on the same CUDA device");
-  TORCH_CHECK(
-      query.device() == value.device(),
-      "query and value must be on the same CUDA device");
-  TORCH_CHECK(
-      is_supported_logit_dtype(query.scalar_type()),
-      "query must be float32, float16, or bfloat16");
-  TORCH_CHECK(query.scalar_type() == key.scalar_type(), "query/key dtype mismatch");
-  TORCH_CHECK(
-      query.scalar_type() == value.scalar_type(),
-      "query/value dtype mismatch");
-  TORCH_CHECK(query.dim() == 4, "query must have shape (B, T, H, D)");
-  TORCH_CHECK(key.dim() == 4, "key must have shape (B, T, H, D)");
-  TORCH_CHECK(
-      value.dim() == 4,
-      "value must have shape (B, T, H_p, D_p)");
-  TORCH_CHECK(query.size(0) > 0, "batch size must be positive");
-  TORCH_CHECK(query.size(1) > 0, "sequence length must be positive");
-  TORCH_CHECK(query.size(2) > 0, "query head count must be positive");
-  TORCH_CHECK(value.size(2) > 0, "value head count must be positive");
-  TORCH_CHECK(value.size(3) > 0, "value dimension must be positive");
-  TORCH_CHECK(query.size(0) == key.size(0), "query/key batch mismatch");
-  TORCH_CHECK(query.size(1) == key.size(1), "query/key sequence mismatch");
-  TORCH_CHECK(query.size(2) == key.size(2), "query/key head mismatch");
-  TORCH_CHECK(query.size(3) == key.size(3), "query/key bit dimension mismatch");
-  TORCH_CHECK(
-      query.size(0) == value.size(0),
-      "query/value batch mismatch");
-  TORCH_CHECK(
-      query.size(1) == value.size(1),
-      "query/value sequence mismatch");
-  TORCH_CHECK(
-      query.size(2) % value.size(2) == 0,
-      "query heads must be divisible by value heads");
-  TORCH_CHECK(
-      query.size(3) > 0 && query.size(3) <= 32,
-      "query/key bit dimension must be in [1, 32]");
-  TORCH_CHECK(
-      query.numel() / query.size(3) <=
-          std::numeric_limits<int>::max(),
-      "B * T * H must fit in int32");
-  TORCH_CHECK(
-      query.size(1) <=
-          std::numeric_limits<int>::max() -
-              kKernelIndexSafetyMargin,
-      "sequence length is too large for the CUDA kernel index stride");
-  TORCH_CHECK(
-      value.size(3) <=
-          std::numeric_limits<int>::max() -
-              kKernelIndexSafetyMargin,
-      "value dimension is too large for the CUDA kernel index stride");
+bool packed(const torch::Tensor& q) {
+  return q.dim() == 3;
 }
 
-void check_max_suffix_length(int64_t max_suffix_length) {
-  TORCH_CHECK(max_suffix_length >= 1, "max_suffix_length must be >= 1");
+void check_inputs(
+    const torch::Tensor& q,
+    const torch::Tensor& k,
+    const torch::Tensor& v,
+    const torch::Tensor& cu) {
+  TORCH_CHECK(q.is_cuda() && k.is_cuda() && v.is_cuda() && cu.is_cuda(),
+              "q, k, v, and cu_seqlens must be CUDA tensors");
+  TORCH_CHECK(q.device() == k.device() && q.device() == v.device() &&
+                  q.device() == cu.device(),
+              "all tensors must be on the same CUDA device");
+  TORCH_CHECK(dtype_ok(q.scalar_type()),
+              "q, k, and v must be float32, float16, or bfloat16");
+  TORCH_CHECK(q.scalar_type() == k.scalar_type() &&
+                  q.scalar_type() == v.scalar_type(),
+              "q, k, and v must have the same dtype");
+  TORCH_CHECK(q.dim() == k.dim() && (q.dim() == 3 || q.dim() == 4),
+              "q and k must have shape [B,T,H,D] or [N,H,D]");
+  TORCH_CHECK(q.sizes() == k.sizes(), "q and k must have the same shape");
+
+  const bool p = packed(q);
+  const int64_t n = p ? q.size(0) : q.size(1);
+  const int64_t h = p ? q.size(1) : q.size(2);
+  const int64_t d = p ? q.size(2) : q.size(3);
+  TORCH_CHECK(p ? v.dim() == 3 : v.dim() == 4,
+              "v rank must match q/k layout");
+  const int64_t hv = p ? v.size(1) : v.size(2);
+  TORCH_CHECK(p || q.size(0) > 0, "batch size must be positive");
+  TORCH_CHECK(n > 0 && h > 0 && d > 0 && d <= 32,
+              "sequence/head dimensions must be positive and D must be in [1,32]");
+  TORCH_CHECK((p ? v.size(0) == q.size(0)
+                 : v.size(0) == q.size(0) && v.size(1) == q.size(1)),
+              "q, k, and v token dimensions must match");
+  TORCH_CHECK(hv > 0 && h % hv == 0 && v.size(-1) > 0,
+              "H must be divisible by value heads and value width must be positive");
+  TORCH_CHECK(q.numel() / d <= std::numeric_limits<int>::max(),
+              "token-head count exceeds int32 indexing");
+  TORCH_CHECK(n <= std::numeric_limits<int>::max() - kPad,
+              "sequence length exceeds int32 indexing");
+  TORCH_CHECK(v.size(-1) <= std::numeric_limits<int>::max() - kPad,
+              "value width exceeds int32 indexing");
+
+  TORCH_CHECK(cu.scalar_type() == torch::kInt32 && cu.dim() == 1,
+              "cu_seqlens must be a one-dimensional int32 tensor");
+  if (p) {
+    TORCH_CHECK(cu.numel() >= 2,
+                "packed input requires at least two sequence offsets");
+    TORCH_CHECK(cu.numel() - 1 <= std::numeric_limits<int>::max(),
+                "sequence count exceeds int32 indexing");
+  } else {
+    TORCH_CHECK(cu.numel() == 0,
+                "dense input must not provide sequence offsets");
+  }
 }
 
-void check_packed_symbols(
-    const torch::Tensor& packed_symbols,
-    const torch::Tensor& query,
-    const char* name) {
-  TORCH_CHECK(packed_symbols.is_cuda(), name, " must be a CUDA tensor");
-  TORCH_CHECK(
-      packed_symbols.device() == query.device(),
-      name,
-      " must be on the same CUDA device as query");
-  TORCH_CHECK(
-      packed_symbols.scalar_type() == torch::kInt32,
-      name,
-      " must be int32");
-  TORCH_CHECK(
-      packed_symbols.dim() == 3,
-      name,
-      " must have shape (B, H, T)");
-  TORCH_CHECK(
-      packed_symbols.size(0) == query.size(0),
-      name,
-      " batch mismatch");
-  TORCH_CHECK(
-      packed_symbols.size(1) == query.size(2),
-      name,
-      " head mismatch");
-  TORCH_CHECK(
-      packed_symbols.size(2) == query.size(1),
-      name,
-      " sequence mismatch");
+void check_backward(
+    const torch::Tensor& q,
+    const torch::Tensor& v,
+    const torch::Tensor& dy,
+    const torch::Tensor& pq,
+    const torch::Tensor& pk,
+    const torch::Tensor& seed,
+    double dropout,
+    int64_t mask) {
+  TORCH_CHECK(dy.is_cuda() && dy.device() == q.device() &&
+                  dy.scalar_type() == q.scalar_type(),
+              "dy must match q device and dtype");
+  if (packed(q)) {
+    TORCH_CHECK(dy.sizes() == torch::IntArrayRef({q.size(0), q.size(1), v.size(2)}),
+                "dy shape mismatch");
+    TORCH_CHECK(pq.sizes() == torch::IntArrayRef({q.size(1), q.size(0)}),
+                "packed q symbol shape mismatch");
+  } else {
+    TORCH_CHECK(dy.sizes() == torch::IntArrayRef(
+                    {q.size(0), q.size(1), q.size(2), v.size(3)}),
+                "dy shape mismatch");
+    TORCH_CHECK(pq.sizes() == torch::IntArrayRef({q.size(0), q.size(2), q.size(1)}),
+                "packed q symbol shape mismatch");
+  }
+  TORCH_CHECK(pk.sizes() == pq.sizes() && pq.scalar_type() == torch::kInt32 &&
+                  pk.scalar_type() == torch::kInt32 && pq.device() == q.device() &&
+                  pk.device() == q.device(),
+              "packed q/k symbols are invalid");
+  TORCH_CHECK(seed.is_cuda() && seed.device() == q.device() &&
+                  seed.scalar_type() == torch::kInt64 &&
+                  seed.numel() == (dropout > 0.0 ? 1 : 0),
+              "dropout seed is invalid");
+  TORCH_CHECK(mask >= 1 && mask <= 7, "gradient mask must be in [1,7]");
 }
 
-void check_dropout_seed(
-    const torch::Tensor& dropout_seed,
-    const torch::Tensor& query,
-    double dropout_p) {
-  TORCH_CHECK(
-      dropout_seed.is_cuda(),
-      "dropout_seed must be a CUDA tensor");
-  TORCH_CHECK(
-      dropout_seed.device() == query.device(),
-      "dropout_seed must be on the same CUDA device as query");
-  TORCH_CHECK(
-      dropout_seed.scalar_type() == torch::kInt64,
-      "dropout_seed must have dtype int64");
-  TORCH_CHECK(
-      dropout_seed.numel() == (dropout_p > 0.0 ? 1 : 0),
-      "dropout_seed must be scalar exactly when dropout_p > 0");
+bool use_fp16_tiles(const torch::Tensor& q, const torch::Tensor& v, int mask) {
+  const int64_t s = q.size(0) * q.size(2);
+  const int64_t t = q.size(1);
+  return q.scalar_type() == torch::kHalf && v.size(3) == 64 && t >= 2048 &&
+      (mask & 3) != 0 &&
+      ((s >= 2 && s * t >= 8192) || t >= 32768);
 }
 
-void check_surrogate_vjp_inputs(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& grad_output,
-    const torch::Tensor& packed_query_symbols,
-    const torch::Tensor& packed_key_symbols,
-    int64_t max_suffix_length) {
-  check_common_inputs(query, key, value);
-  check_max_suffix_length(max_suffix_length);
-  TORCH_CHECK(grad_output.is_cuda(), "grad_output must be a CUDA tensor");
-  TORCH_CHECK(
-      grad_output.device() == query.device(),
-      "grad_output must be on the same CUDA device as query");
-  TORCH_CHECK(
-      grad_output.scalar_type() == query.scalar_type(),
-      "grad_output dtype mismatch");
-  TORCH_CHECK(
-      grad_output.sizes() ==
-          torch::IntArrayRef(
-              {
-                  query.size(0),
-                  query.size(1),
-                  query.size(2),
-                  value.size(3)}),
-      "grad_output shape mismatch");
-  check_packed_symbols(
-      packed_query_symbols,
-      query,
-      "packed_query_symbols");
-  check_packed_symbols(
-      packed_key_symbols,
-      query,
-      "packed_key_symbols");
+Tensors backward_dense(
+    const torch::Tensor& q,
+    const torch::Tensor& k,
+    const torch::Tensor& v,
+    const torch::Tensor& dy,
+    const torch::Tensor& pq,
+    const torch::Tensor& pk,
+    const torch::Tensor& seed,
+    const Args& a,
+    int mask) {
+  if (use_fp16_tiles(q, v, mask)) {
+    return rosa_soft_backward_fp16_cuda(
+        q, k, v, dy, pq, pk, seed, a.scale, a.dropout, a.mismatch, mask);
+  }
+  return rosa_soft_backward_cuda(
+      q, k, v, dy, pq, pk, seed, a.scale, a.dropout, a.mismatch, mask);
 }
 
-void check_gradient_mask(int64_t gradient_mask) {
-  TORCH_CHECK(
-      gradient_mask >= 1 && gradient_mask <= 7,
-      "gradient_mask must be an integer bit mask in [1, 7]");
-}
+Tensors backward_packed(
+    const torch::Tensor& q,
+    const torch::Tensor& k,
+    const torch::Tensor& v,
+    const torch::Tensor& dy,
+    const torch::Tensor& pq,
+    const torch::Tensor& pk,
+    const torch::Tensor& seed,
+    const torch::Tensor& cu,
+    const Args& a,
+    int mask) {
+  const auto f32 = q.options().dtype(torch::kFloat32);
+  auto dq = mask & 1 ? torch::zeros(q.sizes(), f32) : torch::empty({0}, f32);
+  auto dk = mask & 2 ? torch::zeros(k.sizes(), f32) : torch::empty({0}, f32);
+  auto dv = mask & 4 ? torch::zeros(v.sizes(), f32) : torch::empty({0}, f32);
+  const auto host = cu.cpu();
+  const auto* off = host.data_ptr<int32_t>();
+  const int64_t batch = host.numel() - 1;
+  TORCH_CHECK(off[0] == 0 && off[batch] == q.size(0),
+              "cu_seqlens must span all packed tokens");
 
-void check_varlen_inputs(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& cu_seqlens) {
-  TORCH_CHECK(query.is_cuda(), "query must be a CUDA tensor");
-  TORCH_CHECK(key.is_cuda(), "key must be a CUDA tensor");
-  TORCH_CHECK(value.is_cuda(), "value must be a CUDA tensor");
-  TORCH_CHECK(cu_seqlens.is_cuda(), "cu_seqlens must be a CUDA tensor");
-  TORCH_CHECK(
-      query.device() == key.device() &&
-          query.device() == value.device() &&
-          query.device() == cu_seqlens.device(),
-      "all inputs and cu_seqlens must be on the same CUDA device");
-  TORCH_CHECK(
-      is_supported_logit_dtype(query.scalar_type()),
-      "query must be float32, float16, or bfloat16");
-  TORCH_CHECK(query.scalar_type() == key.scalar_type(), "query/key dtype mismatch");
-  TORCH_CHECK(
-      query.scalar_type() == value.scalar_type(),
-      "query/value dtype mismatch");
-  TORCH_CHECK(query.dim() == 3, "query must have shape (N, H, D)");
-  TORCH_CHECK(key.dim() == 3, "key must have shape (N, H, D)");
-  TORCH_CHECK(value.dim() == 3, "value must have shape (N, H_p, D_p)");
-  TORCH_CHECK(query.size(0) > 0, "packed token count must be positive");
-  TORCH_CHECK(query.size(1) > 0, "query head count must be positive");
-  TORCH_CHECK(value.size(1) > 0, "value head count must be positive");
-  TORCH_CHECK(value.size(2) > 0, "value dimension must be positive");
-  TORCH_CHECK(query.size(0) == key.size(0), "query/key token mismatch");
-  TORCH_CHECK(query.size(0) == value.size(0), "query/value token mismatch");
-  TORCH_CHECK(query.size(1) == key.size(1), "query/key head mismatch");
-  TORCH_CHECK(query.size(2) == key.size(2), "query/key bit dimension mismatch");
-  TORCH_CHECK(
-      query.size(1) % value.size(1) == 0,
-      "query heads must be divisible by value heads");
-  TORCH_CHECK(
-      query.size(2) > 0 && query.size(2) <= 32,
-      "query/key bit dimension must be in [1, 32]");
-  TORCH_CHECK(
-      query.size(0) * query.size(1) <=
-          std::numeric_limits<int>::max(),
-      "N * H must fit in int32");
-  TORCH_CHECK(
-      query.size(0) <=
-          std::numeric_limits<int>::max() -
-              kKernelIndexSafetyMargin,
-      "packed token count is too large for CUDA kernel indexing");
-  TORCH_CHECK(
-      value.size(2) <=
-          std::numeric_limits<int>::max() -
-              kKernelIndexSafetyMargin,
-      "value dimension is too large for the CUDA kernel index stride");
-  TORCH_CHECK(
-      cu_seqlens.scalar_type() == torch::kInt32,
-      "cu_seqlens must be int32");
-  TORCH_CHECK(
-      cu_seqlens.dim() == 1 && cu_seqlens.numel() >= 2,
-      "cu_seqlens must be one-dimensional with at least two entries");
-  TORCH_CHECK(
-      cu_seqlens.numel() - 1 <=
-          std::numeric_limits<int>::max() -
-              kKernelIndexSafetyMargin,
-      "number of packed sequences is too large for CUDA indexing");
-}
-
-void check_varlen_packed_symbols(
-    const torch::Tensor& packed_symbols,
-    const torch::Tensor& query,
-    const char* name) {
-  TORCH_CHECK(packed_symbols.is_cuda(), name, " must be a CUDA tensor");
-  TORCH_CHECK(
-      packed_symbols.device() == query.device(),
-      name,
-      " must be on the same CUDA device as query");
-  TORCH_CHECK(
-      packed_symbols.scalar_type() == torch::kInt32,
-      name,
-      " must be int32");
-  TORCH_CHECK(
-      packed_symbols.dim() == 2,
-      name,
-      " must have shape (H, N)");
-  TORCH_CHECK(
-      packed_symbols.size(0) == query.size(1) &&
-          packed_symbols.size(1) == query.size(0),
-      name,
-      " shape mismatch");
+  for (int64_t b = 0; b < batch; ++b) {
+    const int64_t start = off[b];
+    const int64_t length = off[b + 1] - start;
+    TORCH_CHECK(length >= 0, "cu_seqlens must be nondecreasing");
+    if (length == 0) continue;
+    const auto slice = [start, length](const torch::Tensor& x) {
+      return x.narrow(0, start, length).unsqueeze(0);
+    };
+    const auto bits = [start, length](const torch::Tensor& x) {
+      return x.narrow(1, start, length).unsqueeze(0).contiguous();
+    };
+    const auto local_seed = a.dropout > 0.0f ? seed.add(b) : seed;
+    auto grad = backward_dense(
+        slice(q), slice(k), slice(v), slice(dy), bits(pq), bits(pk),
+        local_seed, a, mask);
+    if (mask & 1) dq.narrow(0, start, length).copy_(std::get<0>(grad).squeeze(0));
+    if (mask & 2) dk.narrow(0, start, length).copy_(std::get<1>(grad).squeeze(0));
+    if (mask & 4) dv.narrow(0, start, length).copy_(std::get<2>(grad).squeeze(0));
+  }
+  return {dq, dk, dv};
 }
 
 }  // namespace
 
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> hard_forward_op(
-    torch::Tensor query,
-    torch::Tensor key,
-    torch::Tensor value) {
-  check_common_inputs(query, key, value);
-  return hard_forward_cuda(
-      query.contiguous(),
-      key.contiguous(),
-      value.contiguous());
+Tensors rosa_forward(
+    torch::Tensor q,
+    torch::Tensor k,
+    torch::Tensor v,
+    torch::Tensor cu) {
+  check_inputs(q, k, v, cu);
+  return rosa_hard_cuda(q.contiguous(), k.contiguous(), v.contiguous(),
+                        cu.contiguous());
 }
 
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-hard_forward_varlen_op(
-    torch::Tensor query,
-    torch::Tensor key,
-    torch::Tensor value,
-    torch::Tensor cu_seqlens) {
-  check_varlen_inputs(
-      query,
-      key,
-      value,
-      cu_seqlens);
-  return hard_forward_varlen_cuda(
-      query.contiguous(),
-      key.contiguous(),
-      value.contiguous(),
-      cu_seqlens.contiguous());
-}
-
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-surrogate_vjp_masked_op(
-    torch::Tensor query,
-    torch::Tensor key,
-    torch::Tensor value,
-    torch::Tensor grad_output,
-    torch::Tensor packed_query_symbols,
-    torch::Tensor packed_key_symbols,
-    torch::Tensor dropout_seed,
-    int64_t max_suffix_length,
+Tensors rosa_backward(
+    torch::Tensor q,
+    torch::Tensor k,
+    torch::Tensor v,
+    torch::Tensor dy,
+    torch::Tensor pq,
+    torch::Tensor pk,
+    torch::Tensor seed,
+    torch::Tensor cu,
     double scale,
-    double dropout_p,
-    double mismatch_scale,
-    int64_t gradient_mask) {
-  check_surrogate_vjp_inputs(
-      query,
-      key,
-      value,
-      grad_output,
-      packed_query_symbols,
-      packed_key_symbols,
-      max_suffix_length);
-  const int64_t effective_max_suffix_length =
-      std::min<int64_t>(max_suffix_length, query.size(1));
-  const auto surrogate_scalars = check_surrogate_scalars(
-      effective_max_suffix_length,
-      scale,
-      dropout_p,
-      mismatch_scale);
-  check_dropout_seed(dropout_seed, query, dropout_p);
-  check_gradient_mask(gradient_mask);
-  at::globalContext().alertNotDeterministic(
-      "rosa_soft::surrogate_vjp_masked");
-  query = query.contiguous();
-  key = key.contiguous();
-  value = value.contiguous();
-  grad_output = grad_output.contiguous();
-  packed_query_symbols = packed_query_symbols.contiguous();
-  packed_key_symbols = packed_key_symbols.contiguous();
-  dropout_seed = dropout_seed.contiguous();
-  const int device_major =
-      at::cuda::getDeviceProperties(query.get_device())->major;
-  if (should_use_block_diagonal_vjp(
-          query,
-          value,
-          effective_max_suffix_length,
-          device_major)) {
-    return rosa_soft_block_diagonal_vjp_cuda(
-        query,
-        key,
-        value,
-        grad_output,
-        packed_query_symbols,
-        packed_key_symbols,
-        dropout_seed,
-        effective_max_suffix_length,
-        surrogate_scalars.scale,
-        surrogate_scalars.dropout_p,
-        surrogate_scalars.mismatch_scale,
-        static_cast<int>(gradient_mask));
+    double dropout,
+    double mismatch,
+    int64_t mask) {
+  check_inputs(q, k, v, cu);
+  check_backward(q, v, dy, pq, pk, seed, dropout, mask);
+  const int64_t n = packed(q) ? q.size(0) : q.size(1);
+  const Args a = check_args(scale, dropout, mismatch, n);
+  at::globalContext().alertNotDeterministic("rosa_soft::backward");
+  q = q.contiguous();
+  k = k.contiguous();
+  v = v.contiguous();
+  dy = dy.contiguous();
+  pq = pq.contiguous();
+  pk = pk.contiguous();
+  seed = seed.contiguous();
+  cu = cu.contiguous();
+
+  if (packed(q)) {
+    return backward_packed(
+        q, k, v, dy, pq, pk, seed, cu, a, static_cast<int>(mask));
   }
-  if (should_use_streaming_vjp(query, gradient_mask, device_major)) {
-    return rosa_soft_streaming_vjp_cuda(
-        query,
-        key,
-        value,
-        grad_output,
-        packed_query_symbols,
-        packed_key_symbols,
-        dropout_seed,
-        effective_max_suffix_length,
-        surrogate_scalars.scale,
-        surrogate_scalars.dropout_p,
-        surrogate_scalars.mismatch_scale,
-        static_cast<int>(gradient_mask),
-        32);
-  }
-  return surrogate_vjp_cuda(
-      query,
-      key,
-      value,
-      grad_output,
-      packed_query_symbols,
-      packed_key_symbols,
-      dropout_seed,
-      effective_max_suffix_length,
-      surrogate_scalars.scale,
-      surrogate_scalars.dropout_p,
-      surrogate_scalars.inverse_keep_probability,
-      surrogate_scalars.mismatch_scale,
-      static_cast<int>(gradient_mask));
+  return backward_dense(q, k, v, dy, pq, pk, seed, a,
+                        static_cast<int>(mask));
 }
-
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-surrogate_vjp_varlen_masked_op(
-    torch::Tensor query,
-    torch::Tensor key,
-    torch::Tensor value,
-    torch::Tensor cu_seqlens,
-    torch::Tensor grad_output,
-    torch::Tensor packed_query_symbols,
-    torch::Tensor packed_key_symbols,
-    torch::Tensor dropout_seed,
-    int64_t max_suffix_length,
-    double scale,
-    double dropout_p,
-    double mismatch_scale,
-    int64_t gradient_mask) {
-  check_varlen_inputs(
-      query,
-      key,
-      value,
-      cu_seqlens);
-  check_max_suffix_length(max_suffix_length);
-  TORCH_CHECK(grad_output.is_cuda(), "grad_output must be a CUDA tensor");
-  TORCH_CHECK(
-      grad_output.device() == query.device(),
-      "grad_output must be on the same CUDA device as query");
-  TORCH_CHECK(
-      grad_output.scalar_type() == query.scalar_type(),
-      "grad_output dtype mismatch");
-  TORCH_CHECK(
-      grad_output.sizes() ==
-          torch::IntArrayRef(
-              {
-                  query.size(0),
-                  query.size(1),
-                  value.size(2)}),
-      "grad_output shape mismatch");
-  check_varlen_packed_symbols(
-      packed_query_symbols,
-      query,
-      "packed_query_symbols");
-  check_varlen_packed_symbols(
-      packed_key_symbols,
-      query,
-      "packed_key_symbols");
-  const int64_t effective_max_suffix_length =
-      std::min<int64_t>(max_suffix_length, query.size(0));
-  const auto surrogate_scalars = check_surrogate_scalars(
-      effective_max_suffix_length,
-      scale,
-      dropout_p,
-      mismatch_scale);
-  check_dropout_seed(dropout_seed, query, dropout_p);
-  check_gradient_mask(gradient_mask);
-  at::globalContext().alertNotDeterministic(
-      "rosa_soft::surrogate_vjp_varlen_masked");
-  return surrogate_vjp_varlen_cuda(
-      query.contiguous(),
-      key.contiguous(),
-      value.contiguous(),
-      cu_seqlens.contiguous(),
-      grad_output.contiguous(),
-      packed_query_symbols.contiguous(),
-      packed_key_symbols.contiguous(),
-      dropout_seed.contiguous(),
-      effective_max_suffix_length,
-      surrogate_scalars.scale,
-      surrogate_scalars.dropout_p,
-      surrogate_scalars.inverse_keep_probability,
-      surrogate_scalars.mismatch_scale,
-      static_cast<int>(gradient_mask));
-}
-
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-surrogate_vjp_unbounded_masked_op(
-    torch::Tensor query,
-    torch::Tensor key,
-    torch::Tensor value,
-    torch::Tensor grad_output,
-    torch::Tensor packed_query_symbols,
-    torch::Tensor packed_key_symbols,
-    torch::Tensor dropout_seed,
-    double scale,
-    double dropout_p,
-    double mismatch_scale,
-    int64_t gradient_mask) {
-  check_surrogate_vjp_inputs(
-      query,
-      key,
-      value,
-      grad_output,
-      packed_query_symbols,
-      packed_key_symbols,
-      query.size(1));
-  const auto surrogate_scalars = check_surrogate_scalars(
-      query.size(1),
-      scale,
-      dropout_p,
-      mismatch_scale);
-  check_dropout_seed(dropout_seed, query, dropout_p);
-  check_gradient_mask(gradient_mask);
-  at::globalContext().alertNotDeterministic(
-      "rosa_soft::surrogate_vjp_unbounded_masked");
-  const int64_t series_count = query.size(0) * query.size(2);
-  const bool grouped_workload =
-      (series_count >= 2 &&
-       series_count * query.size(1) >=
-           kGroupedCheckpointMinSeriesTokens) ||
-      query.size(1) >= kGroupedCheckpointSingleSeriesLength;
-  const bool use_grouped_checkpoint =
-      query.scalar_type() == torch::kFloat16 && value.size(3) == 64 &&
-      query.size(1) >= kGroupedCheckpointMinSequenceLength &&
-      grouped_workload &&
-      (gradient_mask & 3) != 0;
-  if (use_grouped_checkpoint) {
-    return rosa_soft_grouped_checkpoint_vjp_cuda(
-        query.contiguous(),
-        key.contiguous(),
-        value.contiguous(),
-        grad_output.contiguous(),
-        packed_query_symbols.contiguous(),
-        packed_key_symbols.contiguous(),
-        dropout_seed.contiguous(),
-        surrogate_scalars.scale,
-        surrogate_scalars.dropout_p,
-        surrogate_scalars.mismatch_scale,
-        static_cast<int>(gradient_mask));
-  }
-  return rosa_soft_unbounded_replay_vjp_cuda(
-      query.contiguous(),
-      key.contiguous(),
-      value.contiguous(),
-      grad_output.contiguous(),
-      packed_query_symbols.contiguous(),
-      packed_key_symbols.contiguous(),
-      dropout_seed.contiguous(),
-      kAutomaticUnboundedReplaySlab,
-      surrogate_scalars.scale,
-      surrogate_scalars.dropout_p,
-      surrogate_scalars.mismatch_scale,
-      static_cast<int>(gradient_mask));
-}
-
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-surrogate_vjp_unbounded_varlen_masked_op(
-    torch::Tensor query,
-    torch::Tensor key,
-    torch::Tensor value,
-    torch::Tensor cu_seqlens,
-    torch::Tensor grad_output,
-    torch::Tensor packed_query_symbols,
-    torch::Tensor packed_key_symbols,
-    torch::Tensor dropout_seed,
-    double scale,
-    double dropout_p,
-    double mismatch_scale,
-    int64_t gradient_mask) {
-  check_varlen_inputs(query, key, value, cu_seqlens);
-  TORCH_CHECK(
-      grad_output.is_cuda() && grad_output.device() == query.device(),
-      "grad_output must be on the same CUDA device as query");
-  TORCH_CHECK(
-      grad_output.scalar_type() == query.scalar_type(),
-      "grad_output dtype mismatch");
-  TORCH_CHECK(
-      grad_output.sizes() == torch::IntArrayRef(
-          {query.size(0), query.size(1), value.size(2)}),
-      "grad_output shape mismatch");
-  check_varlen_packed_symbols(
-      packed_query_symbols, query, "packed_query_symbols");
-  check_varlen_packed_symbols(
-      packed_key_symbols, query, "packed_key_symbols");
-  const auto surrogate_scalars = check_surrogate_scalars(
-      query.size(0), scale, dropout_p, mismatch_scale);
-  check_dropout_seed(dropout_seed, query, dropout_p);
-  check_gradient_mask(gradient_mask);
-  at::globalContext().alertNotDeterministic(
-      "rosa_soft::surrogate_vjp_unbounded_varlen_masked");
-  return surrogate_vjp_varlen_cuda(
-      query.contiguous(),
-      key.contiguous(),
-      value.contiguous(),
-      cu_seqlens.contiguous(),
-      grad_output.contiguous(),
-      packed_query_symbols.contiguous(),
-      packed_key_symbols.contiguous(),
-      dropout_seed.contiguous(),
-      query.size(0),
-      surrogate_scalars.scale,
-      surrogate_scalars.dropout_p,
-      surrogate_scalars.inverse_keep_probability,
-      surrogate_scalars.mismatch_scale,
-      static_cast<int>(gradient_mask));
-}
-
 
 TORCH_LIBRARY_IMPL(rosa_soft, CUDA, m) {
-  m.impl("hard_forward", &hard_forward_op);
-  m.impl("hard_forward_varlen", &hard_forward_varlen_op);
-  m.impl("surrogate_vjp_masked", &surrogate_vjp_masked_op);
-  m.impl(
-      "surrogate_vjp_varlen_masked",
-      &surrogate_vjp_varlen_masked_op);
-  m.impl(
-      "surrogate_vjp_unbounded_masked",
-      &surrogate_vjp_unbounded_masked_op);
-  m.impl(
-      "surrogate_vjp_unbounded_varlen_masked",
-      &surrogate_vjp_unbounded_varlen_masked_op);
+  m.impl("forward", &rosa_forward);
+  m.impl("backward", &rosa_backward);
 }

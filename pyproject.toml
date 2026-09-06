@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--strict-markers"
 
 # Native builds compile against the PyTorch ABI in the invoking environment.
-# Install PyTorch first and pass --no-build-isolation to pip. Reference-only
-# wheels do not import PyTorch during the build when ROSA_BUILD_EXTENSION=0.
+# Install PyTorch first and pass --no-build-isolation to pip.
