@@ -88,6 +88,17 @@ reads. Two empty corners of the utility rectangle are not computed; every
 actual causal candidate is still included. Probability and credit contractions
 retain high and residual FP16 components with FP32 accumulation.
 
+On SM75 and newer, the FP16 backward uses a small `Mma` helper with documented
+`ldmatrix` and `mma.m16n8k8` register layouts. Q/K/V contractions retain their
+results in FP32 registers. Four warp shuffles arrange each 16x16 result for
+coalesced global atomic writes; no shared-memory output tile is needed.
+Adjacent reverse row blocks overlap by 32 value rows. Eight FP32 registers per
+thread retain that dV overlap until the next block, and only final writes are
+reordered. The accumulator resets for every diagonal task and flushes at its
+first row block. Different tasks and GQA heads still accumulate atomically.
+The helper uses CUDA instructions directly, without a CUTLASS build dependency;
+older devices use the existing generic path.
+
 Packed backward copies only the small offset vector to host, then applies the
 same dense implementation to each nonempty segment and writes gradients back
 to packed storage. This keeps one mathematical implementation and limits work

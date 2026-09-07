@@ -151,8 +151,33 @@ def test_fp16_long_dispatch_matches_generic_value_width(layout, mask, bits):
             if i == 2:
                 expected = expected[..., :64]
             torch.testing.assert_close(actual, expected, rtol=4e-2, atol=2e-3)
+            relative = (actual - expected).norm() / expected.norm().clamp_min(1e-20)
+            assert relative < 2e-4
         else:
             assert actual.numel() == 0
+
+
+@CUDA
+@pytest.mark.parametrize("bits", [1, 8, 32])
+def test_fp16_long_dispatch_matches_definition(bits):
+    torch.manual_seed(105 + bits)
+    t = 2051
+    q = torch.randn(1, t, 1, bits, device="cuda", dtype=torch.float16)
+    k = torch.randn_like(q)
+    if bits == 1:
+        q.fill_(1.)
+        k.fill_(1.)
+    v = torch.randn(1, t, 1, 64, device="cuda", dtype=torch.float16)
+    dy = torch.randn_like(v)
+    cu = torch.empty(0, device="cuda", dtype=torch.int32)
+    seed = torch.tensor(123456789, device="cuda", dtype=torch.int64)
+    _, pq, pk = torch.ops.rosa_soft.forward(q, k, v, cu)
+    actual = torch.ops.rosa_soft.backward(q, k, v, dy, pq, pk, seed, cu, .8, .25, 2.2, 7)
+    leaves = [x.float().requires_grad_() for x in (q, k, v)]
+    expected = torch.autograd.grad(carrier(*leaves, .8, .25, 2.2, 123456789), leaves, dy.float())
+    for a, e in zip(actual, expected):
+        torch.testing.assert_close(a, e, rtol=5e-4, atol=5e-4)
+        assert (a - e).norm() / e.norm().clamp_min(1e-20) < 1e-4
 
 
 @CUDA
@@ -166,6 +191,28 @@ def test_torch_compile_dense_and_packed():
         value = loss(q, k, v, None if layout == "dense" else cu)
         value.backward()
         assert all(x.grad is not None for x in (q, k, v))
+
+
+@CUDA
+@pytest.mark.parametrize("layout", ["dense", "packed"])
+def test_torch_compile_fp16_long(layout):
+    torch.manual_seed(119)
+    q = torch.randn(1, 2049, 2, 8, device="cuda", dtype=torch.float16)
+    k = torch.randn_like(q)
+    v = torch.randn(1, 2049, 1, 64, device="cuda", dtype=torch.float16)
+    cu = None
+    if layout == "packed":
+        q, k, v = (x[0] for x in (q, k, v))
+        cu = torch.tensor([0, 0, 2049, 2049], device="cuda", dtype=torch.int32)
+    leaves = [x.requires_grad_() for x in (q, k, v)]
+    compiled = torch.compile(rosa_soft.rosa_soft, fullgraph=True)
+    expected = rosa_soft.rosa_soft(*leaves, cu)
+    actual = compiled(*leaves, cu)
+    assert torch.equal(actual, expected)
+    dy = torch.randn_like(expected)
+    for a, e in zip(torch.autograd.grad(actual, leaves, dy),
+                    torch.autograd.grad(expected, leaves, dy)):
+        torch.testing.assert_close(a, e, rtol=2e-3, atol=2e-4)
 
 
 @CUDA
