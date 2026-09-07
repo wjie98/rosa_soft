@@ -45,6 +45,13 @@ namespace {
 
 namespace wmma = nvcuda::wmma;
 
+constexpr int kProbabilityStride = 32;
+
+__device__ __forceinline__ int tile_index(int route, int row) {
+  // Permute aligned 8-half segments for both diagonal stores and ldmatrix.
+  return route * kProbabilityStride + (row ^ ((route & 6) << 2));
+}
+
 // Documented mma.m16n8k8 registers, independent of WMMA's opaque layout.
 struct Mma {
   float x[8] = {};
@@ -65,22 +72,22 @@ struct Mma {
 
   template <int K, bool Transpose = false>
   __device__ __forceinline__ void mul(
-      const __half* high, const __half* low, const __half* b, int sa, int sb) {
+      const __half* high, const __half* low, const __half* b, int origin, int sb) {
 #if __CUDA_ARCH__ >= 750
     const int lane = threadIdx.x % 32;
 #pragma unroll
     for (int k = 0; k < K; k += 8) {
       unsigned br[2];
       load<true>(br, b + (k + lane % 8) * sb + ((lane / 8) % 2) * 8);
+      // Swizzle the full coordinate, including the transposed tile's origin.
+      const int a_index = Transpose
+          ? tile_index(k + lane % 8, origin + ((lane / 8) % 2) * 8)
+          : tile_index(origin + lane % 16, k);
 #pragma unroll
       for (int part = 0; part < 2; ++part) {
         const __half* a = part == 0 ? high : low;
         unsigned ar[2];
-        if constexpr (Transpose) {
-          load<true>(ar, a + (k + lane % 8) * sa + ((lane / 8) % 2) * 8);
-        } else {
-          load<false>(ar, a + (lane % 16) * sa + k);
-        }
+        load<Transpose>(ar, a + a_index);
 #pragma unroll
         for (int n = 0; n < 2; ++n) {
           asm volatile(
@@ -116,10 +123,9 @@ constexpr int kRows = 32;
 constexpr int kDiagonals = 32;
 constexpr int kRouteCount = 64;
 constexpr int kValueDim = 64;
-// Physical strides keep WMMA loads off repeated shared-memory banks.
+// Physical input strides keep WMMA loads off repeated shared-memory banks.
 constexpr int kUtilityStride = 72;
 constexpr int kInputStride = 72;
-constexpr int kProbabilityStride = 40;
 constexpr int kTensorTile = 16;
 constexpr int kWarps = 8;
 constexpr int kThreads = kWarps * kWarpSize;
@@ -151,6 +157,7 @@ struct HalfPhaseStorage {
   RouteHalfStorage route;
 };
 
+static_assert(kRows == 32 && kRouteCount == 64, "Probability layout is 64x32");
 
 __global__ void initialize_prior_kernel(
     float* __restrict__ prior,
@@ -552,13 +559,13 @@ __global__ void backward_kernel(
                 row,
                 route);
             if ((mask & kGradValue) != 0) {
-              const int probability_index = route_offset * kProbabilityStride + lane;
+              const int index = tile_index(route_offset, lane);
               const float dropped_probability = probability * dropout_scale;
               const __half high = __float2half_rn(dropped_probability);
               half_phase.route.probability.high[
-                  probability_index] = high;
+                  index] = high;
               half_phase.route.probability.low[
-                  probability_index] = __float2half_rn(
+                  index] = __float2half_rn(
                       dropped_probability - __half2float(high));
             }
             if ((mask & (kGradQuery | kGradKey)) != 0) {
@@ -665,9 +672,9 @@ __global__ void backward_kernel(
                 (output_tile % (kValueDim / kTensorTile)) * kTensorTile;
             Mma acc;
             acc.mul<kRows>(
-                half_phase.route.probability.high + output_route * kProbabilityStride,
-                half_phase.route.probability.low + output_route * kProbabilityStride,
-                half_phase.grad + output_feature, kProbabilityStride, kInputStride);
+                half_phase.route.probability.high,
+                half_phase.route.probability.low,
+                half_phase.grad + output_feature, output_route, kInputStride);
             const bool defer = output_round == 1 && row_block > first_row_block;
 #pragma unroll
             for (int i = 0; i < 8; ++i) {
@@ -725,7 +732,7 @@ __global__ void backward_kernel(
                   row_offset - diagonal_offset + kDiagonals - 1;
               const float credit = score_tile[
                   diagonal_offset * kScoreStride + row_offset];
-              const int credit_index = route_offset * kProbabilityStride + row_offset;
+              const int credit_index = tile_index(route_offset, row_offset);
               const __half high = __float2half_rn(credit);
               half_phase.route.probability.high[credit_index] =
                   high;
@@ -770,9 +777,9 @@ __global__ void backward_kernel(
               if (owns_output) {
                 Mma acc;
                 acc.mul<kRows>(
-                    half_phase.route.probability.high + output_route * kProbabilityStride,
-                    half_phase.route.probability.low + output_route * kProbabilityStride,
-                    symbol_tile + output_bit, kProbabilityStride, kSymbolStride);
+                    half_phase.route.probability.high,
+                    half_phase.route.probability.low,
+                    symbol_tile + output_bit, output_route, kSymbolStride);
                 acc.reorder();
 #pragma unroll
                 for (int i = 0; i < 8; ++i) {
@@ -824,9 +831,9 @@ __global__ void backward_kernel(
               if (owns_output) {
                 Mma acc;
                 acc.mul<kRouteCount, true>(
-                    half_phase.route.probability.high + output_row,
-                    half_phase.route.probability.low + output_row,
-                    symbol_tile + output_bit, kProbabilityStride, kSymbolStride);
+                    half_phase.route.probability.high,
+                    half_phase.route.probability.low,
+                    symbol_tile + output_bit, output_row, kSymbolStride);
                 acc.reorder();
 #pragma unroll
                 for (int i = 0; i < 8; ++i) {

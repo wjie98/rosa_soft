@@ -129,10 +129,11 @@ def test_public_autograd_and_packed_empty_segment():
 def test_fp16_long_dispatch_matches_generic_value_width(layout, mask, bits):
     torch.manual_seed(99)
     t = 2049
-    q = torch.randn(1, t, 2, bits, device="cuda", dtype=torch.float16)
+    # H*T >= 8192 reaches the FP16 tiles when Q or K gradients are requested.
+    q = torch.randn(1, t, 4, bits, device="cuda", dtype=torch.float16)
     k = torch.randn_like(q)
     v = torch.randn(1, t, 1, 65, device="cuda", dtype=torch.float16)
-    dy = torch.randn(1, t, 2, 65, device="cuda", dtype=torch.float16)
+    dy = torch.randn(1, t, 4, 65, device="cuda", dtype=torch.float16)
     dy[..., -1] = 0
     cu = torch.empty(0, device="cuda", dtype=torch.int32)
     if layout == "packed":
@@ -162,13 +163,13 @@ def test_fp16_long_dispatch_matches_generic_value_width(layout, mask, bits):
 def test_fp16_long_dispatch_matches_definition(bits):
     torch.manual_seed(105 + bits)
     t = 2051
-    q = torch.randn(1, t, 1, bits, device="cuda", dtype=torch.float16)
+    q = torch.randn(1, t, 4, bits, device="cuda", dtype=torch.float16)
     k = torch.randn_like(q)
     if bits == 1:
         q.fill_(1.)
         k.fill_(1.)
     v = torch.randn(1, t, 1, 64, device="cuda", dtype=torch.float16)
-    dy = torch.randn_like(v)
+    dy = torch.randn(1, t, 4, 64, device="cuda", dtype=torch.float16)
     cu = torch.empty(0, device="cuda", dtype=torch.int32)
     seed = torch.tensor(123456789, device="cuda", dtype=torch.int64)
     _, pq, pk = torch.ops.rosa_soft.forward(q, k, v, cu)
@@ -197,7 +198,7 @@ def test_torch_compile_dense_and_packed():
 @pytest.mark.parametrize("layout", ["dense", "packed"])
 def test_torch_compile_fp16_long(layout):
     torch.manual_seed(119)
-    q = torch.randn(1, 2049, 2, 8, device="cuda", dtype=torch.float16)
+    q = torch.randn(1, 2049, 4, 8, device="cuda", dtype=torch.float16)
     k = torch.randn_like(q)
     v = torch.randn(1, 2049, 1, 64, device="cuda", dtype=torch.float16)
     cu = None

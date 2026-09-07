@@ -44,6 +44,46 @@ constexpr int kFusedThreads = 8 * kWarpSize;
 constexpr int kValueRouteTile = 32;
 constexpr int kMismatchGateCount = 33;
 
+template <int Rows, bool Binary>
+__device__ __forceinline__ void load_tile(
+    const c10::Half* __restrict__ input,
+    __half* __restrict__ tile,
+    int thread, int batch, int seq_len, int num_heads, int head, int first_row) {
+  constexpr int kPairs = kFusedValueDim / 2;
+  static_assert(Rows * kPairs % (2 * kFusedThreads) == 0,
+                "Load pairs must cover the tile exactly");
+#pragma unroll 1
+  for (int base = thread; base < Rows * kPairs; base += 2 * kFusedThreads) {
+    __half2 pending[2];
+    bool valid[2];
+    // Issue two independent loads before converting or writing either one.
+#pragma unroll
+    for (int i = 0; i < 2; ++i) {
+      const int pair = base + i * kFusedThreads;
+      const int row = first_row + pair / kPairs;
+      valid[i] = row >= (Binary ? 1 : 0) && row < seq_len;
+      pending[i] = __float2half2_rn(0.0f);
+      if (valid[i]) {
+        const int64_t source =
+            ((static_cast<int64_t>(batch) * seq_len + row) * num_heads + head) *
+                kFusedValueDim + (pair % kPairs) * 2;
+        pending[i] = *reinterpret_cast<const __half2*>(input + source);
+      }
+    }
+#pragma unroll
+    for (int i = 0; i < 2; ++i) {
+      const int pair = base + i * kFusedThreads;
+      __half2 x = pending[i];
+      if constexpr (Binary) {
+        // Invalid routes stay zero; sign(0) would give -1.
+        if (valid[i]) x = binary_sign_half2(x);
+      }
+      reinterpret_cast<__half2*>(tile)[
+          (pair / kPairs) * (kInputStride / 2) + pair % kPairs] = x;
+    }
+  }
+}
+
 enum ReplayPlan : int {
   kPlanFusedStats = 1 << 0,
   kPlanFusedReverse = 1 << 1,
@@ -179,42 +219,10 @@ __global__ void fused_slab_stats_fp16_kernel(
         kFusedDiagonals,
         slab_width - diagonal_tile * kFusedDiagonals);
 
-    constexpr int kFusedValuePairs = kFusedValueDim / 2;
-    for (int pair = thread;
-         pair < kFusedRows * kFusedValuePairs;
-         pair += blockDim.x) {
-      const int row_offset = pair / kFusedValuePairs;
-      const int feature = (pair - row_offset * kFusedValuePairs) * 2;
-      __half2 gradient = __float2half2_rn(0.0f);
-      if (row_offset < row_count) {
-        const int source_row = row_start + row_offset;
-        const int64_t source =
-            ((static_cast<int64_t>(batch) * seq_len + source_row) *
-                 num_heads +
-             head) * kFusedValueDim + feature;
-        gradient = *reinterpret_cast<const __half2*>(dy + source);
-      }
-      reinterpret_cast<__half2*>(grad_tile)[
-          row_offset * (kInputStride / 2) + feature / 2] = gradient;
-    }
-    for (int pair = thread;
-         pair < kFusedRoutes * kFusedValuePairs;
-         pair += blockDim.x) {
-      const int route_offset = pair / kFusedValuePairs;
-      const int feature = (pair - route_offset * kFusedValuePairs) * 2;
-      const int route = route_start + route_offset;
-      __half2 sign = __float2half2_rn(0.0f);
-      if (route >= 1 && route < seq_len) {
-        const int64_t source =
-            ((static_cast<int64_t>(batch) * seq_len + route) *
-                 num_value_heads +
-             value_head) * kFusedValueDim + feature;
-        sign = binary_sign_half2(
-            *reinterpret_cast<const __half2*>(value + source));
-      }
-      reinterpret_cast<__half2*>(value_tile)[
-          route_offset * (kInputStride / 2) + feature / 2] = sign;
-    }
+    load_tile<kFusedRows, false>(
+        dy, grad_tile, thread, batch, seq_len, num_heads, head, row_start);
+    load_tile<kFusedRoutes, true>(
+        value, value_tile, thread, batch, seq_len, num_value_heads, value_head, route_start);
 
     const int diagonal = thread / 8;
     const int delta = diagonal_start + diagonal;
