@@ -123,26 +123,36 @@ def test_public_autograd_and_packed_empty_segment():
 
 
 @CUDA
-def test_fp16_long_dispatch_matches_generic_value_width():
+@pytest.mark.parametrize("layout", ["dense", "packed"])
+@pytest.mark.parametrize("mask", range(1, 8))
+@pytest.mark.parametrize("bits", [1, 8, 16, 32])
+def test_fp16_long_dispatch_matches_generic_value_width(layout, mask, bits):
     torch.manual_seed(99)
-    t = 2048
-    q = torch.randn(1, t, 4, 8, device="cuda", dtype=torch.float16)
+    t = 2049
+    q = torch.randn(1, t, 2, bits, device="cuda", dtype=torch.float16)
     k = torch.randn_like(q)
-    v = torch.randn(1, t, 2, 65, device="cuda", dtype=torch.float16)
-    dy = torch.randn(1, t, 4, 65, device="cuda", dtype=torch.float16)
+    v = torch.randn(1, t, 1, 65, device="cuda", dtype=torch.float16)
+    dy = torch.randn(1, t, 2, 65, device="cuda", dtype=torch.float16)
     dy[..., -1] = 0
     cu = torch.empty(0, device="cuda", dtype=torch.int32)
-    seed = torch.empty(0, device="cuda", dtype=torch.int64)
+    if layout == "packed":
+        q, k, v, dy = (x[0] for x in (q, k, v, dy))
+        cu = torch.tensor([0, 0, t, t], device="cuda", dtype=torch.int32)
+    seed = torch.tensor(123456789, device="cuda", dtype=torch.int64)
     _, pq, pk = torch.ops.rosa_soft.forward(q, k, v[..., :64], cu)
     fast = torch.ops.rosa_soft.backward(
-        q, k, v[..., :64], dy[..., :64], pq, pk, seed, cu, 1.0, 0.0, 3.0, 7
+        q, k, v[..., :64], dy[..., :64], pq, pk, seed, cu, 0.8, 0.25, 2.2, mask
     )
     generic = torch.ops.rosa_soft.backward(
-        q, k, v, dy, pq, pk, seed, cu, 1.0, 0.0, 3.0, 7
+        q, k, v, dy, pq, pk, seed, cu, 0.8, 0.25, 2.2, mask
     )
-    torch.testing.assert_close(fast[0], generic[0], rtol=4e-2, atol=2e-3)
-    torch.testing.assert_close(fast[1], generic[1], rtol=4e-2, atol=2e-3)
-    torch.testing.assert_close(fast[2], generic[2][..., :64], rtol=4e-2, atol=2e-3)
+    for i, (actual, expected) in enumerate(zip(fast, generic)):
+        if mask & (1 << i):
+            if i == 2:
+                expected = expected[..., :64]
+            torch.testing.assert_close(actual, expected, rtol=4e-2, atol=2e-3)
+        else:
+            assert actual.numel() == 0
 
 
 @CUDA

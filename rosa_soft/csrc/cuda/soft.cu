@@ -37,7 +37,9 @@ constexpr int kFusedRows = 32;
 constexpr int kFusedDiagonals = 32;
 constexpr int kFusedScoreStride = kFusedDiagonals + 1;
 constexpr int kFusedRoutes = 64;
+constexpr int kFusedUtilityStride = 72;
 constexpr int kFusedValueDim = 64;
+constexpr int kInputStride = 72;
 constexpr int kFusedThreads = 8 * kWarpSize;
 constexpr int kValueRouteTile = 32;
 constexpr int kMismatchGateCount = 33;
@@ -137,11 +139,11 @@ __global__ void fused_slab_stats_fp16_kernel(
     float inverse_keep_probability) {
 #if __CUDA_ARCH__ >= 700
   __shared__ __align__(16) __half grad_tile[
-      kFusedRows * kFusedValueDim];
+      kFusedRows * kInputStride];
   __shared__ __align__(16) __half value_tile[
-      kFusedRoutes * kFusedValueDim];
+      kFusedRoutes * kInputStride];
   __shared__ __align__(16) float utility_tile[
-      kFusedRows * kFusedRoutes];
+      kFusedRows * kFusedUtilityStride];
   __shared__ float score_tile[kFusedRows * kFusedScoreStride];
   __shared__ float gate_lut[kMismatchGateCount];
 
@@ -160,9 +162,7 @@ __global__ void fused_slab_stats_fp16_kernel(
   const int value_head = head / (num_heads / num_value_heads);
   const int64_t series_offset = static_cast<int64_t>(series) * seq_len;
   const uint32_t mask = symbol_mask(symbol_dim);
-  constexpr int kDiagonalRounds =
-      kFusedDiagonals / (kFusedThreads / kWarpSize);
-  float score_carry[kDiagonalRounds] = {};
+  float score_carry = 0.0f;
   initialize_mismatch_gate_lut(gate_lut, symbol_dim, mismatch_unit);
 
   // The CTA begins at the first 32-row block that can contain one of its
@@ -175,11 +175,6 @@ __global__ void fused_slab_stats_fp16_kernel(
     const int row_count = min(kFusedRows, seq_len - row_start);
     const int route_start = row_start - diagonal_start -
         (kFusedDiagonals - 1) + 1;
-    const int row = row_start + lane;
-    const bool lane_has_row = lane < row_count;
-    const uint32_t query_word = lane_has_row
-        ? static_cast<uint32_t>(packed_query[series_offset + row])
-        : 0u;
     const int tile_width = min(
         kFusedDiagonals,
         slab_width - diagonal_tile * kFusedDiagonals);
@@ -199,7 +194,8 @@ __global__ void fused_slab_stats_fp16_kernel(
              head) * kFusedValueDim + feature;
         gradient = *reinterpret_cast<const __half2*>(dy + source);
       }
-      reinterpret_cast<__half2*>(grad_tile)[pair] = gradient;
+      reinterpret_cast<__half2*>(grad_tile)[
+          row_offset * (kInputStride / 2) + feature / 2] = gradient;
     }
     for (int pair = thread;
          pair < kFusedRoutes * kFusedValuePairs;
@@ -216,46 +212,43 @@ __global__ void fused_slab_stats_fp16_kernel(
         sign = binary_sign_half2(
             *reinterpret_cast<const __half2*>(value + source));
       }
-      reinterpret_cast<__half2*>(value_tile)[pair] = sign;
+      reinterpret_cast<__half2*>(value_tile)[
+          route_offset * (kInputStride / 2) + feature / 2] = sign;
     }
 
-    // Each warp scans one diagonal at a time across 32 query rows. Four
-    // rounds cover all 32 diagonals while keeping every warp active.
+    const int diagonal = thread / 8;
+    const int delta = diagonal_start + diagonal;
+    Affine prefix[4];
+    Affine total{1.0f, 0.0f};
 #pragma unroll
-    for (int round = 0; round < kDiagonalRounds; ++round) {
-      const int diagonal_offset =
-          round * (kFusedThreads / kWarpSize) + warp;
-      const int delta = diagonal_start + diagonal_offset;
-      const bool active = lane_has_row &&
-          diagonal_offset < tile_width &&
-          delta <= row;
-      const int key_position = row - delta;
+    for (int i = 0; i < 4; ++i) {
+      const int row = row_start + (thread % 8) * 4 + i;
+      const bool active = row < seq_len && diagonal < tile_width && delta <= row;
       const float gate = active
           ? mismatch_gate_from_lut(
-                query_word,
-                static_cast<uint32_t>(
-                    packed_key[series_offset + key_position]),
-                mask,
-                gate_lut)
+                packed_query[series_offset + row],
+                packed_key[series_offset + row - delta], mask, gate_lut)
           : 1.0f;
-      float coefficient = gate;
-      float bias = active ? gate : 0.0f;
-      warp_forward_affine_scan(coefficient, bias);
-      const float score =
-          fmaf(coefficient, score_carry[round], bias);
-      if (lane_has_row) {
-        score_tile[lane * kFusedScoreStride + diagonal_offset] =
-            active ? score : 0.0f;
+      total = Compose{}(total, Affine{gate, active ? gate : 0.0f});
+      prefix[i] = total;
+    }
+    group_affine_scan(prefix, score_carry);
+    score_carry = __shfl_sync(0xffffffffu, prefix[3].b, 7, 8);
+#pragma unroll
+    for (int i = 0; i < 4; ++i) {
+      const int r = (thread % 8) * 4 + i;
+      if (r < row_count) {
+        score_tile[r * kFusedScoreStride + diagonal] =
+            diagonal < tile_width && delta <= row_start + r ? prefix[i].b : 0.0f;
       }
-      score_carry[round] = __shfl_sync(
-          0xffffffffu, score, row_count - 1);
     }
     __syncthreads();
 
     constexpr int kRouteTiles = kFusedRoutes / kTensorTile;
     constexpr int kMmaWarps =
         (kFusedRows / kTensorTile) * kRouteTiles;
-    if (warp < kMmaWarps) {
+    // These two corners of the rectangle contain no diagonal candidates.
+    if (warp < kMmaWarps && warp != 3 && warp != 4) {
       const int output_row = (warp / kRouteTiles) * kTensorTile;
       const int output_route = (warp % kRouteTiles) * kTensorTile;
       wmma::fragment<
@@ -288,18 +281,18 @@ __global__ void fused_slab_stats_fp16_kernel(
             signed_value;
         wmma::load_matrix_sync(
             gradient,
-            grad_tile + output_row * kFusedValueDim + feature_start,
-            kFusedValueDim);
+            grad_tile + output_row * kInputStride + feature_start,
+            kInputStride);
         wmma::load_matrix_sync(
             signed_value,
-            value_tile + output_route * kFusedValueDim + feature_start,
-            kFusedValueDim);
+            value_tile + output_route * kInputStride + feature_start,
+            kInputStride);
         wmma::mma_sync(accumulator, gradient, signed_value, accumulator);
       }
       wmma::store_matrix_sync(
-          utility_tile + output_row * kFusedRoutes + output_route,
+          utility_tile + output_row * kFusedUtilityStride + output_route,
           accumulator,
-          kFusedRoutes,
+          kFusedUtilityStride,
           wmma::mem_row_major);
     }
     __syncthreads();
@@ -328,7 +321,7 @@ __global__ void fused_slab_stats_fp16_kernel(
             head,
             row,
             route) * utility_tile[
-                reduction_row * kFusedRoutes + route_offset];
+                reduction_row * kFusedUtilityStride + route_offset];
         logit = transformed.route_score * scale - row_prior[row];
       }
       const SoftmaxStats item =

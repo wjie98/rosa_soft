@@ -1,94 +1,144 @@
 # rosa_soft
 
-`rosa_soft` is a small PyTorch extension for ROSA's discrete suffix router.
-It has one training operator and one exact CPU inference implementation.
+A PyTorch extension for training and running ROSA, a discrete suffix-based
+retrieval operator. It combines an exact CUDA forward with a dense surrogate
+backward, and provides a C++ suffix automaton for stateful CPU inference.
 
-```python
-from rosa_soft import RosaSam, rosa_hard, rosa_soft
+- Exact, causal, unlimited-length suffix matching.
+- Binary forward values with surrogate gradients for Q, K, and V.
+- A single training API for dense and packed sequences, including grouped
+  value heads.
+- FP16, BF16, and FP32 inputs, with FP32 gradient accumulation.
+- PyTorch autograd and `torch.compile` integration.
+
+## Installation
+
+Requires Python 3.10+, PyTorch 2.11, and a C++17 compiler. CUDA training also
+requires a CUDA toolkit compatible with the installed PyTorch build.
+
+Install PyTorch first, then build the extension against it:
+
+```bash
+pip install --no-build-isolation .
 ```
 
-## Semantics
+CUDA is detected automatically. Set `USE_CUDA=1` to require a CUDA build,
+or `USE_CUDA=0` for CPU-only inference and validation. Set `CUDA_HOME` when
+the toolkit is not on the default search path.
 
-Q, K, and V are quantized by sign (`x > 0` is `+1`; otherwise `-1`). At query
-position `i`, ROSA searches all historical K suffixes ending at `j < i` and
-selects the longest suffix equal to the Q suffix ending at `i`. Equal lengths
-select the latest `j`. A match ending at `j` returns binary `V[j + 1]`; no
-match returns zero.
+## Quick Start
 
-The search is unlimited. There is no suffix window, candidate pruning, top-k,
-or approximate hard route.
+```python
+import torch
+from rosa_soft import rosa_soft
 
-## Training
+q = torch.randn(1, 2048, 4, 8, device="cuda",
+                dtype=torch.float16, requires_grad=True)
+k = torch.randn_like(q, requires_grad=True)
+v = torch.randn(1, 2048, 2, 64, device="cuda",
+                dtype=torch.float16, requires_grad=True)
+
+y = rosa_soft(q, k, v)  # [1, 2048, 4, 64]
+y.float().square().mean().backward()
+```
+
+## Matching Semantics
+
+Each Q/K vector represents a binary symbol: positive elements become `+1`,
+and zero or negative elements become `-1`. At query position `i`, ROSA
+selects the longest exact match between the Q suffix ending at `i` and a
+historical K suffix ending at `j < i`. Ties select the latest `j`.
+
+The output is binary `V[j + 1]`. If no symbol matches, the output is zero.
+Matching has no suffix window or candidate limit. The CUDA DP and CPU suffix
+automaton implement the same rule.
+
+## Training API
 
 ```python
 y = rosa_soft(
-    q,                       # [B,T,H,D]
-    k,                       # [B,T,H,D]
-    v,                       # [B,T,Hv,Dv], H % Hv == 0
+    q, k, v,
+    cu_seqlens=None,
     scale=1.0,
     dropout_p=0.0,
     mismatch_scale=3.0,
 )
 ```
 
-The CUDA forward is the exact hard operation. The backward is a dense
-surrogate over every causal candidate:
+| Argument | Description |
+| --- | --- |
+| `q`, `k` | Same-shaped CUDA tensors: `[B, T, H, D]` or packed `[N, H, D]`; `1 <= D <= 32`. |
+| `v` | `[B, T, Hv, Dv]` or `[N, Hv, Dv]`; `H % Hv == 0`. Same device and dtype as Q/K. |
+| `cu_seqlens` | Required for packed input: a nondecreasing CUDA int32 vector starting at zero and ending at `N`. Omit for dense input. |
+| `scale` | Positive multiplier of the surrogate logits. |
+| `dropout_p` | Probability of dropping a post-softmax surrogate weight, with inverse-keep scaling. Default: zero. |
+| `mismatch_scale` | Positive penalty for symbol mismatch in the surrogate recurrence. |
 
-```text
-m[i,a] = mean_d (1 - q[i,d] k[a-1,d]) / 2
-g[i,a] = exp(-mismatch_scale * m[i,a])
-S[i,a] = g[i,a] * (1 + S[i-1,a-1])
-U(S)    = (sqrt(2) + 1) * (sqrt(1 + S) - 1)
-z[i,a] = scale * U(S[i,a]) - log(i)    for 1 <= a <= i
-z[i,0] = scale * 0.5
-p[i,:] = softmax(z[i,:])
-```
+Output shape is `[B, T, H, Dv]` or `[N, H, Dv]`. Empty packed segments
+are supported; neither matches nor gradients cross sequence boundaries.
 
-The sign operation uses the softsign derivative
-`1 / (1 + abs(x))^2` only in backward. `dropout_p` is the probability of
-dropping a post-softmax route and uses inverse-keep scaling, matching PyTorch
-attention terminology. Forward never sees a soft value or dropout mask.
+The forward is always hard and binary. Continuous scores and dropout exist
+only in backward. The gradient is a dense surrogate over all causal
+candidates, not the derivative of the discrete routing decision. Parameters
+are static; there is no internal training schedule. Higher-order gradients
+are not supported.
 
-Packed input uses `[N,H,D]` and CUDA int32 cumulative offsets:
+CUDA training performs quadratic candidate work. Packed backward runs each
+nonempty segment separately and synchronizes offsets to the host; it is not
+a single fused variable-length kernel. Use the CPU automaton for stateful
+long-context inference.
 
-```python
-y = rosa_soft(q, k, v, cu_seqlens)
-```
+## CPU Inference
 
-The public function is the same for dense and packed layouts. Packed backward
-reuses the dense kernel per segment, so its work is `O(sum(length**2))` rather
-than scanning across sequence boundaries.
-
-## Inference And Validation
-
-`RosaSam` is a stateful synchronous CPU suffix automaton. It returns the local
-matched K end and can retain history across calls:
+For a complete sequence, `rosa_hard` returns both values and matched K ends:
 
 ```python
-sam = RosaSam(num_heads=8, symbol_bits=8)
-matched_key_end = sam.update(q, k)
+from rosa_soft import rosa_hard
+
+y, matched_key_end = rosa_hard(q, k, v)
+```
+
+It accepts dense or packed inputs, using the same optional `cu_seqlens`
+argument. No-match ends are `-1`; packed ends are local to each sequence.
+
+For incremental routing, retain a `RosaSam` instance:
+
+```python
+from rosa_soft import RosaSam
+
+sam = RosaSam(num_heads=4, symbol_bits=8)
+ends = sam.update(q_chunk, k_chunk)
+# Later updates continue the same sequence histories.
+ends = sam.update(next_q_chunk, next_k_chunk)
 sam.reset()
 ```
 
-`rosa_hard(q, k, v, cu_seqlens=None)` creates a temporary SAM, gathers binary
-successor V, and returns `(output, matched_key_end)`. Q/K may originate on a
-GPU, but matching is staged through CPU and is therefore intended for exact
-inference or validation, not training.
+`RosaSam` stores Q/K matching state, not V. Ends refer to the accumulated
+sequence history. Keep the sequence count and ordering fixed between updates,
+and do not update one instance concurrently. `update_packed` accepts
+prepacked int32 symbols of shape `[B, T, H]` or `[N, H]`.
 
-## Install
+CPU matching is synchronous. GPU inputs are staged through the host; these
+interfaces do not provide asynchronous transfer overlap or training gradients.
 
-Install PyTorch first, then build against that exact ABI:
+## Development
 
 ```bash
-pip install --no-build-isolation .
+pip install --no-build-isolation ".[test]"
+python -m pytest -q
 ```
 
-Set `USE_CUDA=0` for a SAM-only CPU build or `USE_CUDA=1` to require CUDA.
-The default is automatic. The CUDA implementation supports FP16, BF16, and
-FP32 with Q/K symbol width `1..32`.
+Tests compare hard routing with an independent dynamic-programming oracle
+and surrogate gradients with an independent PyTorch definition. They cover
+causality, latest-match ties, unbounded suffixes, chunked inference, packed
+sequences, dtypes, gradient masks, dropout, and compilation.
 
-The pre-cleanup research tree is preserved at tag
-`rosa-soft-research-archive-v1` (commit `582fe45`). Frozen dense estimator
-semantics remain available at tag `rosa-soft-dense-unbounded-v1`.
+See [Architecture and Gradient Definition](docs/DESIGN.md) for the equations
+and implementation structure.
 
-See [docs/DESIGN.md](docs/DESIGN.md) for implementation boundaries.
+## Acknowledgements
+
+ROSA was introduced by **Peng Bo (BlinkDL)**. This project builds on his ROSA
+work in [RWKV-LM / RWKV-v8](https://github.com/BlinkDL/RWKV-LM/tree/main/RWKV-v8).
+We thank Peng Bo and the [RWKV-LM project](https://github.com/BlinkDL/RWKV-LM)
+for the original design and implementation.

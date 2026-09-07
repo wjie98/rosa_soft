@@ -48,6 +48,26 @@ diagonal and has no `W` parameter.
 
 ## Dense Soft VJP
 
+For zero-based query position `i`, route `a` returns `V[a]` and matches
+against the key ending at `a - 1`. With binary Q/K signs, the carrier is:
+
+```text
+m[i,a] = mean_d (1 - q[i,d] k[a-1,d]) / 2
+g[i,a] = exp(-mismatch_scale * m[i,a])
+S[i,a] = g[i,a] * (1 + S[i-1,a-1])
+U(S)   = (sqrt(2) + 1) * (sqrt(1 + S) - 1)
+z[i,a] = scale * U(S[i,a]) - log(i)    for 1 <= a <= i
+z[i,0] = scale * 0.5
+p[i,:] = softmax(z[i,:])
+carrier[i] = sum_{a=1..i} dropout(p[i,a]) * sign(V[a])
+```
+
+Out-of-domain suffix states are zero. Route zero is a null route with zero
+value, not `V[0]`; row zero has only this route and never evaluates `log(0)`.
+All signs use `1 / (1 + abs(x))^2` as their backward derivative. Dropout is
+applied after softmax and only to the carrier. The actual forward uses only
+the exact hard route.
+
 `cuda/soft.cu` is the generic FP16/BF16/FP32 implementation. It scans exact
 diagonal suffix recurrence in automatically sized tiles, maintains online
 softmax statistics, replays score tiles for Q/K/V credit, and stores no full
@@ -59,11 +79,20 @@ score/statistics/reverse work, uses checkpoint replay, and uses tensor cores
 where the dense V contraction is suitable. Dispatch is internal and exact
 with respect to the same surrogate.
 
+Statistics scan four consecutive steps per thread and combine the local
+affine maps using an ordered eight-lane CUB scan. Checkpoint generation uses
+the corresponding ordered reduction. Affine composition is associative but
+not commutative; a reordered reduction would change the suffix recurrence.
+Physical shared-memory strides are padded for Tensor Core loads and utility
+reads. Two empty corners of the utility rectangle are not computed; every
+actual causal candidate is still included. Probability and credit contractions
+retain high and residual FP16 components with FP32 accumulation.
+
 Packed backward copies only the small offset vector to host, then applies the
 same dense implementation to each nonempty segment and writes gradients back
-to packed storage. This keeps one mathematical implementation and avoids the
-old finite-window row kernel's cubic behavior. The metadata synchronization
-and per-segment launches are the known varlen tradeoff.
+to packed storage. This keeps one mathematical implementation and limits work
+to the sum of squared segment lengths. Metadata synchronization and
+per-segment launches are the variable-length execution tradeoff.
 
 ## CPU SAM
 

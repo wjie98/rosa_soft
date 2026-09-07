@@ -49,6 +49,10 @@ constexpr int kRows = 32;
 constexpr int kDiagonals = 32;
 constexpr int kRouteCount = 64;
 constexpr int kValueDim = 64;
+// Physical strides keep WMMA loads off repeated shared-memory banks.
+constexpr int kUtilityStride = 72;
+constexpr int kInputStride = 72;
+constexpr int kProbabilityStride = 40;
 constexpr int kTensorTile = 16;
 constexpr int kWarps = 8;
 constexpr int kThreads = kWarps * kWarpSize;
@@ -62,13 +66,13 @@ constexpr int kMismatchGateCount = 33;
 
 
 struct __align__(16) ProbabilityStorage {
-  __half probability_high[kRouteCount * kRows];
-  __half probability_low[kRouteCount * kRows];
+  __half probability_high[kRouteCount * kProbabilityStride];
+  __half probability_low[kRouteCount * kProbabilityStride];
 };
 
 
 union RouteHalfStorage {
-  __half value[kRouteCount * kValueDim];
+  __half value[kRouteCount * kInputStride];
   ProbabilityStorage probability;
 };
 
@@ -76,13 +80,13 @@ union RouteHalfStorage {
 struct HalfPhaseStorage {
   // The same output gradient is consumed by utility and dV, so keep it outside
   // the value/probability overlay instead of loading it twice per row block.
-  __half grad[kRows * kValueDim];
+  __half grad[kRows * kInputStride];
   RouteHalfStorage route;
 };
 
 
 union FloatPhaseStorage {
-  float utility[kRows * kRouteCount];
+  float utility[kRows * kUtilityStride];
   float mma_output[kWarps * kTensorTile * kTensorTile];
 };
 
@@ -172,7 +176,7 @@ __global__ void backward_kernel(
       const int batch = series / num_heads;
       const int value_head = head / (num_heads / num_value_heads);
       const int64_t series_offset = static_cast<int64_t>(series) * seq_len;
-      float score_carry[kDiagonalRounds] = {};
+      float score_carry = 0.0f;
 
       // Save only the incoming state of each 32-row replay interval. Scratch is
       // private to the physical CTA and reused for every logical task it owns.
@@ -180,38 +184,31 @@ __global__ void backward_kernel(
            row_block < row_block_count;
            ++row_block) {
         const int row_start = row_block * kRows;
-        const int row = row_start + lane;
-        const bool lane_has_row = row < seq_len;
-        const uint32_t query_word = lane_has_row
-            ? static_cast<uint32_t>(packed_query[series_offset + row])
-            : 0u;
+        const int group = thread / 8;
+        const int local_lane = thread % 8;
+        const int delta = diagonal_start + group;
+        if (local_lane == 0) {
+          block_checkpoints[
+              static_cast<int64_t>(row_block) * kDiagonals + group] = score_carry;
+        }
+        Affine local{1.0f, 0.0f};
 #pragma unroll
-        for (int round = 0; round < kDiagonalRounds; ++round) {
-          const int diagonal_offset = round * kWarps + warp;
-          const int delta = diagonal_start + diagonal_offset;
-          if (lane == 0) {
-            block_checkpoints[
-                static_cast<int64_t>(row_block) * kDiagonals +
-                diagonal_offset] = score_carry[round];
-          }
-          const bool active = diagonal_offset < tile_width &&
-              lane_has_row && delta <= row;
+        for (int i = 0; i < 4; ++i) {
+          const int row = row_start + local_lane * 4 + i;
+          const bool active = group < tile_width && row < seq_len && delta <= row;
           const float gate = active
               ? mismatch_gate_from_lut(
-                    query_word,
-                    static_cast<uint32_t>(
-                        packed_key[series_offset + row - delta]),
-                    bit_mask,
-                    gate_lut)
+                    packed_query[series_offset + row],
+                    packed_key[series_offset + row - delta], bit_mask, gate_lut)
               : 1.0f;
-          float coefficient = gate;
-          float bias = active ? gate : 0.0f;
-          warp_forward_affine_scan(coefficient, bias);
-          const float score =
-              fmaf(coefficient, score_carry[round], bias);
-          score_carry[round] =
-              __shfl_sync(0xffffffffu, score, kRows - 1);
+          local = Compose{}(local, Affine{gate, active ? gate : 0.0f});
         }
+        using Reduce = cub::WarpReduce<Affine, 8>;
+        __shared__ typename Reduce::TempStorage storage[kDiagonals];
+        const Affine total = Reduce(storage[group]).Reduce(local, Compose{});
+        __syncwarp();
+        const float score = fmaf(total.a, score_carry, total.b);
+        score_carry = __shfl_sync(0xffffffffu, score, 0, 8);
       }
       __syncthreads();
 
@@ -294,7 +291,8 @@ __global__ void backward_kernel(
                 gradient = *reinterpret_cast<const __half2*>(
                     dy + source);
               }
-              reinterpret_cast<__half2*>(half_phase.grad)[pair] = gradient;
+              reinterpret_cast<__half2*>(half_phase.grad)[
+                  row_offset * (kInputStride / 2) + feature / 2] = gradient;
             }
             for (int pair = loader_thread;
                  pair < kRouteCount * kValuePairs;
@@ -311,7 +309,8 @@ __global__ void backward_kernel(
                 value_sign = binary_sign_half2(
                     *reinterpret_cast<const __half2*>(value + source));
               }
-              reinterpret_cast<__half2*>(half_phase.route.value)[pair] =
+              reinterpret_cast<__half2*>(half_phase.route.value)[
+                  route_offset * (kInputStride / 2) + feature / 2] =
                   value_sign;
             }
           }
@@ -356,7 +355,8 @@ __global__ void backward_kernel(
               gradient = *reinterpret_cast<const __half2*>(
                   dy + source);
             }
-            reinterpret_cast<__half2*>(half_phase.grad)[pair] = gradient;
+            reinterpret_cast<__half2*>(half_phase.grad)[
+                row_offset * (kInputStride / 2) + feature / 2] = gradient;
           }
           for (int pair = thread;
                pair < kRouteCount * kValuePairs;
@@ -373,7 +373,8 @@ __global__ void backward_kernel(
               value_sign = binary_sign_half2(
                   *reinterpret_cast<const __half2*>(value + source));
             }
-            reinterpret_cast<__half2*>(half_phase.route.value)[pair] =
+            reinterpret_cast<__half2*>(half_phase.route.value)[
+                route_offset * (kInputStride / 2) + feature / 2] =
                 value_sign;
           }
         }
@@ -384,56 +385,59 @@ __global__ void backward_kernel(
             (warp / kUtilityRouteTiles) * kTensorTile;
         const int utility_route =
             (warp % kUtilityRouteTiles) * kTensorTile;
-        wmma::fragment<
-            wmma::accumulator,
-            kTensorTile,
-            kTensorTile,
-            kTensorTile,
-            float>
-            utility_accumulator;
-        wmma::fill_fragment(utility_accumulator, 0.0f);
+        // The unused corners contain no causal diagonal candidates.
+        if (warp != 3 && warp != 4) {
+          wmma::fragment<
+              wmma::accumulator,
+              kTensorTile,
+              kTensorTile,
+              kTensorTile,
+              float>
+              utility_accumulator;
+          wmma::fill_fragment(utility_accumulator, 0.0f);
 #pragma unroll
-        for (int feature_start = 0;
-             feature_start < kValueDim;
-             feature_start += kTensorTile) {
-          wmma::fragment<
-              wmma::matrix_a,
-              kTensorTile,
-              kTensorTile,
-              kTensorTile,
-              __half,
-              wmma::row_major>
-              gradient;
-          wmma::fragment<
-              wmma::matrix_b,
-              kTensorTile,
-              kTensorTile,
-              kTensorTile,
-              __half,
-              wmma::col_major>
-              signed_value;
-          wmma::load_matrix_sync(
-              gradient,
-              half_phase.grad +
-                  utility_row * kValueDim + feature_start,
-              kValueDim);
-          wmma::load_matrix_sync(
-              signed_value,
-              half_phase.route.value +
-                  utility_route * kValueDim + feature_start,
-              kValueDim);
-          wmma::mma_sync(
+          for (int feature_start = 0;
+               feature_start < kValueDim;
+               feature_start += kTensorTile) {
+            wmma::fragment<
+                wmma::matrix_a,
+                kTensorTile,
+                kTensorTile,
+                kTensorTile,
+                __half,
+                wmma::row_major>
+                gradient;
+            wmma::fragment<
+                wmma::matrix_b,
+                kTensorTile,
+                kTensorTile,
+                kTensorTile,
+                __half,
+                wmma::col_major>
+                signed_value;
+            wmma::load_matrix_sync(
+                gradient,
+                half_phase.grad +
+                    utility_row * kInputStride + feature_start,
+                kInputStride);
+            wmma::load_matrix_sync(
+                signed_value,
+                half_phase.route.value +
+                    utility_route * kInputStride + feature_start,
+                kInputStride);
+            wmma::mma_sync(
+                utility_accumulator,
+                gradient,
+                signed_value,
+                utility_accumulator);
+          }
+          wmma::store_matrix_sync(
+              float_phase.utility +
+                  utility_row * kUtilityStride + utility_route,
               utility_accumulator,
-              gradient,
-              signed_value,
-              utility_accumulator);
+              kUtilityStride,
+              wmma::mem_row_major);
         }
-        wmma::store_matrix_sync(
-            float_phase.utility +
-                utility_row * kRouteCount + utility_route,
-            utility_accumulator,
-            kRouteCount,
-            wmma::mem_row_major);
         __syncthreads();
 
         if ((mask & kGradValue) != 0) {
@@ -486,7 +490,7 @@ __global__ void backward_kernel(
                 row,
                 route);
             if ((mask & kGradValue) != 0) {
-              const int probability_index = route_offset * kRows + lane;
+              const int probability_index = route_offset * kProbabilityStride + lane;
               const float dropped_probability = probability * dropout_scale;
               const __half high = __float2half_rn(dropped_probability);
               half_phase.route.probability.probability_high[
@@ -498,7 +502,7 @@ __global__ void backward_kernel(
             if ((mask & (kGradQuery | kGradKey)) != 0) {
               direct_vjp = scale * probability *
                   (dropout_scale * float_phase.utility[
-                       lane * kRouteCount + route_offset] -
+                       lane * kUtilityStride + route_offset] -
                    row_utility) *
                   transformed.raw_vjp_multiplier;
             }
@@ -628,13 +632,13 @@ __global__ void backward_kernel(
               wmma::load_matrix_sync(
                   probability,
                   half_phase.route.probability.probability_high +
-                      output_route * kRows + query_offset,
-                  kRows);
+                      output_route * kProbabilityStride + query_offset,
+                  kProbabilityStride);
               wmma::load_matrix_sync(
                   gradient,
                   half_phase.grad +
-                      query_offset * kValueDim + output_feature,
-                  kValueDim);
+                      query_offset * kInputStride + output_feature,
+                  kInputStride);
               wmma::mma_sync(
                   value_accumulator,
                   probability,
@@ -643,8 +647,8 @@ __global__ void backward_kernel(
               wmma::load_matrix_sync(
                   probability,
                   half_phase.route.probability.probability_low +
-                      output_route * kRows + query_offset,
-                  kRows);
+                      output_route * kProbabilityStride + query_offset,
+                  kProbabilityStride);
               wmma::mma_sync(
                   value_accumulator,
                   probability,
@@ -681,10 +685,10 @@ __global__ void backward_kernel(
         __syncthreads();
 
         if constexpr (TensorSymbolMask != 0) {
-          constexpr int kSymbolStride = 32;
+          constexpr int kSymbolStride = 40;
           __half* const symbol_tile =
               reinterpret_cast<__half*>(float_phase.utility);
-          constexpr int kProbabilityElements = kRouteCount * kRows;
+          constexpr int kProbabilityElements = kRouteCount * kProbabilityStride;
           if ((mask & kGradValue) == 0) {
             for (int index = thread;
                  index < kProbabilityElements;
@@ -711,7 +715,7 @@ __global__ void backward_kernel(
                   row_offset - diagonal_offset + kDiagonals - 1;
               const float credit = score_tile[
                   diagonal_offset * kScoreStride + row_offset];
-              const int credit_index = route_offset * kRows + row_offset;
+              const int credit_index = route_offset * kProbabilityStride + row_offset;
               const __half high = __float2half_rn(credit);
               half_phase.route.probability.probability_high[credit_index] =
                   high;
@@ -789,8 +793,8 @@ __global__ void backward_kernel(
                   wmma::load_matrix_sync(
                       credit,
                       half_phase.route.probability.probability_high +
-                          output_route * kRows + query_start,
-                      kRows);
+                          output_route * kProbabilityStride + query_start,
+                      kProbabilityStride);
                   wmma::mma_sync(
                       key_accumulator,
                       credit,
@@ -799,8 +803,8 @@ __global__ void backward_kernel(
                   wmma::load_matrix_sync(
                       credit,
                       half_phase.route.probability.probability_low +
-                          output_route * kRows + query_start,
-                      kRows);
+                          output_route * kProbabilityStride + query_start,
+                      kProbabilityStride);
                   wmma::mma_sync(
                       key_accumulator,
                       credit,
@@ -908,8 +912,8 @@ __global__ void backward_kernel(
                   wmma::load_matrix_sync(
                       credit,
                       half_phase.route.probability.probability_high +
-                          route_offset * kRows + output_row,
-                      kRows);
+                          route_offset * kProbabilityStride + output_row,
+                      kProbabilityStride);
                   wmma::mma_sync(
                       query_accumulator,
                       credit,
@@ -918,8 +922,8 @@ __global__ void backward_kernel(
                   wmma::load_matrix_sync(
                       credit,
                       half_phase.route.probability.probability_low +
-                          route_offset * kRows + output_row,
-                      kRows);
+                          route_offset * kProbabilityStride + output_row,
+                      kProbabilityStride);
                   wmma::mma_sync(
                       query_accumulator,
                       credit,

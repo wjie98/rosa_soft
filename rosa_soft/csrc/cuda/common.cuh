@@ -9,6 +9,8 @@
 #include <cuda.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
+#include <cub/warp/warp_reduce.cuh>
+#include <cub/warp/warp_scan.cuh>
 
 #include <cfloat>
 #include <cstdint>
@@ -39,6 +41,32 @@ __device__ __forceinline__ uint32_t symbol_mask(int d) {
 __device__ __forceinline__ __half2 binary_sign_half2(__half2 x) {
   const __half2 p = __hgt2(x, __float2half2_rn(0.0f));
   return __hfma2(p, __float2half2_rn(2.0f), __float2half2_rn(-1.0f));
+}
+
+struct Affine {
+  float a, b;
+};
+
+struct Compose {
+  __device__ __forceinline__ Affine operator()(Affine left, Affine right) const {
+    return {right.a * left.a, fmaf(right.a, left.b, right.b)};
+  }
+};
+
+// Eight ordered lanes each own four consecutive recurrence steps.
+__device__ __forceinline__ void group_affine_scan(
+    Affine (&prefix)[4], float incoming) {
+  using Scan = cub::WarpScan<Affine, 8>;
+  __shared__ typename Scan::TempStorage storage[32];
+  Affine preceding;
+  Scan(storage[threadIdx.x / 8]).ExclusiveScan(
+      prefix[3], preceding, Affine{1.0f, 0.0f}, Compose{});
+  __syncwarp();
+  const float start = fmaf(preceding.a, incoming, preceding.b);
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+    prefix[i].b = fmaf(prefix[i].a, start, prefix[i].b);
+  }
 }
 
 __device__ __forceinline__ void warp_forward_affine_scan(float& a, float& b) {
