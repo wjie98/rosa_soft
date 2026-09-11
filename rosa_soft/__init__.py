@@ -29,8 +29,14 @@ def _has_cuda() -> bool:
 
 
 if _has_cuda():
+    _bitflip = _importlib.import_module(f"{__name__}._bitflip")
+    from .bitflip import rosa_bitflip
     from .soft import rosa_soft
 else:
+
+    def rosa_bitflip(q, k, v, *, rows=256):
+        del q, k, v, rows
+        raise RuntimeError("rosa_bitflip requires a CUDA build")
 
     def rosa_soft(
         q,
@@ -46,4 +52,4 @@ else:
         raise RuntimeError("rosa_soft requires a CUDA build")
 
 
-__all__ = ["__version__", "RosaSam", "rosa_hard", "rosa_soft"]
+__all__ = ["__version__", "RosaSam", "rosa_hard", "rosa_soft", "rosa_bitflip"]

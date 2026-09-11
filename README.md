@@ -1,15 +1,20 @@
 # rosa_soft
 
 A PyTorch extension for training and running ROSA, a discrete suffix-based
-retrieval operator. It combines an exact CUDA forward with a dense surrogate
-backward, and provides a C++ suffix automaton for stateful CPU inference.
+retrieval operator. It provides an exact CUDA forward with a choice of dense
+soft or independent-bit backward estimators, and a C++ suffix automaton for
+stateful CPU inference.
 
 - Exact, causal, unlimited-length suffix matching.
 - Binary forward values with surrogate gradients for Q, K, and V.
-- A single training API for dense and packed sequences, including grouped
-  value heads.
+- Dense and packed soft training, and dense bitflip training, including
+  grouped value heads.
 - FP16, BF16, and FP32 inputs, with FP32 gradient accumulation.
 - PyTorch autograd and `torch.compile` integration.
+
+`rosa_soft` remains the default dense/packed training operator.
+`rosa_bitflip` is an explicit alternative for dense sequences; the library
+never switches estimators automatically.
 
 ## Installation
 
@@ -88,6 +93,51 @@ nonempty segment separately and synchronizes offsets to the host; it is not
 a single fused variable-length kernel. Use the CPU automaton for stateful
 long-context inference.
 
+## Bitflip Training
+
+```python
+from rosa_soft import rosa_bitflip
+
+y = rosa_bitflip(q, k, v, rows=256)
+```
+
+Q/K are dense `[B,T,H,D]`, with `1 <= D <= 32`; V is `[B,T,Hv,Dv]`,
+with `H % Hv == 0`. Inputs must be finite CUDA tensors with matching
+FP16/BF16/FP32 dtype. Noncontiguous inputs and empty T are supported.
+Packed sequences are not supported: do not concatenate independent
+documents into one dense sequence.
+
+The hard output follows the same unlimited matching rule as `rosa_soft`.
+For Q/K, backward evaluates every independent activation-bit output edit,
+contracts its output difference with fixed upstream dY, and applies the
+softsign factor. V gradients follow the hard route only, unlike the dense
+V carrier used by `rosa_soft`. This is not an unbiased derivative of an
+arbitrary nonlinear task loss or a simultaneous shared-parameter edit.
+
+`rows` is an integer in [1,256] limiting the live work band. It controls
+workspace, not suffix length or which edits contribute. Time is quadratic
+in sequence length at fixed widths; working space is linear at fixed rows,
+but has a larger constant than the soft implementation. Highly repetitive
+symbols can be substantially slower than random symbols. Neither estimator
+is universally faster or guarantees better training.
+
+Gradients accumulate in FP32 with nondeterministic atomic summation.
+Strict deterministic mode raises; higher derivatives are unsupported.
+The bitflip extension builds separately without fast math. Its current
+optimized kernels are validated on SM75; native BF16 model/Inductor tests
+require SM80 or newer. BF16 operator arithmetic is tested on SM75 as well.
+
+See [the residual-block training example](examples/train_bitflip.py).
+For mixed-precision compiled models, put autocast inside the compiled
+callable so the dtype is explicit in the graph:
+
+```python
+@torch.compile(fullgraph=True)
+def forward(x):
+    with torch.autocast("cuda", dtype=torch.bfloat16):
+        return model(x)
+```
+
 ## CPU Inference
 
 For a complete sequence, `rosa_hard` returns both values and matched K ends:
@@ -129,7 +179,9 @@ python -m pytest -q
 ```
 
 Tests compare hard routing with an independent dynamic-programming oracle
-and surrogate gradients with an independent PyTorch definition. They cover
+and soft gradients with an independent PyTorch definition. Bitflip tests
+enumerate independent hard output edits, including cancellation-sensitive
+values, and exercise checkpointed residual-block training. Tests cover
 causality, latest-match ties, unbounded suffixes, chunked inference, packed
 sequences, dtypes, gradient masks, dropout, and compilation.
 

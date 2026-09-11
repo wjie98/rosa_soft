@@ -53,6 +53,33 @@ def hard(q, k, v):
     return out.masked_fill(route.to(v.device)[..., None] < 0, 0), route
 
 
+def bitflip_vjp(q, k, v, dy):
+    """Enumerate independent sign edits; contract output differences before STE."""
+    q, k, v, dy = (x.detach().cpu().double().contiguous() for x in (q, k, v, dy))
+    base, route = hard(q, k, v)
+    grads = [torch.zeros_like(x) for x in (q, k, v)]
+    for side, x in enumerate((q, k)):
+        for p in range(x.numel()):
+            edited = x.clone()
+            edited.flatten()[p] = -1 if x.flatten()[p] > 0 else 1
+            out = hard(edited if side == 0 else q, edited if side == 1 else k, v)[0]
+            delta = ((out - base) * dy).sum()
+            grads[side].flatten()[p] = (
+                -0.5 * sign(x.flatten()[p]) * delta / (1 + x.flatten()[p].abs()).square()
+            )
+    b, t, h = route.shape
+    for a in range(b):
+        for i in range(t):
+            for head in range(h):
+                end = int(route[a, i, head])
+                if end >= 0:
+                    vh = head // (h // v.size(2))
+                    grads[2][a, end + 1, vh] += (
+                        dy[a, i, head] / (1 + v[a, end + 1, vh].abs()).square()
+                    )
+    return tuple(grads)
+
+
 def _mask(t, device):
     i = torch.arange(t, device=device).view(t, 1)
     a = torch.arange(t, device=device).view(1, t)

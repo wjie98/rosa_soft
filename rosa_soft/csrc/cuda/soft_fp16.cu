@@ -10,37 +10,13 @@
 #include <tuple>
 
 #include "common.cuh"
+#include "../soft.h"
 
 
 using namespace rosa_soft::cuda;
 
 
-torch::Tensor rosa_soft_stats_fp16_cuda(
-    const torch::Tensor& value,
-    const torch::Tensor& dy,
-    const torch::Tensor& packed_q,
-    const torch::Tensor& packed_k,
-    const torch::Tensor& seed,
-    int symbol_dim,
-    float scale,
-    float dropout_p,
-    float mismatch);
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-rosa_soft_backward_cuda(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& dy,
-    const torch::Tensor& packed_q,
-    const torch::Tensor& packed_k,
-    const torch::Tensor& seed,
-    float scale,
-    float dropout_p,
-    float mismatch,
-    int mask);
-
-
+namespace rosa::soft {
 namespace {
 
 namespace wmma = nvcuda::wmma;
@@ -159,17 +135,7 @@ struct HalfPhaseStorage {
 
 static_assert(kRows == 32 && kRouteCount == 64, "Probability layout is 64x32");
 
-__global__ void initialize_prior_kernel(
-    float* __restrict__ prior,
-    int seq_len) {
-  const int row = blockIdx.x * blockDim.x + threadIdx.x;
-  if (row < seq_len) {
-    prior[row] = row > 0 ? logf(static_cast<float>(row)) : 0.0f;
-  }
-}
-
-
-template <int TensorSymbolMask, bool SpecializedReplay>
+template <int TensorMask>
 __global__ void backward_kernel(
     const c10::Half* __restrict__ dy,
     const c10::Half* __restrict__ value,
@@ -196,6 +162,7 @@ __global__ void backward_kernel(
     float inverse_keep_probability,
     int mask) {
 #if __CUDA_ARCH__ >= 750
+  constexpr bool Split = (TensorMask & kGradKey) != 0;
   __shared__ HalfPhaseStorage half_phase;
   __shared__ float utility_tile[kRows * kUtilityStride];
   __shared__ float score_tile[kDiagonals * kScoreStride];
@@ -309,7 +276,7 @@ __global__ void backward_kernel(
         float replay_gate[kDiagonalRounds];
 
         constexpr int kValuePairs = kValueDim / 2;
-        if constexpr (SpecializedReplay) {
+        if constexpr (Split) {
           constexpr int kProducerWarps = kWarps / 2;
           constexpr int kProducerThreads = kProducerWarps * kWarpSize;
           if (warp < kProducerWarps) {
@@ -528,7 +495,7 @@ __global__ void backward_kernel(
           const int delta = diagonal_start + diagonal_offset;
           const bool active = diagonal_offset < tile_width &&
               lane_has_row && delta <= row;
-          const float gate = SpecializedReplay
+          const float gate = Split
               ? replay_gate_tile[
                     diagonal_offset * kScoreStride + lane]
               : replay_gate[round];
@@ -588,7 +555,7 @@ __global__ void backward_kernel(
         }
         __syncthreads();
 
-        if constexpr ((TensorSymbolMask & kGradQuery) == 0) {
+        if constexpr ((TensorMask & kGradQuery) == 0) {
           if ((mask & kGradQuery) != 0) {
             const int output_count = row_count * symbol_dim;
             for (int output = thread;
@@ -621,7 +588,7 @@ __global__ void backward_kernel(
           }
         }
 
-        if constexpr ((TensorSymbolMask & kGradKey) == 0) {
+        if constexpr ((TensorMask & kGradKey) == 0) {
           if ((mask & kGradKey) != 0) {
             const int output_count =
                 (kRows + kDiagonals - 1) * symbol_dim;
@@ -701,7 +668,7 @@ __global__ void backward_kernel(
         }
         __syncthreads();
 
-        if constexpr (TensorSymbolMask != 0) {
+        if constexpr (TensorMask != 0) {
           constexpr int kSymbolStride = 40;
           __half* const symbol_tile =
               reinterpret_cast<__half*>(utility_tile);
@@ -745,7 +712,7 @@ __global__ void backward_kernel(
           // Signs are exactly representable in FP16. Splitting each FP32
           // credit into high and residual halves keeps Tensor Core
           // contractions close to the scalar FP32 accumulation.
-          if constexpr ((TensorSymbolMask & kGradKey) != 0) {
+          if constexpr ((TensorMask & kGradKey) != 0) {
             if ((mask & kGradKey) != 0) {
               for (int index = thread;
                    index < kRows * kSymbolStride;
@@ -798,7 +765,7 @@ __global__ void backward_kernel(
             }
           }
 
-          if constexpr ((TensorSymbolMask & kGradQuery) != 0) {
+          if constexpr ((TensorMask & kGradQuery) != 0) {
             if ((mask & kGradQuery) != 0) {
               for (int index = thread;
                    index < kRouteCount * kSymbolStride;
@@ -859,292 +826,44 @@ __global__ void backward_kernel(
 }
 
 
-__global__ void finish_kernel(
-    const c10::Half* __restrict__ query,
-    const c10::Half* __restrict__ key,
-    const c10::Half* __restrict__ value,
-    float* __restrict__ dq,
-    float* __restrict__ dk,
-    float* __restrict__ dv,
-    int64_t query_elements,
-    int64_t key_elements,
-    int64_t value_elements) {
-  const int64_t total =
-      query_elements + key_elements + value_elements;
-  for (int64_t index =
-           static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-       index < total;
-       index += static_cast<int64_t>(gridDim.x) * blockDim.x) {
-    if (index < query_elements) {
-      dq[index] *=
-          softsign_derivative(read_float(query, index));
-    } else if (index < query_elements + key_elements) {
-      const int64_t key_index = index - query_elements;
-      dk[key_index] *=
-          softsign_derivative(read_float(key, key_index));
-    } else {
-      const int64_t value_index =
-          index - query_elements - key_elements;
-      dv[value_index] *=
-          softsign_derivative(read_float(value, value_index));
-    }
-  }
+template <int TensorMask>
+Grads launch(const Input& x, const Args& a, int mask,
+             const Tensor& stats, const Tensor& prior) {
+  const int b = x.q.size(0), t = x.q.size(1), h = x.q.size(2), d = x.q.size(3);
+  const int hv = x.v.size(2), s = b * h;
+  auto grad = gradients(x, mask);
+  auto& [dq, dk, dv] = grad;
+  if (t <= 1) return grad;
+  const int rows = (t + kRows - 1) / kRows;
+  const int diagonals = (t - 1 + kDiagonals - 1) / kDiagonals;
+  const int pairs = s * ((diagonals + 1) / 2);
+  int blocks = 1;
+  C10_CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      &blocks, backward_kernel<TensorMask>, kThreads, 0));
+  const int sms = at::cuda::getCurrentDeviceProperties()->multiProcessorCount;
+  const int grid = std::min(pairs, std::max(1, blocks * sms));
+  auto checkpoints = torch::empty({grid, rows, kDiagonals},
+                                  x.q.options().dtype(torch::kFloat32));
+  backward_kernel<TensorMask><<<grid, kThreads, 0, at::cuda::getCurrentCUDAStream()>>>(
+      x.dy.data_ptr<c10::Half>(), x.v.data_ptr<c10::Half>(),
+      x.pq.data_ptr<int32_t>(), x.pk.data_ptr<int32_t>(), x.seed.data_ptr<int64_t>(),
+      prior.data_ptr<float>(), stats.data_ptr<float>(), checkpoints.data_ptr<float>(),
+      dq.numel() ? dq.data_ptr<float>() : nullptr,
+      dk.numel() ? dk.data_ptr<float>() : nullptr,
+      dv.numel() ? dv.data_ptr<float>() : nullptr, s, t, h, hv, d, rows, diagonals,
+      a.mismatch / float(d), .5f * a.mismatch / float(d), a.scale, a.dropout,
+      1.0f / (1.0f - a.dropout), mask);
+  finish(x, grad);
+  return grad;
 }
-
 }  // namespace
 
-
-template <int TensorSymbolMask, bool SpecializedReplay>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-backward_fp16(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& dy,
-    const torch::Tensor& packed_q,
-    const torch::Tensor& packed_k,
-    const torch::Tensor& seed,
-    const torch::Tensor& stats,
-    float scale,
-    float dropout_p,
-    float mismatch,
-    int mask) {
-  const c10::cuda::CUDAGuard device_guard(query.device());
-  const int batch_size = query.size(0);
-  const int seq_len = query.size(1);
-  const int num_heads = query.size(2);
-  const int symbol_dim = query.size(3);
-  const int num_value_heads = value.size(2);
-  const int series_count = batch_size * num_heads;
-  const auto float_options = query.options().dtype(torch::kFloat32);
-  torch::Tensor dq = (mask & kGradQuery) != 0
-      ? torch::zeros(query.sizes(), float_options)
-      : torch::empty({0}, float_options);
-  torch::Tensor dk = (mask & kGradKey) != 0
-      ? torch::zeros(key.sizes(), float_options)
-      : torch::empty({0}, float_options);
-  torch::Tensor dv = (mask & kGradValue) != 0
-      ? torch::zeros(value.sizes(), float_options)
-      : torch::empty({0}, float_options);
-  if (seq_len <= 1) {
-    return std::make_tuple(dq, dk, dv);
-  }
-
-  const int row_block_count = (seq_len + kRows - 1) / kRows;
-  const int diagonal_tile_count =
-      (seq_len - 1 + kDiagonals - 1) / kDiagonals;
-  const int task_pair_count =
-      series_count * ((diagonal_tile_count + 1) / 2);
-  int blocks_per_sm = 1;
-  C10_CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-      &blocks_per_sm,
-      backward_kernel<
-          TensorSymbolMask,
-          SpecializedReplay>,
-      kThreads,
-      0));
-  const int multiprocessors =
-      at::cuda::getCurrentDeviceProperties()->multiProcessorCount;
-  const int resident_blocks =
-      std::max(1, blocks_per_sm * multiprocessors);
-  const int grid_count = std::min(
-      task_pair_count, resident_blocks);
-  torch::Tensor checkpoints = torch::empty(
-      {grid_count, row_block_count, kDiagonals}, float_options);
-  torch::Tensor prior = torch::empty({seq_len}, float_options);
-  const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  initialize_prior_kernel<<<
-      (seq_len + kThreads - 1) / kThreads,
-      kThreads,
-      0,
-      stream>>>(prior.data_ptr<float>(), seq_len);
-
-  backward_kernel<
-      TensorSymbolMask,
-      SpecializedReplay><<<
-      grid_count, kThreads, 0, stream>>>(
-      dy.data_ptr<c10::Half>(),
-      value.data_ptr<c10::Half>(),
-      packed_q.data_ptr<int32_t>(),
-      packed_k.data_ptr<int32_t>(),
-      seed.data_ptr<int64_t>(),
-      prior.data_ptr<float>(),
-      stats.data_ptr<float>(),
-      checkpoints.data_ptr<float>(),
-      dq.numel() != 0 ? dq.data_ptr<float>() : nullptr,
-      dk.numel() != 0 ? dk.data_ptr<float>() : nullptr,
-      dv.numel() != 0 ? dv.data_ptr<float>() : nullptr,
-      series_count,
-      seq_len,
-      num_heads,
-      num_value_heads,
-      symbol_dim,
-      row_block_count,
-      diagonal_tile_count,
-      mismatch / static_cast<float>(symbol_dim),
-      0.5f * mismatch / static_cast<float>(symbol_dim),
-      scale,
-      dropout_p,
-      1.0f / (1.0f - dropout_p),
-      mask);
-
-  const int64_t query_elements = dq.numel();
-  const int64_t key_elements = dk.numel();
-  const int64_t value_elements = dv.numel();
-  const int64_t final_elements =
-      query_elements + key_elements + value_elements;
-  if (final_elements != 0) {
-    finish_kernel<<<
-        std::min<int64_t>(
-            65535, (final_elements + kThreads - 1) / kThreads),
-        kThreads,
-        0,
-        stream>>>(
-        query.data_ptr<c10::Half>(),
-        key.data_ptr<c10::Half>(),
-        value.data_ptr<c10::Half>(),
-        dq.numel() != 0 ? dq.data_ptr<float>() : nullptr,
-        dk.numel() != 0 ? dk.data_ptr<float>() : nullptr,
-        dv.numel() != 0 ? dv.data_ptr<float>() : nullptr,
-        query_elements,
-        key_elements,
-        value_elements);
-  }
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return std::make_tuple(dq, dk, dv);
+Grads backward_fp16(const Input& x, const Args& a, int mask, const Tensor& prior) {
+  auto stats = stats_fp16(x, a, prior);
+  const int d = x.q.size(3);
+  if (d >= 16 && (mask & 3) == 3) return launch<3>(x, a, mask, stats, prior);
+  if (d >= 8 && (mask & 2)) return launch<2>(x, a, mask, stats, prior);
+  if (d >= 16 && (mask & 1)) return launch<1>(x, a, mask, stats, prior);
+  return launch<0>(x, a, mask, stats, prior);
 }
-
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-backward_fp16_dispatch(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& dy,
-    const torch::Tensor& packed_q,
-    const torch::Tensor& packed_k,
-    const torch::Tensor& seed,
-    const torch::Tensor& stats,
-    float scale,
-    float dropout_p,
-    float mismatch,
-    int mask) {
-  const int symbol_dim = query.size(3);
-  const bool needs_query = (mask & kGradQuery) != 0;
-  const bool needs_key = (mask & kGradKey) != 0;
-  if (symbol_dim >= 16 && needs_query && needs_key) {
-    return backward_fp16<
-        kGradQuery | kGradKey,
-        true>(
-        query,
-        key,
-        value,
-        dy,
-        packed_q,
-        packed_k,
-        seed,
-        stats,
-        scale,
-        dropout_p,
-        mismatch,
-        mask);
-  }
-  if (symbol_dim >= 8 && needs_key) {
-    return backward_fp16<kGradKey, true>(
-        query,
-        key,
-        value,
-        dy,
-        packed_q,
-        packed_k,
-        seed,
-        stats,
-        scale,
-        dropout_p,
-        mismatch,
-        mask);
-  }
-  if (symbol_dim >= 16 && needs_query) {
-    return backward_fp16<kGradQuery, false>(
-        query,
-        key,
-        value,
-        dy,
-        packed_q,
-        packed_k,
-        seed,
-        stats,
-        scale,
-        dropout_p,
-        mismatch,
-        mask);
-  }
-  return backward_fp16<0, false>(
-      query,
-      key,
-      value,
-      dy,
-      packed_q,
-      packed_k,
-      seed,
-      stats,
-      scale,
-      dropout_p,
-      mismatch,
-      mask);
-}
-
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-rosa_soft_backward_fp16_cuda(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& dy,
-    const torch::Tensor& packed_q,
-    const torch::Tensor& packed_k,
-    const torch::Tensor& seed,
-    float scale,
-    float dropout_p,
-    float mismatch,
-    int mask) {
-  const c10::cuda::CUDAGuard device_guard(query.device());
-  const auto* device = at::cuda::getCurrentDeviceProperties();
-  if (10 * device->major + device->minor < 75) {
-    return rosa_soft_backward_cuda(
-        query,
-        key,
-        value,
-        dy,
-        packed_q,
-        packed_k,
-        seed,
-        scale,
-        dropout_p,
-        mismatch,
-        mask);
-  }
-  torch::Tensor stats = rosa_soft_stats_fp16_cuda(
-      value,
-      dy,
-      packed_q,
-      packed_k,
-      seed,
-      query.size(3),
-      scale,
-      dropout_p,
-      mismatch);
-  return backward_fp16_dispatch(
-      query,
-      key,
-      value,
-      dy,
-      packed_q,
-      packed_k,
-      seed,
-      stats,
-      scale,
-      dropout_p,
-      mismatch,
-      mask);
-}
+}  // namespace rosa::soft

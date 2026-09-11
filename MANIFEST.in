@@ -3,3 +3,4 @@ include LICENSE
 include docs/DESIGN.md
 recursive-include rosa_soft/csrc *.h *.cuh *.cpp *.cu
 recursive-include tests *.py
+include examples/train_bitflip.py

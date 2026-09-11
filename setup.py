@@ -47,19 +47,29 @@ if cuda:
     ]
     args["nvcc"] = ["-O3", "--use_fast_math", "-Xptxas", "-O3"]
 
+extensions = [
+    extension(
+        "rosa_soft._C",
+        [str(x) for x in sources],
+        define_macros=macros,
+        extra_compile_args=args,
+    )
+]
+if cuda:
+    # Bit differences retain their validated FP32 arithmetic, without fast math.
+    extensions.append(CUDAExtension(
+        "rosa_soft._bitflip",
+        [str(SRC / "bitflip.cpp"), str(SRC / "cuda" / "bitflip.cu"),
+         str(SRC / "cuda" / "bitflip_io.cu")],
+        extra_compile_args={"cxx": ["-O3"], "nvcc": ["-O3", "--extended-lambda"]},
+    ))
+
 setup(
     name="rosa_soft",
     version=version(),
-    description="Hard ROSA routing with a dense soft training gradient",
+    description="Exact hard ROSA routing with soft and bitflip training gradients",
     packages=find_packages(include=["rosa_soft"]),
-    ext_modules=[
-        extension(
-            "rosa_soft._C",
-            [str(x) for x in sources],
-            define_macros=macros,
-            extra_compile_args=args,
-        )
-    ],
+    ext_modules=extensions,
     cmdclass={"build_ext": BuildExtension},
     install_requires=["torch>=2.11,<2.12"],
     python_requires=">=3.10",

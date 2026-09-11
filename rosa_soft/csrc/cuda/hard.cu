@@ -1,4 +1,5 @@
-#include <ATen/Dispatch.h>
+#include "../dispatch.h"
+#include "hard.cuh"
 #include <ATen/cuda/CUDAContext.h>
 #include <c10/cuda/CUDAException.h>
 #include <c10/cuda/CUDAGuard.h>
@@ -15,14 +16,6 @@ namespace {
 constexpr int W = 32;
 constexpr int N = 128;
 constexpr int NW = N / W;
-
-#define ROSA_DISPATCH(TYPE, NAME, ...)                         \
-  AT_DISPATCH_SWITCH(                                          \
-      TYPE,                                                    \
-      NAME,                                                    \
-      AT_DISPATCH_CASE(at::ScalarType::Float, __VA_ARGS__)     \
-      AT_DISPATCH_CASE(at::ScalarType::Half, __VA_ARGS__)      \
-      AT_DISPATCH_CASE(at::ScalarType::BFloat16, __VA_ARGS__))
 
 template <typename T>
 __device__ __forceinline__ float load(const T* x, int64_t i) {
@@ -84,60 +77,30 @@ __global__ void check_cu(
   if (i == b) CUDA_KERNEL_ASSERT(cu[b] == n);
 }
 
-template <bool Packed>
 __global__ void route(
-    const int32_t* __restrict__ q,
-    const int32_t* __restrict__ k,
-    int64_t* __restrict__ out,
-    int b,
-    int t,
-    int h,
-    const int32_t* __restrict__ cu,
-    int ns,
-    int nt) {
-  const int w = threadIdx.x / W;
-  const int l = threadIdx.x & (W - 1);
+    const int32_t* __restrict__ q, const int32_t* __restrict__ k,
+    int64_t* __restrict__ out, int h, const int32_t* __restrict__ cu, int ns, int nt) {
+  const int w = threadIdx.x / W, l = threadIdx.x & (W - 1);
   const int64_t id = static_cast<int64_t>(blockIdx.x) * NW + w;
-
-  int delta;
-  int n;
-  const int32_t* qs;
-  const int32_t* ks;
-  int64_t* y;
-  if constexpr (Packed) {
-    if (id >= static_cast<int64_t>(h) * nt) return;
-    const int a = static_cast<int>(id / nt);
-    const int x = static_cast<int>(id - static_cast<int64_t>(a) * nt);
-    int s = 0;
-    int p = 0;
-    int e = 0;
-    if (l == 0) {
-      s = segment(cu, ns, x);
-      if (s < ns) {
-        p = cu[s];
-        e = cu[s + 1];
-      }
+  if (id >= static_cast<int64_t>(h) * nt) return;
+  const int a = static_cast<int>(id / nt), x = static_cast<int>(id - int64_t(a) * nt);
+  int s = 0, p = 0, e = 0;
+  if (l == 0) {
+    s = segment(cu, ns, x);
+    if (s < ns) {
+      p = cu[s];
+      e = cu[s + 1];
     }
-    s = __shfl_sync(0xffffffffu, s, 0);
-    p = __shfl_sync(0xffffffffu, p, 0);
-    e = __shfl_sync(0xffffffffu, e, 0);
-    if (s >= ns || e <= p) return;
-    delta = x - p;
-    if (delta <= 0) return;
-    n = e - x;
-    qs = q + static_cast<int64_t>(a) * nt + p;
-    ks = k + static_cast<int64_t>(a) * nt + p;
-    y = out + static_cast<int64_t>(a) * nt + p;
-  } else {
-    const int nd = t - 1;
-    if (id >= static_cast<int64_t>(b) * h * nd) return;
-    const int s = static_cast<int>(id / nd);
-    delta = static_cast<int>(id - static_cast<int64_t>(s) * nd) + 1;
-    n = t - delta;
-    qs = q + static_cast<int64_t>(s) * t;
-    ks = k + static_cast<int64_t>(s) * t;
-    y = out + static_cast<int64_t>(s) * t;
   }
+  s = __shfl_sync(0xffffffffu, s, 0);
+  p = __shfl_sync(0xffffffffu, p, 0);
+  e = __shfl_sync(0xffffffffu, e, 0);
+  if (s >= ns || e <= p) return;
+  const int delta = x - p, n = e - x;
+  if (delta <= 0) return;
+  const auto* qs = q + int64_t(a) * nt + p;
+  const auto* ks = k + int64_t(a) * nt + p;
+  auto* y = out + int64_t(a) * nt + p;
 
   int last = -1;
   for (int x = 0; x < n; x += W) {
@@ -245,7 +208,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> rosa_hard_cuda(
       : torch::zeros({b, h, t}, q.options().dtype(torch::kInt64));
   const auto stream = at::cuda::getCurrentCUDAStream();
 
-  ROSA_DISPATCH(q.scalar_type(), "rosa_soft_forward", [&] {
+  DISPATCH_ROSA_FLOAT_TYPES(q.scalar_type(), "rosa_soft_forward", [&] {
     const int d = packed ? static_cast<int>(q.size(2))
                          : static_cast<int>(q.size(3));
     pack<scalar_t><<<(rows + 255) / 256, 256, 0, stream>>>(
@@ -255,19 +218,16 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> rosa_hard_cuda(
       check_cu<<<(ns + 256) / 256, 256, 0, stream>>>(
           cu.data_ptr<int32_t>(), ns, t);
     }
-    const int64_t tasks = packed
-        ? static_cast<int64_t>(h) * t
-        : static_cast<int64_t>(b) * h * (t - 1);
-    if (tasks > 0) {
-      if (packed) {
-        route<true><<<(tasks + NW - 1) / NW, N, 0, stream>>>(
-            pq.data_ptr<int32_t>(), pk.data_ptr<int32_t>(),
-            best.data_ptr<int64_t>(), b, t, h, cu.data_ptr<int32_t>(), ns, t);
-      } else {
-        route<false><<<(tasks + NW - 1) / NW, N, 0, stream>>>(
-            pq.data_ptr<int32_t>(), pk.data_ptr<int32_t>(),
-            best.data_ptr<int64_t>(), b, t, h, nullptr, 0, t);
-      }
+    if (packed) {
+      const int64_t tasks = int64_t(h) * t;
+      route<<<(tasks + NW - 1) / NW, N, 0, stream>>>(
+          pq.data_ptr<int32_t>(), pk.data_ptr<int32_t>(), best.data_ptr<int64_t>(),
+          h, cu.data_ptr<int32_t>(), ns, t);
+    } else if (t > 1) {
+      const int groups = (t - 1 + 3) / 4;
+      rosa::cuda::match<<<(b * h * groups + 3) / 4, 128, 0, stream>>>(
+          pq.data_ptr<int32_t>(), pk.data_ptr<int32_t>(),
+          reinterpret_cast<unsigned long long*>(best.data_ptr<int64_t>()), b * h, t);
     }
     if (packed) {
       gather<scalar_t, true><<<rows, N, 0, stream>>>(

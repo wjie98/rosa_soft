@@ -10,11 +10,13 @@
 #include <tuple>
 
 #include "common.cuh"
+#include "../soft.h"
 
 
 using namespace rosa_soft::cuda;
 
 
+namespace rosa::soft {
 namespace {
 
 namespace wmma = nvcuda::wmma;
@@ -83,14 +85,6 @@ __device__ __forceinline__ void load_tile(
     }
   }
 }
-
-enum ReplayPlan : int {
-  kPlanFusedStats = 1 << 0,
-  kPlanFusedReverse = 1 << 1,
-  kPlanTensorValue = 1 << 2,
-  kPlanTiledSymbols = 1 << 3,
-};
-
 
 __device__ __forceinline__ int64_t workspace_index(
     int series,
@@ -1593,737 +1587,259 @@ __global__ void finalize_vjp_kernel(
 }
 
 
-struct SlabShape {
-  int total_diagonals;
-  int workspace_stride;
-  int row_tiles;
-  int diagonal_tiles;
+struct Slab {
+  int stride, rows, diagonals;
+  Slab(int t, int size)
+      : stride(std::max(1, std::min(t - 1, size))),
+        rows((t + kWorkspaceRowTile - 1) / kWorkspaceRowTile),
+        diagonals((stride + kWorkspaceDiagonalTile - 1) / kWorkspaceDiagonalTile) {}
+  Tensor allocate(int s, const torch::TensorOptions& options) const {
+    return torch::empty(
+        {s, diagonals, rows, kWorkspaceRowTile, kWorkspaceDiagonalTile}, options);
+  }
 };
 
+struct Shape {
+  int b, t, h, d, hv, dv, s;
+  explicit Shape(const Input& x)
+      : b(x.q.size(0)), t(x.q.size(1)), h(x.q.size(2)), d(x.q.size(3)),
+        hv(x.v.size(2)), dv(x.v.size(3)), s(b * h) {}
+};
 
-SlabShape slab_shape(int seq_len, int slab_size) {
-  const int total_diagonals = std::max(0, seq_len - 1);
-  const int maximum_diagonals =
-      std::min(total_diagonals, slab_size);
-  const int workspace_stride = std::max(
-      1, maximum_diagonals);
-  return {
-      total_diagonals,
-      workspace_stride,
-      (seq_len + kWorkspaceRowTile - 1) / kWorkspaceRowTile,
-      (workspace_stride + kWorkspaceDiagonalTile - 1) /
-          kWorkspaceDiagonalTile};
+struct Plan {
+  bool fp16, fused, value, tiled;
+  int slab;
+};
+
+// All shape-dependent execution choices live here; none change the estimator.
+Plan plan(const Input& x, int mask) {
+  const Shape shape(x);
+  const int t = shape.t, d = shape.d, dv = shape.dv, s = shape.s;
+  const bool symbols = (mask & 3) != 0;
+  const bool half = x.q.scalar_type() == torch::kHalf && dv == 64;
+  const auto* device = at::cuda::getCurrentDeviceProperties();
+  const bool fp16 = half && symbols && t >= 2048 &&
+      ((s >= 2 && static_cast<int64_t>(s) * t >= 8192) || t >= 32768) &&
+      10 * device->major + device->minor >= 75;
+  const bool fused = half && symbols && t >= 2048 &&
+      (s >= 8 || (t >= 4096 && static_cast<int64_t>(s) * t >= 8192));
+  const bool value = half && (mask & 4) &&
+      (t >= 4096 || static_cast<int64_t>(s) * t >= 8192);
+  const int buffers = symbols && !fused ? 2 : 1;
+  const int64_t padded = ((int64_t(t) + kWorkspaceRowTile - 1) /
+                         kWorkspaceRowTile) * kWorkspaceRowTile;
+  const int64_t bytes = buffers * int64_t(s) * padded * sizeof(float);
+  int64_t slots = std::max<int64_t>(1, (int64_t{1} << 30) / bytes);
+  const int alignment = slots >= kWarpSize ? kWarpSize : kWorkspaceDiagonalTile;
+  if (slots >= alignment) slots = slots / alignment * alignment;
+  const int slab = std::min<int64_t>({std::max(1, t - 1), 8192, slots});
+  return {fp16, fused, value, symbols && d >= 4, slab};
 }
 
-
-torch::Tensor slabbed_replay_stats(
-    const torch::Tensor& value,
-    const torch::Tensor& dy,
-    const torch::Tensor& packed_q,
-    const torch::Tensor& packed_k,
-    const torch::Tensor& seed,
-    const torch::Tensor& row_prior,
-    int symbol_dim,
-    float scale,
-    float dropout_p,
-    float mismatch,
-    bool compute_utility,
-    int slab_size) {
-  const int batch_size = packed_q.size(0);
-  const int num_heads = packed_q.size(1);
-  const int seq_len = packed_q.size(2);
-  const int num_value_heads = value.size(2);
-  const int value_dim = value.size(3);
-  const int series_count = batch_size * num_heads;
-  const SlabShape shape = slab_shape(seq_len, slab_size);
-  const auto options = value.options().dtype(torch::kFloat32);
-  torch::Tensor scores = torch::empty(
-      {series_count,
-       shape.diagonal_tiles,
-       shape.row_tiles,
-       kWorkspaceRowTile,
-       kWorkspaceDiagonalTile},
-      options);
-  torch::Tensor utilities = compute_utility
-      ? torch::empty_like(scores)
-      : torch::empty({0}, options);
-  torch::Tensor row_stats = torch::empty(
-      {batch_size, num_heads, seq_len, kRowStatsWidth}, options);
-  const int64_t total_rows =
-      static_cast<int64_t>(series_count) * seq_len;
-  const int linear_blocks = static_cast<int>(
-      (total_rows + kLinearThreads - 1) / kLinearThreads);
-  const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  initialize_stats_kernel<<<linear_blocks, kLinearThreads, 0, stream>>>(
-      row_stats.data_ptr<float>(), total_rows, scale);
+Tensor initialize_stats(const Input& x, const Args& a) {
+  const Shape shape(x);
+  const int b = shape.b, t = shape.t, h = shape.h, s = shape.s;
+  auto stats = torch::empty({b, h, t, kRowStatsWidth}, x.q.options().dtype(torch::kFloat32));
+  const int64_t n = int64_t(s) * t;
+  initialize_stats_kernel<<<(n + 255) / 256, 256, 0, at::cuda::getCurrentCUDAStream()>>>(
+      stats.data_ptr<float>(), n, a.scale);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
-  if (seq_len > 1) {
-    const float mismatch_unit =
-        mismatch / static_cast<float>(symbol_dim);
-    const float inverse_keep_probability = 1.0f / (1.0f - dropout_p);
-    DISPATCH_ROSA_FLOAT_TYPES(
-        value.scalar_type(),
-        "rosa_soft_slabbed_replay_stats",
-        [&] {
-          for (int slab_start = 1;
-               slab_start < seq_len;
-               slab_start += slab_size) {
-            const int slab_width = std::min(
-                slab_size, seq_len - slab_start);
-            const int blocks_per_series =
-                (slab_width + kWarpsPerBlock - 1) / kWarpsPerBlock;
-            const int diagonal_blocks = series_count * blocks_per_series;
-            slab_diagonal_scores_kernel<<<
-                diagonal_blocks, kThreads, 0, stream>>>(
-                packed_q.data_ptr<int32_t>(),
-                packed_k.data_ptr<int32_t>(),
-                scores.data_ptr<float>(),
-                series_count,
-                seq_len,
-                symbol_dim,
-                slab_start,
-                slab_width,
-                shape.workspace_stride,
-                mismatch_unit);
-            if (compute_utility) {
-              const int row_tiles =
-                  (seq_len + kUtilityTile - 1) / kUtilityTile;
-              const int diagonal_tiles =
-                  (slab_width + kUtilityTile - 1) / kUtilityTile;
-              slab_utilities_tiled_kernel<scalar_t><<<
-                  series_count * row_tiles * diagonal_tiles,
-                  kUtilityThreads,
-                  0,
-                  stream>>>(
-                  value.data_ptr<scalar_t>(),
-                  dy.data_ptr<scalar_t>(),
-                  utilities.data_ptr<float>(),
-                  series_count,
-                  seq_len,
-                  num_heads,
-                  num_value_heads,
-                  value_dim,
-                  slab_start,
-                  slab_width,
-                  shape.workspace_stride);
-            }
-            accumulate_slab_stats_kernel<<<
-                series_count * (seq_len - slab_start),
-                kThreads,
-                0,
-                stream>>>(
-                seed.data_ptr<int64_t>(),
-                row_prior.data_ptr<float>(),
-                scores.data_ptr<float>(),
-                compute_utility ? utilities.data_ptr<float>() : nullptr,
-                row_stats.data_ptr<float>(),
-                seq_len,
-                num_heads,
-                slab_start,
-                slab_width,
-                shape.workspace_stride,
-                scale,
-                dropout_p,
-                inverse_keep_probability,
-                compute_utility ? 1 : 0);
-          }
-        });
-  }
-  finalize_stats_kernel<<<linear_blocks, kLinearThreads, 0, stream>>>(
-      row_stats.data_ptr<float>(), total_rows);
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return row_stats;
+  return stats;
 }
 
-
-torch::Tensor fused_replay_stats_fp16(
-    const torch::Tensor& value,
-    const torch::Tensor& dy,
-    const torch::Tensor& packed_q,
-    const torch::Tensor& packed_k,
-    const torch::Tensor& seed,
-    const torch::Tensor& row_prior,
-    int symbol_dim,
-    float scale,
-    float dropout_p,
-    float mismatch,
-    int slab_size) {
-  const int batch_size = packed_q.size(0);
-  const int num_heads = packed_q.size(1);
-  const int seq_len = packed_q.size(2);
-  const int num_value_heads = value.size(2);
-  const int series_count = batch_size * num_heads;
-  const int partial_tile_stride =
-      (slab_size + kFusedDiagonals - 1) / kFusedDiagonals;
-  const auto options = value.options().dtype(torch::kFloat32);
-  torch::Tensor partial_stats = torch::empty(
-      {series_count, seq_len, partial_tile_stride, kRowStatsWidth},
-      options);
-  torch::Tensor row_stats = torch::empty(
-      {batch_size, num_heads, seq_len, kRowStatsWidth}, options);
-  const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  const int64_t total_rows =
-      static_cast<int64_t>(series_count) * seq_len;
-  const int linear_blocks = static_cast<int>(
-      (total_rows + kLinearThreads - 1) / kLinearThreads);
-  initialize_stats_kernel<<<linear_blocks, kLinearThreads, 0, stream>>>(
-      row_stats.data_ptr<float>(), total_rows, scale);
-  if (seq_len <= 1) {
-    finalize_stats_kernel<<<linear_blocks, kLinearThreads, 0, stream>>>(
-        row_stats.data_ptr<float>(), total_rows);
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-    return row_stats;
-  }
-  const float mismatch_unit =
-      mismatch / static_cast<float>(symbol_dim);
-  const float inverse_keep_probability = 1.0f / (1.0f - dropout_p);
-
-  TORCH_INTERNAL_ASSERT(value.scalar_type() == torch::kFloat16);
-  for (int slab_start = 1;
-       slab_start < seq_len;
-       slab_start += slab_size) {
-    const int slab_width = std::min(
-        slab_size, seq_len - slab_start);
-    const int diagonal_tile_count =
-        (slab_width + kFusedDiagonals - 1) / kFusedDiagonals;
-    fused_slab_stats_fp16_kernel<<<
-        series_count * diagonal_tile_count,
-        kFusedThreads,
-        0,
-        stream>>>(
-        value.data_ptr<c10::Half>(),
-        dy.data_ptr<c10::Half>(),
-        packed_q.data_ptr<int32_t>(),
-        packed_k.data_ptr<int32_t>(),
-        seed.data_ptr<int64_t>(),
-        row_prior.data_ptr<float>(),
-        partial_stats.data_ptr<float>(),
-        series_count,
-        seq_len,
-        num_heads,
-        num_value_heads,
-        symbol_dim,
-        slab_start,
-        slab_width,
-        diagonal_tile_count,
-        partial_tile_stride,
-        mismatch_unit,
-        scale,
-        dropout_p,
-        inverse_keep_probability);
-    constexpr int kRowsPerBlock = kFusedThreads / kWarpSize;
-    const int row_blocks =
-        (seq_len - slab_start + kRowsPerBlock - 1) / kRowsPerBlock;
-    merge_fused_slab_stats_kernel<<<
-        series_count * row_blocks, kFusedThreads, 0, stream>>>(
-        partial_stats.data_ptr<float>(),
-        row_stats.data_ptr<float>(),
-        series_count,
-        seq_len,
-        slab_start,
-        diagonal_tile_count,
-        partial_tile_stride,
-        kFusedDiagonals);
-  }
-  finalize_stats_kernel<<<linear_blocks, kLinearThreads, 0, stream>>>(
-      row_stats.data_ptr<float>(), total_rows);
+void finalize_stats(const Tensor& stats) {
+  const int64_t n = stats.numel() / kRowStatsWidth;
+  finalize_stats_kernel<<<(n + 255) / 256, 256, 0, at::cuda::getCurrentCUDAStream()>>>(
+      stats.data_ptr<float>(), n);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return row_stats;
 }
 
+// Reused by the statistics pass and backward replay, with identical launches.
+void replay(const Input& x, const Args& a, const Slab& slab, int start, int width,
+            const Tensor& scores, const Tensor& utilities) {
+  const Shape shape(x);
+  const int t = shape.t, h = shape.h, d = shape.d,
+            hv = shape.hv, dv = shape.dv, s = shape.s;
+  const auto stream = at::cuda::getCurrentCUDAStream();
+  slab_diagonal_scores_kernel<<<s * ((width + kWarpsPerBlock - 1) / kWarpsPerBlock),
+                                kThreads, 0, stream>>>(
+      x.pq.data_ptr<int32_t>(), x.pk.data_ptr<int32_t>(), scores.data_ptr<float>(),
+      s, t, d, start, width, slab.stride, a.mismatch / float(d));
+  if (utilities.numel()) {
+    const int tiles = ((t + kUtilityTile - 1) / kUtilityTile) *
+                      ((width + kUtilityTile - 1) / kUtilityTile);
+    DISPATCH_ROSA_FLOAT_TYPES(x.v.scalar_type(), "rosa_soft_utility", [&] {
+      slab_utilities_tiled_kernel<scalar_t><<<s * tiles, kUtilityThreads, 0, stream>>>(
+          x.v.data_ptr<scalar_t>(), x.dy.data_ptr<scalar_t>(), utilities.data_ptr<float>(),
+          s, t, h, hv, dv, start, width, slab.stride);
+    });
+  }
+}
 
+Tensor replay_stats(const Input& x, const Args& a, const Tensor& prior,
+                    bool symbols, int size) {
+  const Shape shape(x);
+  const int t = shape.t, h = shape.h, s = shape.s;
+  const Slab slab(t, size);
+  const auto options = x.q.options().dtype(torch::kFloat32);
+  auto scores = slab.allocate(s, options);
+  auto utilities = symbols ? torch::empty_like(scores) : torch::empty({0}, options);
+  auto stats = initialize_stats(x, a);
+  const auto stream = at::cuda::getCurrentCUDAStream();
+  for (int start = 1; start < t; start += size) {
+    const int width = std::min(size, t - start);
+    replay(x, a, slab, start, width, scores, utilities);
+    accumulate_slab_stats_kernel<<<s * (t - start), kThreads, 0, stream>>>(
+        x.seed.data_ptr<int64_t>(), prior.data_ptr<float>(), scores.data_ptr<float>(),
+        symbols ? utilities.data_ptr<float>() : nullptr, stats.data_ptr<float>(),
+        t, h, start, width, slab.stride, a.scale, a.dropout,
+        1.0f / (1.0f - a.dropout), symbols);
+  }
+  finalize_stats(stats);
+  return stats;
+}
 
+Tensor fused_stats(const Input& x, const Args& a, const Tensor& prior, int size) {
+  const Shape shape(x);
+  const int t = shape.t, h = shape.h, d = shape.d, hv = shape.hv, s = shape.s;
+  const int stride = (size + kFusedDiagonals - 1) / kFusedDiagonals;
+  auto partial = torch::empty({s, t, stride, kRowStatsWidth},
+                              x.q.options().dtype(torch::kFloat32));
+  auto stats = initialize_stats(x, a);
+  const auto stream = at::cuda::getCurrentCUDAStream();
+  TORCH_INTERNAL_ASSERT(x.v.scalar_type() == torch::kFloat16);
+  for (int start = 1; start < t; start += size) {
+    const int width = std::min(size, t - start);
+    const int tiles = (width + kFusedDiagonals - 1) / kFusedDiagonals;
+    fused_slab_stats_fp16_kernel<<<s * tiles, kFusedThreads, 0, stream>>>(
+        x.v.data_ptr<c10::Half>(), x.dy.data_ptr<c10::Half>(),
+        x.pq.data_ptr<int32_t>(), x.pk.data_ptr<int32_t>(), x.seed.data_ptr<int64_t>(),
+        prior.data_ptr<float>(), partial.data_ptr<float>(), s, t, h, hv, d,
+        start, width, tiles, stride, a.mismatch / float(d), a.scale, a.dropout,
+        1.0f / (1.0f - a.dropout));
+    constexpr int rows = kFusedThreads / kWarpSize;
+    merge_fused_slab_stats_kernel<<<s * ((t - start + rows - 1) / rows),
+                                   kFusedThreads, 0, stream>>>(
+        partial.data_ptr<float>(), stats.data_ptr<float>(), s, t, start, tiles,
+        stride, kFusedDiagonals);
+  }
+  finalize_stats(stats);
+  return stats;
+}
+
+Grads backward_impl(const Input& x, const Args& a, int mask,
+                    const Tensor& prior, const Plan& p) {
+  const Shape shape(x);
+  const int b = shape.b, t = shape.t, h = shape.h, d = shape.d,
+            hv = shape.hv, dv = shape.dv, s = shape.s;
+  const Slab slab(t, p.slab);
+  auto grad = gradients(x, mask);
+  auto& dq = std::get<0>(grad);
+  auto& dk = std::get<1>(grad);
+  auto& out_v = std::get<2>(grad);
+  const bool symbols = (mask & 3) != 0;
+  const auto options = x.q.options().dtype(torch::kFloat32);
+  const auto stream = at::cuda::getCurrentCUDAStream();
+  auto stats = p.fused ? fused_stats(x, a, prior, p.slab)
+                       : replay_stats(x, a, prior, symbols, p.slab);
+  if (t <= 1) return grad;
+  auto scores = slab.allocate(s, options);
+  auto utilities = symbols && !p.fused ? torch::empty_like(scores) : torch::empty({0}, options);
+  const float gate_scale = a.mismatch / float(d), symbol_scale = .5f * a.mismatch / float(d);
+  const float keep = 1.0f / (1.0f - a.dropout);
+  const int64_t items = 2 * x.q.numel();
+  const int symbol_blocks = std::min<int64_t>(65535, (items + 255) / 256);
+  constexpr int owner_warps = kFusedThreads / kWarpSize;
+  const int groups = (d + 7) / 8;
+  const int tiled_blocks = (2 * int64_t(s) * t * groups + owner_warps - 1) / owner_warps;
+  float* gq = dq.numel() ? dq.data_ptr<float>() : nullptr;
+  float* gk = dk.numel() ? dk.data_ptr<float>() : nullptr;
+  const int last = 1 + ((t - 2) / p.slab) * p.slab;
+  DISPATCH_ROSA_FLOAT_TYPES(x.q.scalar_type(), "rosa_soft_backward", [&] {
+    for (int start = last; start >= 1; start -= p.slab) {
+      const int width = std::min(p.slab, t - start);
+      replay(x, a, slab, start, width, scores, utilities);
+      if (mask & kGradValue) {
+        if (p.value) {
+          const int tiles = (t - start + kValueRouteTile - 1) / kValueRouteTile;
+          tensor_slab_value_vjp_fp16_kernel<<<b * hv * tiles, 8 * kWarpSize, 0, stream>>>(
+              x.dy.data_ptr<c10::Half>(), x.seed.data_ptr<int64_t>(), prior.data_ptr<float>(),
+              stats.data_ptr<float>(), scores.data_ptr<float>(), out_v.data_ptr<float>(),
+              b, t, h, hv, start, width, slab.stride, a.scale, a.dropout, keep);
+        } else {
+          accumulate_slab_value_vjp_kernel<scalar_t><<<b * hv * (t - start),
+                                                      kValueOwnerThreads, 0, stream>>>(
+              x.dy.data_ptr<scalar_t>(), x.seed.data_ptr<int64_t>(), prior.data_ptr<float>(),
+              stats.data_ptr<float>(), scores.data_ptr<float>(), out_v.data_ptr<float>(),
+              b, t, h, hv, dv, start, width, slab.stride, a.scale, a.dropout, keep);
+        }
+      }
+      if (symbols) {
+        if (p.fused) {
+          const int tiles = (width + kFusedDiagonals - 1) / kFusedDiagonals;
+          fused_slab_reverse_fp16_kernel<<<s * tiles, kFusedThreads, 0, stream>>>(
+              x.v.data_ptr<c10::Half>(), x.dy.data_ptr<c10::Half>(),
+              x.pq.data_ptr<int32_t>(), x.pk.data_ptr<int32_t>(), x.seed.data_ptr<int64_t>(),
+              prior.data_ptr<float>(), stats.data_ptr<float>(), scores.data_ptr<float>(),
+              s, t, h, hv, d, start, width, tiles, slab.stride,
+              gate_scale, a.scale, a.dropout, keep);
+        } else {
+          const int blocks = s * ((width + kWarpsPerBlock - 1) / kWarpsPerBlock);
+          slab_diagonal_reverse_kernel<<<blocks, kThreads, 0, stream>>>(
+              x.pq.data_ptr<int32_t>(), x.pk.data_ptr<int32_t>(), scores.data_ptr<float>(),
+              utilities.data_ptr<float>(), x.seed.data_ptr<int64_t>(), prior.data_ptr<float>(),
+              stats.data_ptr<float>(), s, t, h, d, start, width, slab.stride,
+              gate_scale, a.scale, a.dropout, keep);
+        }
+        if (p.tiled) {
+          accumulate_slab_symbol_vjp_tiled_kernel<<<tiled_blocks, kFusedThreads, 0, stream>>>(
+              x.pq.data_ptr<int32_t>(), x.pk.data_ptr<int32_t>(), scores.data_ptr<float>(),
+              gq, gk, s, t, h, d, start, width, slab.stride, symbol_scale, mask);
+        } else {
+          accumulate_slab_symbol_vjp_kernel<<<symbol_blocks, kLinearThreads, 0, stream>>>(
+              x.pq.data_ptr<int32_t>(), x.pk.data_ptr<int32_t>(), scores.data_ptr<float>(),
+              gq, gk, items, b, t, h, d, start, width, slab.stride, symbol_scale, mask);
+        }
+      }
+    }
+  });
+  finish(x, grad);
+  return grad;
+}
 }  // namespace
 
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-backward_impl(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& dy,
-    const torch::Tensor& packed_q,
-    const torch::Tensor& packed_k,
-    const torch::Tensor& seed,
-    float scale,
-    float dropout_p,
-    float mismatch,
-    int mask,
-    int execution_plan,
-    int slab_size) {
-  const c10::cuda::CUDAGuard device_guard(query.device());
-  const int batch_size = query.size(0);
-  const int seq_len = query.size(1);
-  const int num_heads = query.size(2);
-  const int symbol_dim = query.size(3);
-  const int num_value_heads = value.size(2);
-  const int value_dim = value.size(3);
-  const int series_count = batch_size * num_heads;
-  const SlabShape shape = slab_shape(seq_len, slab_size);
-  const auto options = query.options().dtype(torch::kFloat32);
-  const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  torch::Tensor row_prior = torch::empty({seq_len}, options);
-  initialize_row_prior_kernel<<<
-      (seq_len + kLinearThreads - 1) / kLinearThreads,
-      kLinearThreads,
-      0,
-      stream>>>(row_prior.data_ptr<float>(), seq_len);
-  torch::Tensor dq = (mask & kGradQuery) != 0
-      ? torch::zeros(query.sizes(), options)
-      : torch::empty({0}, options);
-  torch::Tensor dk = (mask & kGradKey) != 0
-      ? torch::zeros(key.sizes(), options)
-      : torch::empty({0}, options);
-  torch::Tensor dv = (mask & kGradValue) != 0
-      ? torch::zeros(value.sizes(), options)
-      : torch::empty({0}, options);
-  const bool needs_symbols =
-      (mask & (kGradQuery | kGradKey)) != 0;
-  const bool tensor_shape_supported =
-      value.scalar_type() == torch::kFloat16 && value_dim == kFusedValueDim;
-  const bool fused_shape_supported =
-      tensor_shape_supported && needs_symbols;
-  const bool use_fused_stats =
-      fused_shape_supported && (execution_plan & kPlanFusedStats) != 0;
-  const bool use_fused_reverse =
-      fused_shape_supported && (execution_plan & kPlanFusedReverse) != 0;
-  const bool use_tensor_value =
-      tensor_shape_supported && (execution_plan & kPlanTensorValue) != 0;
-  const bool use_tiled_symbol =
-      needs_symbols && (execution_plan & kPlanTiledSymbols) != 0;
-  torch::Tensor row_stats = use_fused_stats
-      ? fused_replay_stats_fp16(
-            value,
-            dy,
-            packed_q,
-            packed_k,
-            seed,
-            row_prior,
-            symbol_dim,
-            scale,
-            dropout_p,
-            mismatch,
-            slab_size)
-      : slabbed_replay_stats(
-            value,
-            dy,
-            packed_q,
-            packed_k,
-            seed,
-            row_prior,
-            symbol_dim,
-            scale,
-            dropout_p,
-            mismatch,
-            needs_symbols,
-            slab_size);
-  if (seq_len <= 1) {
-    return std::make_tuple(dq, dk, dv);
+void finish(const Input& x, Grads& grad) {
+  auto& dq = std::get<0>(grad);
+  auto& dk = std::get<1>(grad);
+  auto& dv = std::get<2>(grad);
+  const int64_t n = dq.numel() + dk.numel() + dv.numel();
+  if (n) {
+    DISPATCH_ROSA_FLOAT_TYPES(x.q.scalar_type(), "rosa_soft_finish", [&] {
+      finalize_vjp_kernel<scalar_t><<<std::min<int64_t>(65535, (n + 255) / 256),
+                                      256, 0, at::cuda::getCurrentCUDAStream()>>>(
+          x.q.data_ptr<scalar_t>(), x.k.data_ptr<scalar_t>(), x.v.data_ptr<scalar_t>(),
+          dq.numel() ? dq.data_ptr<float>() : nullptr,
+          dk.numel() ? dk.data_ptr<float>() : nullptr,
+          dv.numel() ? dv.data_ptr<float>() : nullptr, dq.numel(), dk.numel(), dv.numel());
+    });
   }
-
-  torch::Tensor scores = torch::empty(
-      {series_count,
-       shape.diagonal_tiles,
-       shape.row_tiles,
-       kWorkspaceRowTile,
-       kWorkspaceDiagonalTile},
-      options);
-  torch::Tensor utilities = needs_symbols && !use_fused_reverse
-      ? torch::empty_like(scores)
-      : torch::empty({0}, options);
-  const float mismatch_unit =
-      mismatch / static_cast<float>(symbol_dim);
-  const float symbol_scale =
-      0.5f * mismatch / static_cast<float>(symbol_dim);
-  const float inverse_keep_probability = 1.0f / (1.0f - dropout_p);
-  const int64_t symbol_tensor_items = query.numel();
-  const int64_t symbol_output_items = 2 * symbol_tensor_items;
-  const int symbol_blocks = static_cast<int>(std::min<int64_t>(
-      65535,
-      (symbol_output_items + kLinearThreads - 1) / kLinearThreads));
-  constexpr int kSymbolOwnerWarps = kFusedThreads / kWarpSize;
-  constexpr int kBitsPerSymbolWarp = 8;
-  const int symbol_bit_groups =
-      (symbol_dim + kBitsPerSymbolWarp - 1) / kBitsPerSymbolWarp;
-  const int tiled_symbol_blocks = static_cast<int>(
-      (2 * static_cast<int64_t>(series_count) * seq_len *
-           symbol_bit_groups +
-       kSymbolOwnerWarps - 1) /
-      kSymbolOwnerWarps);
-  const int final_slab_start = 1 +
-      ((shape.total_diagonals - 1) / slab_size) * slab_size;
-
-  DISPATCH_ROSA_FLOAT_TYPES(
-      query.scalar_type(),
-      "rosa_soft_slabbed_replay_vjp",
-      [&] {
-        for (int slab_start = final_slab_start;
-             slab_start >= 1;
-             slab_start -= slab_size) {
-          const int slab_width = std::min(
-              slab_size, seq_len - slab_start);
-          const int blocks_per_series =
-              (slab_width + kWarpsPerBlock - 1) / kWarpsPerBlock;
-          const int diagonal_blocks = series_count * blocks_per_series;
-          slab_diagonal_scores_kernel<<<
-              diagonal_blocks, kThreads, 0, stream>>>(
-              packed_q.data_ptr<int32_t>(),
-              packed_k.data_ptr<int32_t>(),
-              scores.data_ptr<float>(),
-              series_count,
-              seq_len,
-              symbol_dim,
-              slab_start,
-              slab_width,
-              shape.workspace_stride,
-              mismatch_unit);
-          if (needs_symbols && !use_fused_reverse) {
-            const int row_tiles =
-                (seq_len + kUtilityTile - 1) / kUtilityTile;
-            const int diagonal_tiles =
-                (slab_width + kUtilityTile - 1) / kUtilityTile;
-            slab_utilities_tiled_kernel<scalar_t><<<
-                series_count * row_tiles * diagonal_tiles,
-                kUtilityThreads,
-                0,
-                stream>>>(
-                value.data_ptr<scalar_t>(),
-                dy.data_ptr<scalar_t>(),
-                utilities.data_ptr<float>(),
-                series_count,
-                seq_len,
-                num_heads,
-                num_value_heads,
-                value_dim,
-                slab_start,
-                slab_width,
-                shape.workspace_stride);
-          }
-          if ((mask & kGradValue) != 0) {
-            if (use_tensor_value) {
-              const int value_route_tiles =
-                  (seq_len - slab_start + kValueRouteTile - 1) /
-                  kValueRouteTile;
-              tensor_slab_value_vjp_fp16_kernel<<<
-                  batch_size * num_value_heads * value_route_tiles,
-                  8 * kWarpSize,
-                  0,
-                  stream>>>(
-                  dy.data_ptr<c10::Half>(),
-                  seed.data_ptr<int64_t>(),
-                  row_prior.data_ptr<float>(),
-                  row_stats.data_ptr<float>(),
-                  scores.data_ptr<float>(),
-                  dv.data_ptr<float>(),
-                  batch_size,
-                  seq_len,
-                  num_heads,
-                  num_value_heads,
-                  slab_start,
-                  slab_width,
-                  shape.workspace_stride,
-                  scale,
-                  dropout_p,
-                  inverse_keep_probability);
-            } else {
-              const int value_blocks =
-                  batch_size * num_value_heads * (seq_len - slab_start);
-              accumulate_slab_value_vjp_kernel<scalar_t><<<
-                  value_blocks, kValueOwnerThreads, 0, stream>>>(
-                  dy.data_ptr<scalar_t>(),
-                  seed.data_ptr<int64_t>(),
-                  row_prior.data_ptr<float>(),
-                  row_stats.data_ptr<float>(),
-                  scores.data_ptr<float>(),
-                  dv.data_ptr<float>(),
-                  batch_size,
-                  seq_len,
-                  num_heads,
-                  num_value_heads,
-                  value_dim,
-                  slab_start,
-                  slab_width,
-                  shape.workspace_stride,
-                  scale,
-                  dropout_p,
-                  inverse_keep_probability);
-            }
-          }
-          if (needs_symbols) {
-            if (use_fused_reverse) {
-              const int fused_diagonal_tiles =
-                  (slab_width + kFusedDiagonals - 1) /
-                  kFusedDiagonals;
-              fused_slab_reverse_fp16_kernel<<<
-                  series_count * fused_diagonal_tiles,
-                  kFusedThreads,
-                  0,
-                  stream>>>(
-                  value.data_ptr<c10::Half>(),
-                  dy.data_ptr<c10::Half>(),
-                  packed_q.data_ptr<int32_t>(),
-                  packed_k.data_ptr<int32_t>(),
-                  seed.data_ptr<int64_t>(),
-                  row_prior.data_ptr<float>(),
-                  row_stats.data_ptr<float>(),
-                  scores.data_ptr<float>(),
-                  series_count,
-                  seq_len,
-                  num_heads,
-                  num_value_heads,
-                  symbol_dim,
-                  slab_start,
-                  slab_width,
-                  fused_diagonal_tiles,
-                  shape.workspace_stride,
-                  mismatch_unit,
-                  scale,
-                  dropout_p,
-                  inverse_keep_probability);
-            } else {
-              slab_diagonal_reverse_kernel<<<
-                  diagonal_blocks, kThreads, 0, stream>>>(
-                  packed_q.data_ptr<int32_t>(),
-                  packed_k.data_ptr<int32_t>(),
-                  scores.data_ptr<float>(),
-                  utilities.data_ptr<float>(),
-                  seed.data_ptr<int64_t>(),
-                  row_prior.data_ptr<float>(),
-                  row_stats.data_ptr<float>(),
-                  series_count,
-                  seq_len,
-                  num_heads,
-                  symbol_dim,
-                  slab_start,
-                  slab_width,
-                  shape.workspace_stride,
-                  mismatch_unit,
-                  scale,
-                  dropout_p,
-                  inverse_keep_probability);
-            }
-            if (use_tiled_symbol) {
-              accumulate_slab_symbol_vjp_tiled_kernel<<<
-                  tiled_symbol_blocks, kFusedThreads, 0, stream>>>(
-                  packed_q.data_ptr<int32_t>(),
-                  packed_k.data_ptr<int32_t>(),
-                  scores.data_ptr<float>(),
-                  dq.numel() != 0
-                      ? dq.data_ptr<float>()
-                      : nullptr,
-                  dk.numel() != 0
-                      ? dk.data_ptr<float>()
-                      : nullptr,
-                  series_count,
-                  seq_len,
-                  num_heads,
-                  symbol_dim,
-                  slab_start,
-                  slab_width,
-                  shape.workspace_stride,
-                  symbol_scale,
-                  mask);
-            } else {
-              accumulate_slab_symbol_vjp_kernel<<<
-                  symbol_blocks, kLinearThreads, 0, stream>>>(
-                  packed_q.data_ptr<int32_t>(),
-                  packed_k.data_ptr<int32_t>(),
-                  scores.data_ptr<float>(),
-                  dq.numel() != 0
-                      ? dq.data_ptr<float>()
-                      : nullptr,
-                  dk.numel() != 0
-                      ? dk.data_ptr<float>()
-                      : nullptr,
-                  symbol_output_items,
-                  batch_size,
-                  seq_len,
-                  num_heads,
-                  symbol_dim,
-                  slab_start,
-                  slab_width,
-                  shape.workspace_stride,
-                  symbol_scale,
-                  mask);
-            }
-          }
-        }
-
-        const int64_t query_items = dq.numel();
-        const int64_t key_items = dk.numel();
-        const int64_t value_items = dv.numel();
-        const int64_t final_items = query_items + key_items + value_items;
-        if (final_items != 0) {
-          const int final_blocks = static_cast<int>(std::min<int64_t>(
-              65535,
-              (final_items + kLinearThreads - 1) / kLinearThreads));
-          finalize_vjp_kernel<scalar_t><<<
-              final_blocks, kLinearThreads, 0, stream>>>(
-              query.data_ptr<scalar_t>(),
-              key.data_ptr<scalar_t>(),
-              value.data_ptr<scalar_t>(),
-              dq.numel() != 0 ? dq.data_ptr<float>() : nullptr,
-              dk.numel() != 0 ? dk.data_ptr<float>() : nullptr,
-              dv.numel() != 0 ? dv.data_ptr<float>() : nullptr,
-              query_items,
-              key_items,
-              value_items);
-        }
-      });
   C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return std::make_tuple(dq, dk, dv);
 }
 
-
-namespace {
-
-constexpr int kAutomaticMaximumSlabSize = 8192;
-constexpr int64_t kAutomaticSlabWorkspaceBudgetBytes = int64_t{1} << 30;
-
-
-int automatic_slab_size(
-    int series_count,
-    int seq_len,
-    int workspace_count) {
-  const int diagonal_count = std::max(1, seq_len - 1);
-  const int64_t padded_rows =
-      ((static_cast<int64_t>(seq_len) + kWorkspaceRowTile - 1) /
-       kWorkspaceRowTile) * kWorkspaceRowTile;
-  const int64_t bytes_per_slot =
-      static_cast<int64_t>(workspace_count) * series_count * padded_rows *
-      sizeof(float);
-  int64_t budget_slots = bytes_per_slot == 0
-      ? kAutomaticMaximumSlabSize
-      : kAutomaticSlabWorkspaceBudgetBytes / bytes_per_slot;
-  budget_slots = std::max<int64_t>(1, budget_slots);
-  const int alignment = budget_slots >= kWarpSize
-      ? kWarpSize
-      : kWorkspaceDiagonalTile;
-  if (budget_slots >= alignment) {
-    budget_slots = (budget_slots / alignment) * alignment;
-  }
-  return std::min({
-      diagonal_count,
-      kAutomaticMaximumSlabSize,
-      static_cast<int>(budget_slots)});
+Tensor stats_fp16(const Input& x, const Args& a, const Tensor& prior) {
+  const int64_t bytes = x.pq.numel() * kRowStatsWidth * sizeof(float);
+  const int64_t tiles = std::max<int64_t>(1, (int64_t{64} << 20) / bytes);
+  const int size = std::min<int64_t>({x.q.size(1), 4096, tiles * kFusedDiagonals});
+  return fused_stats(x, a, prior, size);
 }
 
-
-bool should_fuse_slab_replay(int series_count, int seq_len) {
-  if (seq_len < 2048) {
-    return false;
-  }
-  return series_count >= 8 ||
-      (seq_len >= 4096 &&
-       static_cast<int64_t>(series_count) * seq_len >= 8192);
+Grads backward(const Input& x, const Args& a, int mask) {
+  const c10::cuda::CUDAGuard guard(x.q.device());
+  const int t = x.q.size(1);
+  const Plan p = plan(x, mask);
+  auto prior = torch::empty({t}, x.q.options().dtype(torch::kFloat32));
+  initialize_row_prior_kernel<<<(t + 255) / 256, 256, 0, at::cuda::getCurrentCUDAStream()>>>(
+      prior.data_ptr<float>(), t);
+  return p.fp16 ? backward_fp16(x, a, mask, prior) : backward_impl(x, a, mask, prior, p);
 }
-
-
-constexpr int kStatsMaxSlab = 4096;
-constexpr int64_t kStatsBudget = int64_t{64} << 20;
-
-
-int stats_tile_size(int series_count, int seq_len) {
-  const int64_t bytes_per_diagonal_tile =
-      static_cast<int64_t>(series_count) * seq_len * kRowStatsWidth *
-      sizeof(float);
-  const int64_t tile_count = std::max<int64_t>(
-      1, kStatsBudget / bytes_per_diagonal_tile);
-  const int64_t slab_size = std::min<int64_t>(
-      kStatsMaxSlab, tile_count * kFusedDiagonals);
-  return std::min(seq_len, static_cast<int>(slab_size));
-}
-
-
-
-}  // namespace
-
-
-torch::Tensor rosa_soft_stats_fp16_cuda(
-    const torch::Tensor& value,
-    const torch::Tensor& dy,
-    const torch::Tensor& packed_q,
-    const torch::Tensor& packed_k,
-    const torch::Tensor& seed,
-    int symbol_dim,
-    float scale,
-    float dropout_p,
-    float mismatch) {
-  const c10::cuda::CUDAGuard device_guard(value.device());
-  const int seq_len = packed_q.size(2);
-  const int series_count =
-      packed_q.size(0) * packed_q.size(1);
-  const auto float_options = value.options().dtype(torch::kFloat32);
-  torch::Tensor row_prior = torch::empty({seq_len}, float_options);
-  const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  initialize_row_prior_kernel<<<
-      (seq_len + kLinearThreads - 1) / kLinearThreads,
-      kLinearThreads,
-      0,
-      stream>>>(row_prior.data_ptr<float>(), seq_len);
-  torch::Tensor row_stats = fused_replay_stats_fp16(
-      value,
-      dy,
-      packed_q,
-      packed_k,
-      seed,
-      row_prior,
-      symbol_dim,
-      scale,
-      dropout_p,
-      mismatch,
-      stats_tile_size(series_count, seq_len));
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return row_stats;
-}
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-rosa_soft_backward_cuda(
-    const torch::Tensor& query,
-    const torch::Tensor& key,
-    const torch::Tensor& value,
-    const torch::Tensor& dy,
-    const torch::Tensor& packed_q,
-    const torch::Tensor& packed_k,
-    const torch::Tensor& seed,
-    float scale,
-    float dropout_p,
-    float mismatch,
-    int mask) {
-  const int series_count = query.size(0) * query.size(2);
-  const int seq_len = query.size(1);
-  const bool needs_symbols =
-      (mask & (kGradQuery | kGradKey)) != 0;
-  const bool fp16_value_tiles =
-      query.scalar_type() == torch::kFloat16 && value.size(3) == 64;
-  const bool fuse_replay =
-      fp16_value_tiles && needs_symbols &&
-      should_fuse_slab_replay(series_count, seq_len);
-  const bool tensor_value =
-      fp16_value_tiles && (mask & kGradValue) != 0 &&
-      (seq_len >= 4096 ||
-       static_cast<int64_t>(series_count) * seq_len >= 8192);
-  const bool tiled_symbols = needs_symbols && query.size(3) >= 4;
-  const int execution_plan =
-      (fuse_replay ? kPlanFusedStats | kPlanFusedReverse : 0) |
-      (tensor_value ? kPlanTensorValue : 0) |
-      (tiled_symbols ? kPlanTiledSymbols : 0);
-  const int workspace_count =
-      needs_symbols && !fuse_replay ? 2 : 1;
-  const int slab_size =
-      automatic_slab_size(series_count, seq_len, workspace_count);
-  return backward_impl(
-      query,
-      key,
-      value,
-      dy,
-      packed_q,
-      packed_k,
-      seed,
-      scale,
-      dropout_p,
-      mismatch,
-      mask,
-      execution_plan,
-      slab_size);
-}
+}  // namespace rosa::soft

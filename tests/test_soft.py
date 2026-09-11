@@ -56,6 +56,22 @@ def test_gpu_packed_hard_isolates_empty_segments():
 
 
 @CUDA
+@pytest.mark.parametrize("t", [2, 31, 32, 33, 127, 128, 129])
+@pytest.mark.parametrize("d", [1, 8, 32])
+def test_dense_hard_diagonal_boundaries(t, d):
+    torch.manual_seed(t + d)
+    code = torch.arange(t, device="cuda") % 5
+    bits = (code[:, None] >> torch.arange(d, device="cuda")) & 1
+    q = (2 * bits - 1).float()[None, :, None].repeat(2, 1, 2, 1)
+    k = q.clone()
+    q[:, -1, :, 0] *= -1
+    v = torch.randn(2, t, 1, 3, device="cuda")
+    expected, _ = hard(q, k, v)
+    for fn in (rosa_soft.rosa_soft, rosa_soft.rosa_bitflip):
+        assert torch.equal(fn(q, k, v), expected.to(v.device))
+
+
+@CUDA
 def test_gpu_hard_suffix_is_not_truncated_at_32():
     t, bits = 71, 8
     code = torch.arange(40, device="cuda")

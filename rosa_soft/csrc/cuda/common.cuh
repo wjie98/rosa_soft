@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ATen/Dispatch.h>
+#include "../dispatch.h"
 #include <ATen/cuda/CUDAContext.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDAException.h>
@@ -16,14 +16,6 @@
 #include <cstdint>
 #include <limits>
 #include <tuple>
-
-#define DISPATCH_ROSA_FLOAT_TYPES(TYPE, NAME, ...)              \
-  AT_DISPATCH_SWITCH(                                           \
-      TYPE,                                                     \
-      NAME,                                                     \
-      AT_DISPATCH_CASE(at::ScalarType::Float, __VA_ARGS__)      \
-      AT_DISPATCH_CASE(at::ScalarType::Half, __VA_ARGS__)       \
-      AT_DISPATCH_CASE(at::ScalarType::BFloat16, __VA_ARGS__))
 
 namespace rosa_soft::cuda {
 

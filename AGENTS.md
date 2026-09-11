@@ -8,12 +8,14 @@ These rules are part of the operator contract.
 2. Training forward must contain only hard binary ROSA values. Soft state may
    exist only in the custom backward; otherwise the model can exploit numeric
    leakage and diverge from inference.
-3. Backward includes every causal candidate and uses the frozen dense suffix
-   recurrence. Do not replace it with sparse gradients without a new operator
-   and independent training evidence.
-4. Public API is only `RosaSam`, `rosa_hard`, and `rosa_soft`. Dense and packed
-   layouts share `rosa_soft`; do not add `varlen`, `unbounded`, `anchor`, or
-   schedule-specific aliases.
+3. `rosa_soft` backward includes every causal candidate and uses the frozen
+   dense suffix recurrence. The separate `rosa_bitflip` operator computes
+   complete independent activation-bit output differences at fixed dY, with
+   hard-route V gradients. Do not prune nonzero edits, change either estimator,
+   or switch between them based on data or a hidden schedule.
+4. Public API is only `RosaSam`, `rosa_hard`, `rosa_soft`, and `rosa_bitflip`.
+   Dense and packed layouts share `rosa_soft`; `rosa_bitflip` is dense-only.
+   Do not add `varlen`, `unbounded`, `anchor`, or schedule-specific aliases.
 5. `scale`, `dropout_p`, and `mismatch_scale` are static user parameters.
    Do not reintroduce automatic temperature, lambda, or context-length
    schedules.
@@ -32,6 +34,11 @@ These rules are part of the operator contract.
 10. Before changing kernels, verify dense and packed hard semantics, all seven
     Q/K/V gradient masks, FP16/BF16/FP32, dropout, GQA, empty packed segments,
     and `torch.compile`.
+11. `rosa_bitflip` has no suffix limit; `rows` controls only its live workspace.
+    Preserve its separate non-fast-math build and independent bit-edit oracle.
+    It is not an unbiased derivative of arbitrary nonlinear task loss or a
+    simultaneous shared-parameter edit. Never route packed documents through
+    dense matching without isolating their boundaries.
 
 Archive points:
 

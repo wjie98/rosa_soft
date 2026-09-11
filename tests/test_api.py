@@ -8,7 +8,9 @@ import rosa_soft
 
 
 def test_public_surface_is_minimal():
-    assert rosa_soft.__all__ == ["__version__", "RosaSam", "rosa_hard", "rosa_soft"]
+    assert rosa_soft.__all__ == [
+        "__version__", "RosaSam", "rosa_hard", "rosa_soft", "rosa_bitflip"
+    ]
     for old in (
         "rosa_soft_unbounded",
         "rosa_soft_varlen",
@@ -19,9 +21,12 @@ def test_public_surface_is_minimal():
     assert list(inspect.signature(rosa_soft.rosa_soft).parameters) == [
         "q", "k", "v", "cu_seqlens", "scale", "dropout_p", "mismatch_scale"
     ]
+    assert list(inspect.signature(rosa_soft.rosa_bitflip).parameters) == [
+        "q", "k", "v", "rows"
+    ]
 
 
-def test_native_surface_has_only_two_cuda_ops():
+def test_native_surface_is_minimal():
     schemas = {
         schema.name.split("::", 1)[1]
         for schema in torch._C._jit_get_all_schemas()
@@ -29,7 +34,7 @@ def test_native_surface_has_only_two_cuda_ops():
     }
     if not schemas:
         pytest.skip("CPU-only build")
-    assert schemas == {"forward", "backward"}
+    assert schemas == {"forward", "backward", "bitflip_forward", "bitflip_backward"}
 
 
 def test_production_sources_do_not_expose_a_suffix_window():

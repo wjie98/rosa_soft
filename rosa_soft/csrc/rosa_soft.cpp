@@ -1,44 +1,16 @@
 #include <ATen/Context.h>
-#include <torch/extension.h>
+#include "soft.h"
 
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <tuple>
 
-using Tensors = std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>;
+using Tensors = rosa::soft::Grads;
+using rosa::soft::Args;
 
-Tensors rosa_hard_cuda(
-    const torch::Tensor& q,
-    const torch::Tensor& k,
-    const torch::Tensor& v,
-    const torch::Tensor& cu);
-
-Tensors rosa_soft_backward_cuda(
-    const torch::Tensor& q,
-    const torch::Tensor& k,
-    const torch::Tensor& v,
-    const torch::Tensor& dy,
-    const torch::Tensor& pq,
-    const torch::Tensor& pk,
-    const torch::Tensor& seed,
-    float scale,
-    float dropout,
-    float mismatch,
-    int mask);
-
-Tensors rosa_soft_backward_fp16_cuda(
-    const torch::Tensor& q,
-    const torch::Tensor& k,
-    const torch::Tensor& v,
-    const torch::Tensor& dy,
-    const torch::Tensor& pq,
-    const torch::Tensor& pk,
-    const torch::Tensor& seed,
-    float scale,
-    float dropout,
-    float mismatch,
-    int mask);
+Tensors rosa_hard_cuda(const torch::Tensor&, const torch::Tensor&,
+                       const torch::Tensor&, const torch::Tensor&);
 
 namespace {
 
@@ -56,12 +28,6 @@ float positive_float(double x, const char* name) {
       name, " must be a positive normal float32 value");
   return y;
 }
-
-struct Args {
-  float scale;
-  float dropout;
-  float mismatch;
-};
 
 Args check_args(double scale, double dropout, double mismatch, int64_t n) {
   TORCH_CHECK(
@@ -172,32 +138,6 @@ void check_backward(
   TORCH_CHECK(mask >= 1 && mask <= 7, "gradient mask must be in [1,7]");
 }
 
-bool use_fp16_tiles(const torch::Tensor& q, const torch::Tensor& v, int mask) {
-  const int64_t s = q.size(0) * q.size(2);
-  const int64_t t = q.size(1);
-  return q.scalar_type() == torch::kHalf && v.size(3) == 64 && t >= 2048 &&
-      (mask & 3) != 0 &&
-      ((s >= 2 && s * t >= 8192) || t >= 32768);
-}
-
-Tensors backward_dense(
-    const torch::Tensor& q,
-    const torch::Tensor& k,
-    const torch::Tensor& v,
-    const torch::Tensor& dy,
-    const torch::Tensor& pq,
-    const torch::Tensor& pk,
-    const torch::Tensor& seed,
-    const Args& a,
-    int mask) {
-  if (use_fp16_tiles(q, v, mask)) {
-    return rosa_soft_backward_fp16_cuda(
-        q, k, v, dy, pq, pk, seed, a.scale, a.dropout, a.mismatch, mask);
-  }
-  return rosa_soft_backward_cuda(
-      q, k, v, dy, pq, pk, seed, a.scale, a.dropout, a.mismatch, mask);
-}
-
 Tensors backward_packed(
     const torch::Tensor& q,
     const torch::Tensor& k,
@@ -231,9 +171,8 @@ Tensors backward_packed(
       return x.narrow(1, start, length).unsqueeze(0).contiguous();
     };
     const auto local_seed = a.dropout > 0.0f ? seed.add(b) : seed;
-    auto grad = backward_dense(
-        slice(q), slice(k), slice(v), slice(dy), bits(pq), bits(pk),
-        local_seed, a, mask);
+    auto grad = rosa::soft::backward(
+        {slice(q), slice(k), slice(v), slice(dy), bits(pq), bits(pk), local_seed}, a, mask);
     if (mask & 1) dq.narrow(0, start, length).copy_(std::get<0>(grad).squeeze(0));
     if (mask & 2) dk.narrow(0, start, length).copy_(std::get<1>(grad).squeeze(0));
     if (mask & 4) dv.narrow(0, start, length).copy_(std::get<2>(grad).squeeze(0));
@@ -284,8 +223,7 @@ Tensors rosa_backward(
     return backward_packed(
         q, k, v, dy, pq, pk, seed, cu, a, static_cast<int>(mask));
   }
-  return backward_dense(q, k, v, dy, pq, pk, seed, a,
-                        static_cast<int>(mask));
+  return rosa::soft::backward({q, k, v, dy, pq, pk, seed}, a, static_cast<int>(mask));
 }
 
 TORCH_LIBRARY_IMPL(rosa_soft, CUDA, m) {
