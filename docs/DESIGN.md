@@ -281,6 +281,10 @@ latest end and the first edge; `Edge` stores a symbol, target and next edge.
 The wrapper manages one automaton per sequence/head, not the external V cache.
 This compact implementation walks linked edges and propagates latest ends along
 suffix links; it does not guarantee linear total runtime on adversarial inputs.
+Storage grows geometrically when a chunk exceeds current capacity. This avoids
+copying the state arrays at every single-token update while still reserving
+room for a large prefill in one request. Empty chunks preserve matching history
+and the sequence-count contract.
 
 ## Source Map
 

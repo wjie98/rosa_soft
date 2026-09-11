@@ -84,7 +84,10 @@ class RosaSam:
             if cu_seqlens is not None:
                 raise ValueError("dense input must not provide cu_seqlens")
             b, t, _ = shape
-            cu = torch.arange(0, (b + 1) * t, t, dtype=torch.int64)
+            if t:
+                cu = torch.arange(0, (b + 1) * t, t, dtype=torch.int64)
+            else:
+                cu = torch.zeros(b + 1, dtype=torch.int64)
             q = q.reshape(b * t, self.num_heads)
             k = k.reshape(b * t, self.num_heads)
         else:

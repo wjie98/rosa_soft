@@ -165,7 +165,8 @@ sam.reset()
 
 `RosaSam` stores Q/K matching state, not V. Ends refer to the accumulated
 sequence history. Keep the sequence count and ordering fixed between updates,
-and do not update one instance concurrently. `update_packed` accepts
+including empty chunks, and do not update one instance concurrently. Empty
+chunks return empty results without advancing history. `update_packed` accepts
 prepacked int32 symbols of shape `[B, T, H]` or `[N, H]`.
 
 CPU matching is synchronous. GPU inputs are staged through the host; these

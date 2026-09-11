@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
@@ -37,8 +38,14 @@ class Sam {
     if (n > (limit - s_.size()) / 2) {
       throw std::length_error("ROSA SAM exceeds int32 state space");
     }
-    s_.reserve(s_.size() + 2 * n);
-    e_.reserve(e_.size() + n);
+    // Small decode chunks must not force a reallocation at every token.
+    auto grow = [limit](auto& v, size_t add) {
+      const size_t need = v.size() + add;
+      if (need > v.capacity())
+        v.reserve(std::max(need, std::min(limit, 2 * v.capacity())));
+    };
+    grow(s_, 2 * n);
+    grow(e_, n);
   }
 
  private:

@@ -24,6 +24,69 @@ def test_sam_is_stateful_across_chunks():
     assert torch.equal(chunked, full)
 
 
+@pytest.mark.parametrize("prepacked", [False, True])
+@pytest.mark.parametrize("chunk", [1, 7, 32])
+def test_empty_chunks_preserve_history(prepacked, chunk):
+    torch.manual_seed(71)
+    q = torch.randn(2, 35, 2, 4)
+    k = torch.randn_like(q)
+    expected = routes(q, k)
+    sam = RosaSam(2, 4)
+    if prepacked:
+        q, k = [((x > 0) * (1 << torch.arange(4))).sum(-1).int() for x in (q, k)]
+    update = sam.update_packed if prepacked else sam.update
+    parts = []
+    for start in range(0, 35, chunk):
+        empty = update(q[:, :0], k[:, :0])
+        assert empty.shape == (2, 0, 2) and empty.dtype == torch.int64
+        parts.append(update(q[:, start:start + chunk], k[:, start:start + chunk]))
+    assert update(q[:, :0], k[:, :0]).numel() == 0
+    assert torch.equal(torch.cat(parts, 1), expected)
+    sam.reset()
+    assert torch.equal(update(q, k), expected)
+
+
+@pytest.mark.parametrize("packed", [False, True])
+@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="CUDA required"))])
+def test_hard_empty_output(packed, device):
+    q = torch.empty((0, 4, 8) if packed else (2, 0, 4, 8), device=device)
+    v = torch.empty((0, 2, 3) if packed else (2, 0, 2, 3), device=device)
+    cu = torch.zeros(3, dtype=torch.int32) if packed else None
+    y, ends = rosa_hard(q, q, v, cu)
+    assert y.shape == (*q.shape[:-1], 3) and y.dtype == v.dtype
+    assert ends.shape == q.shape[:-1] and ends.dtype == torch.int64
+    assert y.device == ends.device == q.device
+
+
+def test_empty_chunk_keeps_sequence_count_contract():
+    sam = RosaSam(1, 2)
+    empty = torch.empty(2, 0, 1, 2)
+    sam.update(empty, empty)
+    q = torch.ones(1, 3, 1, 2)
+    with pytest.raises(RuntimeError, match="sequence count changed"):
+        sam.update(q, q)
+    sam.reset()
+    assert torch.equal(sam.update(q, q), routes(q, q))
+
+
+def test_packed_chunks_preserve_paused_histories():
+    torch.manual_seed(73)
+    q = [torch.randn(1, n, 2, 3) for n in (7, 6, 5)]
+    k = [torch.randn_like(x) for x in q]
+    expected = [routes(a, b)[0] for a, b in zip(q, k)]
+    sam = RosaSam(2, 3)
+    starts = [0, 0, 0]
+    for sizes in ((4, 0, 3), (0, 5, 2), (3, 1, 0)):
+        cu = torch.tensor([0, *sizes], dtype=torch.int32).cumsum(0).int()
+        def chunk(xs):
+            return torch.cat([x[0, start:start + n] for x, start, n in zip(xs, starts, sizes)])
+        actual = sam.update(chunk(q), chunk(k), cu)
+        target = torch.cat([x[start:start + n] for x, start, n in zip(expected, starts, sizes)])
+        assert torch.equal(actual, target)
+        starts = [start + n for start, n in zip(starts, sizes)]
+
+
 def test_unlimited_suffix_beats_recent_one_symbol_match():
     t, bits = 71, 8
     code = torch.arange(40)
