@@ -1,41 +1,46 @@
 # rosa_soft
 
-A PyTorch extension for training and running ROSA, a discrete suffix-based
-retrieval operator. It provides an exact CUDA forward with a choice of dense
-soft or bitflip backward estimators, and a C++ suffix automaton for
-stateful CPU inference.
+English | [简体中文](README.zh-CN.md)
 
-- Exact, causal, unlimited-length suffix matching.
-- Binary forward values with surrogate gradients for Q, K, and V.
-- Dense and packed soft training, and dense bitflip training, including
-  grouped value heads.
-- FP16, BF16, and FP32 inputs, with FP32 gradient accumulation.
-- PyTorch autograd and `torch.compile` integration.
+A PyTorch extension for ROSA, a discrete suffix-based retrieval operator.
+It provides exact CUDA matching with dense soft or bitflip training gradients,
+and a C++ suffix automaton for stateful CPU inference.
 
-`rosa_soft` remains the default dense/packed training operator.
-`rosa_bitflip` is an explicit alternative for dense sequences; the library
-never switches estimators automatically.
+## Operators
+
+| API | Purpose | Input layout |
+| --- | --- | --- |
+| `rosa_soft` | Hard CUDA forward, dense soft surrogate backward | Dense or packed |
+| `rosa_bitflip` | Hard CUDA forward, complete bit-edit output differences | Dense |
+| `rosa_hard` | Stateless CPU SAM inference and validation; returns values and routes | Dense or packed |
+| `RosaSam` | Stateful CPU SAM routing; caller owns the V history | Dense or packed chunks |
+
+Both training operators use the same exact, causal, unlimited-suffix forward.
+For query position `i`, select the longest matching Q/K suffix with K end
+`j < i`; ties select the latest `j`. Return binary `V[j+1]`, or zero if
+there is no match. Positive inputs encode `+1`; zero and negative inputs
+encode `-1`. Neither training forward exposes soft values.
 
 ## Installation
 
-Requires Python 3.10+, PyTorch 2.11, and a C++17 compiler. CUDA training also
-requires a CUDA toolkit compatible with the installed PyTorch build.
-
-Install PyTorch first, then build the extension against it:
+Requires Python 3.10+, PyTorch 2.11.x, and a C++17 compiler. CUDA training
+also requires a CUDA toolkit compatible with the installed PyTorch build.
+From a source checkout, install PyTorch first, then build:
 
 ```bash
 pip install --no-build-isolation .
 ```
 
-CUDA is detected automatically. Set `USE_CUDA=1` to require a CUDA build,
-or `USE_CUDA=0` for CPU-only inference and validation. Set `CUDA_HOME` when
-the toolkit is not on the default search path.
+CUDA is detected automatically. Set `USE_CUDA=1` to require a CUDA build or
+`USE_CUDA=0` for CPU-only inference and validation. Set `CUDA_HOME` if the
+toolkit is outside the default search path. Extensions build at installation,
+not on import. See [API and deployment](docs/API.md) for execution constraints.
 
-## Quick Start
+## Training
 
 ```python
 import torch
-from rosa_soft import rosa_soft
+from rosa_soft import rosa_soft, rosa_bitflip
 
 q = torch.randn(1, 2048, 4, 8, device="cuda",
                 dtype=torch.float16, requires_grad=True)
@@ -44,209 +49,90 @@ v = torch.randn(1, 2048, 2, 64, device="cuda",
                 dtype=torch.float16, requires_grad=True)
 
 y = rosa_soft(q, k, v)  # [1, 2048, 4, 64]
+# Alternative estimator, with the same hard forward:
+# y = rosa_bitflip(q, k, v, rows=64, chunks=2)
 y.float().square().mean().backward()
 ```
 
-## Matching Semantics
+Dense Q/K use `[B,T,H,D]`, with `1 <= D <= 32`. V uses `[B,T,Hv,Dv]`,
+where `H % Hv == 0`. CUDA training supports FP16, BF16 and FP32, FP32
+gradient accumulation, first-order autograd, and `torch.compile`.
 
-Each Q/K vector represents a binary symbol: positive elements become `+1`,
-and zero or negative elements become `-1`. At query position `i`, ROSA
-selects the longest exact match between the Q suffix ending at `i` and a
-historical K suffix ending at `j < i`. Ties select the latest `j`.
+`rosa_soft` is the default estimator. Its static options are `scale=1.0`,
+`dropout_p=0.0` and `mismatch_scale=3.0`; they affect only backward.
+`rosa_bitflip` evaluates complete activation-bit output changes at fixed dY,
+then maps credit to continuous inputs using softsign. Explicit `tied="qk"`
+and `tied="qkv"` modes perform simultaneous edits of shared activations.
+Neither estimator is an unbiased derivative of an arbitrary nonlinear task
+loss, and neither guarantees better training than the other.
 
-The output is binary `V[j + 1]`. If no symbol matches, the output is zero.
-Matching has no suffix window or candidate limit. The CUDA DP and CPU suffix
-automaton implement the same rule.
+For independent QKV 4-bit models, use `[B,T,C/4,4]`. The
+[Rosa4Bit adapter](examples/rosa_4bit.py) retains a trainable output amplitude
+outside V quantization. See the [integration guide](docs/API.md#qkv-4-bit-models)
+and [residual-block training example](examples/train_bitflip.py).
 
-## Training API
+## Memory and Scaling
 
-```python
-y = rosa_soft(
-    q, k, v,
-    cu_seqlens=None,
-    scale=1.0,
-    dropout_p=0.0,
-    mismatch_scale=3.0,
-)
-```
+CUDA training performs quadratic work in sequence length at fixed widths.
+Unlimited suffix matching does not imply linear-time GPU training.
 
-| Argument | Description |
-| --- | --- |
-| `q`, `k` | Same-shaped CUDA tensors: `[B, T, H, D]` or packed `[N, H, D]`; `1 <= D <= 32`. |
-| `v` | `[B, T, Hv, Dv]` or `[N, Hv, Dv]`; `H % Hv == 0`. Same device and dtype as Q/K. |
-| `cu_seqlens` | Required for packed input: a nondecreasing CUDA int32 vector starting at zero and ending at `N`. Omit for dense input. |
-| `scale` | Positive multiplier of the surrogate logits. |
-| `dropout_p` | Probability of dropping a post-softmax surrogate weight, with inverse-keep scaling. Default: zero. |
-| `mismatch_scale` | Positive penalty for symbol mismatch in the surrogate recurrence. |
+**Bitflip workspace is O(T), not O(T log T), for fixed batch size, head counts,
+bit/value widths, and `rows`.** Let `S = B*H/chunks` and `R = min(rows,T)`:
 
-Output shape is `[B, T, H, Dv]` or `[N, H, Dv]`. Empty packed segments
-are supported; neither matches nor gradients cross sequence boundaries.
+- Independent edits use `O(S*R*T)` band storage.
+- Joint QK/QKV edits use `O(S*R*T*D)` band storage.
+- Full inputs, saved routes and final gradients remain linear-sized and are
+  not divided by `chunks`.
 
-The forward is always hard and binary. Continuous scores and dropout exist
-only in backward. The gradient is a dense surrogate over all causal
-candidates, not the derivative of the discrete routing decision. Parameters
-are static; there is no internal training schedule. Higher-order gradients
-are not supported.
+`rows` (default 256) limits live query rows, not suffix length. `chunks`
+(default 1) is the number of equal head groups processed sequentially in
+backward; it must divide both H and Hv. Both reduce workspace when adjusted
+appropriately, with a throughput tradeoff. Linear space can still be large:
+see the [allocation ledger and sizing examples](docs/MEMORY.md).
 
-CUDA training performs quadratic candidate work. Packed backward runs each
-nonempty segment separately and synchronizes offsets to the host; it is not
-a single fused variable-length kernel. Use the CPU automaton for stateful
-long-context inference.
-
-## Bitflip Training
+## Inference
 
 ```python
-from rosa_soft import rosa_bitflip
+import torch
+from rosa_soft import rosa_hard, RosaSam
 
-y = rosa_bitflip(q, k, v, rows=256)
-# Optional equal head groups, processed sequentially in backward:
-y = rosa_bitflip(q, k, v, chunks=6)  # H=Hv=192: 32 heads per group
-# Explicit shared-activation edits:
-y = rosa_bitflip(q, q, v, rows=64, tied="qk")
-y = rosa_bitflip(q, q, q, rows=64, tied="qkv")
-```
-
-Q/K are dense `[B,T,H,D]`, with `1 <= D <= 32`; V is `[B,T,Hv,Dv]`,
-with `H % Hv == 0`. Inputs must be finite CUDA tensors with matching
-FP16/BF16/FP32 dtype. Noncontiguous inputs and empty T are supported.
-Packed sequences are not supported: do not concatenate independent
-documents into one dense sequence.
-
-The hard output follows the same unlimited matching rule as `rosa_soft`.
-For Q/K, backward evaluates every independent activation-bit output edit,
-contracts its output difference with fixed upstream dY, and applies the
-softsign factor. V gradients follow the hard route only, unlike the dense
-V carrier used by `rosa_soft`. This is not an unbiased derivative of an
-arbitrary nonlinear task loss or a projection-weight edit.
-
-By default, edits remain independent even when inputs alias. `tied="qk"`
-flips one shared activation bit in Q and K simultaneously. `tied="qkv"`
-also flips its V payload. Bound arguments must be the same Tensor object;
-the library does not infer binding from values or shared projection weights.
-Joint modes require `T < 2**20` and `B*H <= 65535`. These are integer-format
-limits, not suffix windows. Joint edits are not sums of independent edits.
-
-`rows` is an integer in [1,256] limiting the live work band. It controls
-workspace, not suffix length or which edits contribute. Time is quadratic
-in sequence length at fixed widths; working space is linear at fixed rows,
-but has a larger constant than the soft implementation. Highly repetitive
-symbols can be substantially slower than random symbols. Neither estimator
-is universally faster or guarantees better training.
-
-`chunks` is the number of equal head groups processed sequentially in backward,
-per batch element. The default `1` preserves unsharded execution. It must be a
-positive integer dividing both `H` and `Hv`, so each group owns complete GQA
-value heads. It works with independent and explicit tied modes. Increasing it
-reduces peak backward workspace at the cost of extra launches and copies; it
-does not reduce total work, split the time axis, or change the estimator.
-Inputs, saved routes and final gradients remain full size. You can pass a
-different value on each call; changing it under `torch.compile` may recompile.
-
-Gradients accumulate in FP32 with nondeterministic atomic summation.
-Strict deterministic mode raises; higher derivatives are unsupported.
-The bitflip extension builds separately without fast math. Independent and joint
-modes, including head chunking, are runtime-tested on SM75 and SM86. Native BF16
-model/Inductor tests require SM80 or newer. BF16 operator arithmetic is tested on
-SM75 as well.
-
-See [the residual-block training example](examples/train_bitflip.py).
-For mixed-precision compiled models, put autocast inside the compiled
-callable so the dtype is explicit in the graph:
-
-```python
-@torch.compile(fullgraph=True)
-def forward(x):
-    with torch.autocast("cuda", dtype=torch.bfloat16):
-        return model(x)
-```
-
-## QKV 4-bit Models
-
-Independent Q/K/V projections with four consecutive channels per symbol use
-`H=C/4` and `D=Dv=4`. Both training estimators support this layout directly;
-use the default independent `rosa_bitflip`, not a tied mode. For width 768,
-the operator inputs are `[B,T,192,4]`.
-
-The source example [Rosa4Bit](examples/rosa_4bit.py) adapts `[B,T,C]` projections
-and retains a trainable `emb` of shape `[1,1,C]`. Install it as the model's
-`rosa_qkv` submodule to preserve that parameter path. It multiplies hard binary
-output by `emb` after retrieval, keeps no-match output zero, and propagates
-gradients through both the amplitude and Q/K/V under AMP. Do not pre-quantize
-the projections, detach `emb`, or put it inside V's sign quantization.
-
-In a source checkout, after the model's Q/K/V projections:
-
-```python
-from examples.rosa_4bit import Rosa4Bit
-from rosa_soft import rosa_bitflip, rosa_soft
-from functools import partial
-
-# Bitflip with 32 heads per group; use op=rosa_soft for the dense estimator.
-layer = Rosa4Bit(768, op=partial(rosa_bitflip, chunks=6)).cuda()
-y = layer(q, k, v)  # Q/K/V and output: [B,T,768]
-```
-
-This matches the layer structure in
-[RWKV-LM's QKV 4-bit inference example](https://github.com/BlinkDL/RWKV-LM/blob/main/RWKV-v8/260222_rosa4bitLM_L12.py).
-It does not establish the unpublished training estimator or qualify the
-official checkpoint: loading the full model and comparing its logits remain
-separate integration tests. Training tests cover amplitude gradients, two
-checkpointed residual blocks, AMP/compile, and the 192-head, 512-token layout.
-
-## CPU Inference
-
-For a complete sequence, `rosa_hard` returns both values and matched K ends:
-
-```python
-from rosa_soft import rosa_hard
-
-y, matched_key_end = rosa_hard(q, k, v)
-```
-
-It accepts dense or packed inputs, using the same optional `cu_seqlens`
-argument. No-match ends are `-1`; packed ends are local to each sequence.
-
-For incremental routing, retain a `RosaSam` instance:
-
-```python
-from rosa_soft import RosaSam
+q = torch.randn(1, 16, 4, 8)
+k = torch.randn_like(q)
+v = torch.randn(1, 16, 2, 64)
+y, ends = rosa_hard(q, k, v)  # No-match ends are -1.
 
 sam = RosaSam(num_heads=4, symbol_bits=8)
-ends = sam.update(q_chunk, k_chunk)
-# Later updates continue the same sequence histories.
-ends = sam.update(next_q_chunk, next_k_chunk)
-sam.reset()
+ends = sam.update(q, k)
+# Subsequent updates continue each sequence's history until sam.reset().
 ```
 
-`RosaSam` stores Q/K matching state, not V. Ends refer to the accumulated
-sequence history. Keep the sequence count and ordering fixed between updates,
-including empty chunks, and do not update one instance concurrently. Empty
-chunks return empty results without advancing history. `update_packed` accepts
-prepacked int32 symbols of shape `[B, T, H]` or `[N, H]`.
+CPU SAM avoids the all-pairs CUDA DP and supports incremental retrieval, but
+its state grows with history; this implementation does not guarantee constant
+worst-case time per token. CPU calls are synchronous, including staging GPU
+inputs. Calling `model.eval()` does not automatically switch operators.
 
-CPU matching is synchronous. GPU inputs are staged through the host; these
-interfaces do not provide asynchronous transfer overlap or training gradients.
+## Documentation
 
-## Development
+- [中文版 README](README.zh-CN.md): matching overview and quick start in Chinese.
+- [API and deployment](docs/API.md): parameters, packed input, binding and model integration.
+- [Memory and complexity](docs/MEMORY.md): allocations, sizing and measurement scope.
+- [Methods and related work](docs/METHODS.md): forward semantics and gradient definitions.
+- [Production design](docs/DESIGN.md): equations, kernel organization and source map.
+
+Run the semantic and training integration tests from a source checkout:
 
 ```bash
 pip install --no-build-isolation ".[test]"
 python -m pytest -q
 ```
 
-Tests compare hard routing with an independent dynamic-programming oracle
-and soft gradients with an independent PyTorch definition. Bitflip tests
-enumerate independent and joint hard output edits, including cancellation-sensitive
-values, and exercise checkpointed residual-block training. Tests cover
-causality, latest-match ties, unbounded suffixes, chunked inference, packed
-sequences, dtypes, gradient masks, dropout, and compilation.
-
-See [Architecture and Gradient Definition](docs/DESIGN.md) for the equations
-and implementation structure.
+Tests use independent DP/math and literal bit-edit oracles. They cover
+causality, ties, unlimited suffixes, layouts, dtypes, gradient masks,
+compilation and checkpointed training. Current bitflip execution is tested
+on SM75 and SM86; native BF16 model/Inductor tests require SM80 or newer.
 
 ## Acknowledgements
 
-ROSA was introduced by **Peng Bo (BlinkDL)**. This project builds on his ROSA
-work in [RWKV-LM / RWKV-v8](https://github.com/BlinkDL/RWKV-LM/tree/main/RWKV-v8).
-We thank Peng Bo and the [RWKV-LM project](https://github.com/BlinkDL/RWKV-LM)
+ROSA was introduced by **Peng Bo (BlinkDL)**. We thank him and the
+[RWKV-LM project](https://github.com/BlinkDL/RWKV-LM/tree/main/RWKV-v8)
 for the original design and implementation.

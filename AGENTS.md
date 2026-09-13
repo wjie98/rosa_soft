@@ -46,6 +46,11 @@ These rules are part of the operator contract.
     shared projection-weight edit. Joint modes edit one shared activation bit,
     not the projection parameters. Never route packed documents through
     dense matching without isolating their boundaries.
+12. Keep README.md and README.zh-CN.md aligned when changing public behavior.
+    API contracts belong in docs/API.md, allocation formulas in docs/MEMORY.md,
+    estimator comparisons in docs/METHODS.md, and implementation details in
+    docs/DESIGN.md. Distinguish live scratch from saved tensors and whole-model
+    peak memory; any O(T) claim must state the dimensions held fixed.
 
 Archive points:
 

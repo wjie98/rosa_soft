@@ -1,5 +1,11 @@
 # Production Design
 
+[English overview](../README.md) | [中文概览](../README.zh-CN.md) |
+[API](API.md) | [Memory](MEMORY.md) | [Methods](METHODS.md)
+
+This document describes the current algorithm and source organization.
+Public parameter contracts live in API; allocation formulas live in Memory.
+
 ## Public Data Flow
 
 ```text
@@ -12,7 +18,7 @@ q, k, v
    |                                                            |
    |    dy -> selected backward -> dq, dk, dv <-----------------+
    |          rosa_soft: dense unlimited suffix carrier
-   |          rosa_bitflip: independent hard bit edits
+   |          rosa_bitflip: independent or explicit joint bit edits
    |
    +-- inference / validation
         pack sign bits -> CPU suffix automaton -> matched end
@@ -41,18 +47,32 @@ An empty CUDA int32 `cu` identifies dense input. The Python autograd wrapper
 saves Q/K/V, two `O(BHT)` packed symbol tensors, an optional scalar seed, and
 offsets. It returns gradients only for requested Q/K/V inputs.
 
-Bitflip adds two separate schemas without changing the soft ABI:
+Bitflip adds independent and joint schemas without changing the soft ABI:
 
 ```text
-rosa_soft::bitflip_forward(q, k, v, rows) -> (y, packed_q, packed_k, route)
+rosa_soft::bitflip_forward(q, k, v, rows, chunks=1)
+                         -> (y, packed_q, packed_k, route)
 rosa_soft::bitflip_backward(q, k, v, dy, packed_q, packed_k, route,
                             d, rows, mask) -> (dq, dk, dv)
+rosa_soft::joint_forward(x, v, rows, all, chunks=1)
+                       -> (y, packed_q, packed_k, route)
+rosa_soft::joint_backward(x, v, dy, packed_q, route, rows, all, mask)
+                        -> (dx, dv)
 ```
 
 Its autograd setup retains the winning priority and only the raw Q/K
 activations that need gradients. Packed Q/K are retained whenever either
-needs a gradient. V-only backward skips bit-edit DP. Both schemas have
-FakeTensor implementations and a registered first-order autograd rule.
+needs a gradient. V-only backward skips bit-edit DP. Joint setup retains the
+shared activation, V, packed symbols and route. All dispatcher operations have
+FakeTensor implementations; the two forward operations register first-order
+autograd rules. `all` selects whether V participates in the joint edit.
+
+`chunks` is backward scheduling metadata; hard forward runs once over the
+full batch. Python `_chunks` slices complete Q/K and V head groups, invokes
+the existing native backward sequentially, and copies each result into its
+owned output slice. It never slices T or shares a V head across groups.
+Packed-symbol and input-layout copies are temporary; final gradients remain
+full-sized. The default one-group path calls native backward directly.
 
 ## Hard CUDA DP
 
@@ -93,9 +113,10 @@ the exact hard route.
 
 `cuda/soft.cu` is the generic FP16/BF16/FP32 implementation. It scans exact
 diagonal suffix recurrence in automatically sized tiles, maintains online
-softmax statistics, replays score tiles for Q/K/V credit, and stores no full
-candidate matrix. Workspace size is selected internally and capped; it is not
-a public tuning parameter.
+softmax statistics, and replays score tiles for Q/K/V credit. Slab width is
+bounded; small inputs may fit all diagonals in one slab, but a full candidate
+matrix is not required as T grows. Workspace selection is internal; see
+[Memory](MEMORY.md) for its bounds and padding.
 
 `cuda/soft_fp16.cu` is the long-sequence FP16/Dv64 specialization. It fuses
 score/statistics/reverse work, uses checkpoint replay, and uses tensor cores
@@ -217,12 +238,13 @@ These are exact representations of the same output difference.
 The live band is `min(rows,T)`. Integer generation tags let repair storage
 be reused without clearing it for every bit; it is reset before tag order
 wraps. No full edited-world tensor or debug mode exists in the native API.
-Space is `O(BH*rows*T + BHTD + BHTDv)`; time is quadratic in T at fixed
-widths. Dense repeated codes generate more repair/credit work than
-independent random codes, even though both have the same asymptotic bound.
+At fixed batch, heads, rows and widths, current-group scratch is linear in T;
+time is quadratic in T. Dense repeated codes generate more repair/credit
+work than independent random codes, even though both have the same asymptotic bound.
 Smaller `rows` reduces the workspace but adds band launches and leaves fewer
 row CTAs available per launch. It is a memory/throughput tradeoff, not a change
-to the estimator or its matching range.
+to the estimator or its matching range. [Memory](MEMORY.md) gives the independent
+and joint allocation ledgers, head-chunk factors and whole-model exclusions.
 
 The package builds `_bitflip` separately from `_C` to preserve bitflip's
 non-fast-math floating arithmetic while leaving the soft/SAM build intact.
@@ -233,8 +255,10 @@ and expose clear CUDA-required errors for both training APIs.
 
 | Function | Responsibility |
 |---|---|
-| Python `rosa_bitflip` | Validate the layout/rows argument and call the dispatcher |
+| Python `rosa_bitflip` | Validate layout, rows/chunks and explicit binding; call the dispatcher |
 | `_setup_context`, `_backward` | Save requested activations and register first-order autograd |
+| `_setup_joint`, `_joint_backward` | Register the shared-activation edit and its gradient ownership |
+| `_chunks` | Run native backward on sequential, disjoint head groups |
 | Native `forward` | Validate/pack inputs, compute hard priorities, gather binary V |
 | CUDA `dp` | Carry exact/repair suffix state across row bands and emit packed records |
 | CUDA `row` | Build replacement summaries, combine repairs and accumulate output-difference credit |
@@ -312,8 +336,9 @@ nonzero edit. Binary V uses the existing packed format, a four-bit credit table
 and an exact uncached tail above 480 coordinates. Credit subtracts symbols before
 contracting dY, preserving cancellation of unchanged coordinates.
 
-Joint scratch is `O(BH*rows*T*D + BHTDv)`, linear in T for fixed widths and rows.
-The repair buffer alone occupies `8*BH*rows*T*D` bytes. `T<2**20` and `BH<=65535`
+Joint scratch is linear in T for fixed widths and rows, but its repair buffer
+has an additional D factor absent from the independent band. Exact byte sizes
+and the effect of chunks are in [Memory](MEMORY.md). `T<2**20` and `BH<=65535`
 are checked representation/grid limits. There is no suffix truncation or
 content-dependent algorithm selection. Final STE and hard-route V scatter reuse
 the native I/O layer; no research gradient maps or diagnostics are exported.
@@ -329,10 +354,11 @@ before the key at the same position is appended, preserving causality. Every
 state tracks its latest end position, and clone transitions are copied rather
 than shared so later mutation cannot corrupt another state.
 
-`RosaSam.update` returns local matched key ends; no match is `-1`. It can process
-successive chunks as long as the number of sequences does not change. The
-convenience `rosa_hard` call is stateless and gathers only values present in
-the supplied chunk.
+`RosaSam.update` returns matched key ends in each sequence's accumulated
+history; no match is `-1`. Ends are neither flattened-batch offsets nor
+current-chunk offsets. It can process successive chunks while sequence count
+and ordering remain fixed. The convenience `rosa_hard` call creates fresh
+state and gathers only values present in its supplied sequence(s).
 
 `Sam::step` calls `match` before `extend`; `go`/`set` handle transitions and
 `copy_edges` makes independent clone edges. `State` stores length, suffix link,
