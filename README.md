@@ -99,6 +99,8 @@ long-context inference.
 from rosa_soft import rosa_bitflip
 
 y = rosa_bitflip(q, k, v, rows=256)
+# Optional equal head groups, processed sequentially in backward:
+y = rosa_bitflip(q, k, v, chunks=6)  # H=Hv=192: 32 heads per group
 # Explicit shared-activation edits:
 y = rosa_bitflip(q, q, v, rows=64, tied="qk")
 y = rosa_bitflip(q, q, q, rows=64, tied="qkv")
@@ -131,12 +133,21 @@ but has a larger constant than the soft implementation. Highly repetitive
 symbols can be substantially slower than random symbols. Neither estimator
 is universally faster or guarantees better training.
 
+`chunks` is the number of equal head groups processed sequentially in backward,
+per batch element. The default `1` preserves unsharded execution. It must be a
+positive integer dividing both `H` and `Hv`, so each group owns complete GQA
+value heads. It works with independent and explicit tied modes. Increasing it
+reduces peak backward workspace at the cost of extra launches and copies; it
+does not reduce total work, split the time axis, or change the estimator.
+Inputs, saved routes and final gradients remain full size. You can pass a
+different value on each call; changing it under `torch.compile` may recompile.
+
 Gradients accumulate in FP32 with nondeterministic atomic summation.
 Strict deterministic mode raises; higher derivatives are unsupported.
-The bitflip extension builds separately without fast math. Its current
-independent kernels are validated on SM75 and SM86. Joint modes are runtime-tested
-on SM86 and compile-tested on SM75. Native BF16 model/Inductor tests require SM80
-or newer. BF16 operator arithmetic is tested on SM75 as well.
+The bitflip extension builds separately without fast math. Independent and joint
+modes, including head chunking, are runtime-tested on SM75 and SM86. Native BF16
+model/Inductor tests require SM80 or newer. BF16 operator arithmetic is tested on
+SM75 as well.
 
 See [the residual-block training example](examples/train_bitflip.py).
 For mixed-precision compiled models, put autocast inside the compiled
@@ -168,8 +179,10 @@ In a source checkout, after the model's Q/K/V projections:
 ```python
 from examples.rosa_4bit import Rosa4Bit
 from rosa_soft import rosa_bitflip, rosa_soft
+from functools import partial
 
-layer = Rosa4Bit(768, op=rosa_bitflip).cuda()  # or op=rosa_soft
+# Bitflip with 32 heads per group; use op=rosa_soft for the dense estimator.
+layer = Rosa4Bit(768, op=partial(rosa_bitflip, chunks=6)).cuda()
 y = layer(q, k, v)  # Q/K/V and output: [B,T,768]
 ```
 

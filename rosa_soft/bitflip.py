@@ -10,7 +10,7 @@ __all__ = ["rosa_bitflip"]
 
 
 @torch.library.register_fake("rosa_soft::bitflip_forward")
-def _fake_forward(q: Tensor, k: Tensor, v: Tensor, rows: int):
+def _fake_forward(q: Tensor, k: Tensor, v: Tensor, rows: int, chunks: int = 1):
     torch._check(q.ndim == k.ndim == v.ndim == 4)
     for a, b in zip(q.shape, k.shape):
         torch._check(a == b)
@@ -23,6 +23,9 @@ def _fake_forward(q: Tensor, k: Tensor, v: Tensor, rows: int):
     torch._check(v.size(2) > 0)
     torch._check(v.size(3) > 0)
     torch._check(h % v.size(2) == 0)
+    torch._check(chunks > 0)
+    torch._check(h % chunks == 0)
+    torch._check(v.size(2) % chunks == 0)
     torch._check(q.dtype == k.dtype == v.dtype)
     torch._check(q.device == k.device == v.device)
     torch._check(q.dtype in (torch.float16, torch.bfloat16, torch.float32))
@@ -43,9 +46,10 @@ def _fake_backward(q, k, v, dy, pq, pk, route, d, rows, mask):
 
 
 def _setup_context(ctx, inputs, output):
-    q, k, v, rows = inputs
+    q, k, v, rows, chunks = inputs
     mask = sum(int(need) << i for i, need in enumerate(ctx.needs_input_grad[:3]))
     ctx.mask, ctx.d, ctx.rows = mask, q.size(3), rows
+    ctx.chunks = chunks
     _, pq, pk, route = output
     ctx.save_for_backward(
         q if mask & 1 else q.new_empty(0),
@@ -58,15 +62,43 @@ def _setup_context(ctx, inputs, output):
     ctx.set_materialize_grads(False)
 
 
+def _chunks(op, xs, dy, codes, args, mask, chunks):
+    if chunks == 1:
+        return op(*xs, dy, *codes, *args)
+    b, t, h, _ = dy.shape
+    heads = h // chunks
+    grads = tuple(x.new_empty(x.shape if mask & (1 << i) else (0,))
+                  for i, x in enumerate(xs))
+    for index in range(chunks):
+        start = index * heads
+        # Each slice owns complete V-head groups, so dV needs no cross-slice sum.
+        def part(x):
+            if x.ndim != 4:
+                return x
+            group = h // x.size(2)
+            return x.narrow(2, start // group, heads // group)
+
+        packed = tuple(x.view(b, h, t).narrow(1, start, heads)
+                       .reshape(b * heads, t).contiguous() if x.ndim == 2 else x
+                       for x in codes)
+        chunk = op(*(part(x) for x in xs), dy.narrow(2, start, heads), *packed, *args)
+        for i, g in enumerate(chunk):
+            if mask & (1 << i):
+                part(grads[i]).copy_(g)
+        del chunk, packed
+    return grads
+
+
 @once_differentiable
 def _backward(ctx, dy, *ignored):
     if dy is None:
-        return None, None, None, None
+        return None, None, None, None, None
     q, k, v, pq, pk, route = ctx.saved_tensors
-    grads = torch.ops.rosa_soft.bitflip_backward(
-        q, k, v, dy, pq, pk, route, ctx.d, ctx.rows, ctx.mask
+    grads = _chunks(
+        torch.ops.rosa_soft.bitflip_backward, (q, k, v), dy, (pq, pk, route),
+        (ctx.d, ctx.rows, ctx.mask), ctx.mask, ctx.chunks,
     )
-    return (*(g if ctx.mask & (1 << i) else None for i, g in enumerate(grads)), None)
+    return (*(g if ctx.mask & (1 << i) else None for i, g in enumerate(grads)), None, None)
 
 
 torch.library.register_autograd(
@@ -75,13 +107,13 @@ torch.library.register_autograd(
 
 
 @torch.library.register_fake("rosa_soft::joint_forward")
-def _fake_joint_forward(x, v, rows, all):
+def _fake_joint_forward(x, v, rows, all, chunks=1):
     torch._check(x.ndim == 4)
     torch._check(x.size(1) < (1 << 20))
     torch._check(x.size(0) * x.size(2) <= 65535)
     if all:
         torch._check(x.shape == v.shape)
-    return _fake_forward(x, x, v, rows)
+    return _fake_forward(x, x, v, rows, chunks)
 
 
 @torch.library.register_fake("rosa_soft::joint_backward")
@@ -91,8 +123,8 @@ def _fake_joint_backward(x, v, dy, q, route, rows, all, mask):
 
 
 def _setup_joint(ctx, inputs, output):
-    x, v, rows, all = inputs
-    ctx.rows, ctx.all = rows, all
+    x, v, rows, all, chunks = inputs
+    ctx.rows, ctx.all, ctx.chunks = rows, all, chunks
     ctx.mask = int(ctx.needs_input_grad[0]) | (int(ctx.needs_input_grad[1] and not all) << 1)
     _, q, _, route = output
     ctx.save_for_backward(x, v, q, route)
@@ -102,17 +134,18 @@ def _setup_joint(ctx, inputs, output):
 @once_differentiable
 def _joint_backward(ctx, dy, *ignored):
     if dy is None or not ctx.mask:
-        return None, None, None, None
+        return None, None, None, None, None
     x, v, q, route = ctx.saved_tensors
-    gx, gv = torch.ops.rosa_soft.joint_backward(x, v, dy, q, route, ctx.rows, ctx.all, ctx.mask)
-    return gx if ctx.mask & 1 else None, gv if ctx.mask & 2 else None, None, None
+    gx, gv = _chunks(torch.ops.rosa_soft.joint_backward, (x, v), dy, (q, route),
+                     (ctx.rows, ctx.all, ctx.mask), ctx.mask, ctx.chunks)
+    return gx if ctx.mask & 1 else None, gv if ctx.mask & 2 else None, None, None, None
 
 
 torch.library.register_autograd("rosa_soft::joint_forward", _joint_backward, setup_context=_setup_joint)
 
 
 def rosa_bitflip(q: Tensor, k: Tensor, v: Tensor, *, rows: int = 256,
-                 tied: str | None = None) -> Tensor:
+                 tied: str | None = None, chunks: int = 1) -> Tensor:
     """Run unlimited hard ROSA with exact bit-edit output differences.
 
     Q/K are dense [B,T,H,D], D<=32; V is [B,T,Hv,Dv], H%Hv==0.
@@ -124,6 +157,11 @@ def rosa_bitflip(q: Tensor, k: Tensor, v: Tensor, *, rows: int = 256,
     softsign factor. With independent edits or tied QK, V gradients follow
     only the hard route; tied QKV includes payload changes in its joint edit.
 
+    chunks divides backward heads into equal sequential groups per batch.
+    It must be a positive integer dividing both H and Hv; 1 processes all
+    heads together. Forward and suffix history are unchanged. Changing chunks
+    under torch.compile may recompile the graph.
+
     tied="qk" edits the same bit in Q and K simultaneously; Q and K must be
     the same Tensor object. tied="qkv" additionally edits its V payload and
     requires all three arguments to be the same Tensor. Joint modes require
@@ -133,10 +171,14 @@ def rosa_bitflip(q: Tensor, k: Tensor, v: Tensor, *, rows: int = 256,
         raise ValueError("rosa_bitflip requires dense [B,T,H,D] inputs")
     if type(rows) is not int or not 1 <= rows <= 256:
         raise ValueError("rows must be an integer in [1,256]")
+    if type(chunks) is not int or chunks <= 0:
+        raise ValueError("chunks must be a positive integer")
+    if q.size(2) % chunks or v.size(2) % chunks:
+        raise ValueError("chunks must divide H and Hv (complete GQA groups)")
     if tied is not None:
         if tied not in ("qk", "qkv"):
             raise ValueError("tied must be None, 'qk', or 'qkv'")
         if q is not k or (tied == "qkv" and q is not v):
             raise ValueError("tied inputs must be the same Tensor object")
-        return torch.ops.rosa_soft.joint_forward(q, v, rows, tied == "qkv")[0]
-    return torch.ops.rosa_soft.bitflip_forward(q, k, v, rows)[0]
+        return torch.ops.rosa_soft.joint_forward(q, v, rows, tied == "qkv", chunks)[0]
+    return torch.ops.rosa_soft.bitflip_forward(q, k, v, rows, chunks)[0]

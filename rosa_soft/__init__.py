@@ -34,8 +34,8 @@ if _has_cuda():
     from .soft import rosa_soft
 else:
 
-    def rosa_bitflip(q, k, v, *, rows=256, tied=None):
-        del q, k, v, rows, tied
+    def rosa_bitflip(q, k, v, *, rows=256, tied=None, chunks=1):
+        del q, k, v, rows, tied, chunks
         raise RuntimeError("rosa_bitflip requires a CUDA build")
 
     def rosa_soft(

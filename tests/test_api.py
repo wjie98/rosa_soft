@@ -22,8 +22,9 @@ def test_public_surface_is_minimal():
         "q", "k", "v", "cu_seqlens", "scale", "dropout_p", "mismatch_scale"
     ]
     assert list(inspect.signature(rosa_soft.rosa_bitflip).parameters) == [
-        "q", "k", "v", "rows", "tied"
+        "q", "k", "v", "rows", "tied", "chunks"
     ]
+    assert inspect.signature(rosa_soft.rosa_bitflip).parameters["chunks"].default == 1
 
 
 def test_native_surface_is_minimal():

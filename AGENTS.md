@@ -38,6 +38,9 @@ These rules are part of the operator contract.
     Q/K/V gradient masks, FP16/BF16/FP32, dropout, GQA, empty packed segments,
     and `torch.compile`.
 11. `rosa_bitflip` has no suffix limit; `rows` controls only its live workspace.
+    `chunks` partitions backward heads into equal sequential groups and must
+    divide both H and Hv. Keep the full forward and complete per-head edits;
+    never split GQA value-head ownership or treat chunks as a time window.
     Preserve its separate non-fast-math build and independent bit-edit oracle.
     It is not an unbiased derivative of arbitrary nonlinear task loss or a
     shared projection-weight edit. Joint modes edit one shared activation bit,
