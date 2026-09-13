@@ -37,4 +37,9 @@ Credit credit(const Tensor&, const Tensor&, const Tensor&, const Tensor&,
               const Tensor&, int d, int rows);
 Grads backward(const Tensor&, const Tensor&, const Tensor&, const Tensor&,
                const Tensor&, const Tensor&, const Tensor&, int d, int rows, int mask);
+Tensor joint_credit(const Tensor&, const Tensor&, const Tensor&, const Tensor&,
+                    int d, int rows, bool all);
+std::tuple<Tensor, Tensor> joint_backward(const Tensor&, const Tensor&, const Tensor&,
+                                        const Tensor&, const Tensor&, int rows,
+                                        bool all, int mask);
 }  // namespace rosa::bitflip

@@ -1,4 +1,4 @@
-"""Exact hard ROSA with independent activation-bit output differences."""
+"""Exact hard ROSA with explicit independent or joint bit differences."""
 
 from __future__ import annotations
 
@@ -74,8 +74,46 @@ torch.library.register_autograd(
 )
 
 
-def rosa_bitflip(q: Tensor, k: Tensor, v: Tensor, *, rows: int = 256) -> Tensor:
-    """Run unlimited hard ROSA with an independent-bit backward estimator.
+@torch.library.register_fake("rosa_soft::joint_forward")
+def _fake_joint_forward(x, v, rows, all):
+    torch._check(x.ndim == 4)
+    torch._check(x.size(1) < (1 << 20))
+    torch._check(x.size(0) * x.size(2) <= 65535)
+    if all:
+        torch._check(x.shape == v.shape)
+    return _fake_forward(x, x, v, rows)
+
+
+@torch.library.register_fake("rosa_soft::joint_backward")
+def _fake_joint_backward(x, v, dy, q, route, rows, all, mask):
+    return tuple(z.new_empty(z.shape if mask & (1 << i) else (0,))
+                 for i, z in enumerate((x, v)))
+
+
+def _setup_joint(ctx, inputs, output):
+    x, v, rows, all = inputs
+    ctx.rows, ctx.all = rows, all
+    ctx.mask = int(ctx.needs_input_grad[0]) | (int(ctx.needs_input_grad[1] and not all) << 1)
+    _, q, _, route = output
+    ctx.save_for_backward(x, v, q, route)
+    ctx.set_materialize_grads(False)
+
+
+@once_differentiable
+def _joint_backward(ctx, dy, *ignored):
+    if dy is None or not ctx.mask:
+        return None, None, None, None
+    x, v, q, route = ctx.saved_tensors
+    gx, gv = torch.ops.rosa_soft.joint_backward(x, v, dy, q, route, ctx.rows, ctx.all, ctx.mask)
+    return gx if ctx.mask & 1 else None, gv if ctx.mask & 2 else None, None, None
+
+
+torch.library.register_autograd("rosa_soft::joint_forward", _joint_backward, setup_context=_setup_joint)
+
+
+def rosa_bitflip(q: Tensor, k: Tensor, v: Tensor, *, rows: int = 256,
+                 tied: str | None = None) -> Tensor:
+    """Run unlimited hard ROSA with exact bit-edit output differences.
 
     Q/K are dense [B,T,H,D], D<=32; V is [B,T,Hv,Dv], H%Hv==0.
     Inputs must be finite CUDA tensors with matching FP16/BF16/FP32 dtype.
@@ -83,10 +121,22 @@ def rosa_bitflip(q: Tensor, k: Tensor, v: Tensor, *, rows: int = 256) -> Tensor:
 
     rows bounds workspace, not suffix length. Q/K gradients contract each
     independent bit's hard output change with fixed dY, then apply the
-    softsign factor. V gradients follow only the hard route.
+    softsign factor. With independent edits or tied QK, V gradients follow
+    only the hard route; tied QKV includes payload changes in its joint edit.
+
+    tied="qk" edits the same bit in Q and K simultaneously; Q and K must be
+    the same Tensor object. tied="qkv" additionally edits its V payload and
+    requires all three arguments to be the same Tensor. Joint modes require
+    T<2**20 and B*H<=65535. No binding is inferred from aliases by default.
     """
     if q.ndim != 4 or k.ndim != 4 or v.ndim != 4:
         raise ValueError("rosa_bitflip requires dense [B,T,H,D] inputs")
     if type(rows) is not int or not 1 <= rows <= 256:
         raise ValueError("rows must be an integer in [1,256]")
+    if tied is not None:
+        if tied not in ("qk", "qkv"):
+            raise ValueError("tied must be None, 'qk', or 'qkv'")
+        if q is not k or (tied == "qkv" and q is not v):
+            raise ValueError("tied inputs must be the same Tensor object")
+        return torch.ops.rosa_soft.joint_forward(q, v, rows, tied == "qkv")[0]
     return torch.ops.rosa_soft.bitflip_forward(q, k, v, rows)[0]

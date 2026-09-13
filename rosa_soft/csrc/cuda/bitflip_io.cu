@@ -114,6 +114,18 @@ __global__ void v_grad(const F* v, const float* dv, F* out, int64_t size) {
   }
 }
 
+template <class F>
+__global__ void joint_grad(const F* x, const float* grad, F* out, int64_t size,
+                          int t, int h, int d) {
+  int64_t p = static_cast<int64_t>(blockIdx.x)*blockDim.x+threadIdx.x;
+  if (p >= size) return;
+  int z=p%d, a=(p/d)%h, i=(p/(d*h))%t, b=p/(int64_t(d)*h*t);
+  float value=static_cast<float>(x[p]), scale=1+fabsf(value);
+  float raw=grad[(int64_t(b*h+a)*d+z)*t+i];
+  // Match the prototype's orientation, then reciprocal STE multiplication.
+  out[p]=static_cast<F>((raw*(value>0 ? -1.f : 1.f))*(.5f/(scale*scale)));
+}
+
 void check(const torch::Tensor& x) {
   TORCH_CHECK(x.is_cuda() && x.is_contiguous() && x.dim() == 4,
               "contiguous CUDA BTHD input required");
@@ -270,6 +282,53 @@ torch::Tensor hard(const torch::Tensor& q, const torch::Tensor& k) {
         reinterpret_cast<U*>(out.data_ptr<int64_t>()), s, t);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
   return out;
+}
+
+std::tuple<Tensor, Tensor> joint_backward(const Tensor& x, const Tensor& v,
+                                        const Tensor& dy, const Tensor& q,
+                                        const Tensor& route, int rows,
+                                        bool all, int mask) {
+  check_inputs(x, x, v);
+  check(dy);
+  int b=x.size(0), t=x.size(1), h=x.size(2), d=x.size(3), hv=v.size(2), dv=v.size(3);
+  TORCH_CHECK(t < (1 << 20) && int64_t(b)*h <= 65535, "joint index limit exceeded");
+  TORCH_CHECK(!all || x.sizes()==v.sizes(), "QKV requires matching shapes");
+  TORCH_CHECK(dy.device()==x.device() && dy.scalar_type()==x.scalar_type() &&
+                  dy.sizes()==torch::IntArrayRef({b,t,h,dv}), "invalid joint dY");
+  TORCH_CHECK(q.device()==x.device() && q.scalar_type()==torch::kInt32 &&
+                  q.is_contiguous() && q.sizes()==torch::IntArrayRef({int64_t(b)*h,t}) &&
+                  route.device()==x.device() && route.scalar_type()==torch::kInt64 &&
+                  route.is_contiguous() && route.sizes()==q.sizes(), "invalid joint state");
+  c10::cuda::CUDAGuard guard(x.device());
+  bool need_x=mask&1, need_v=mask&2;
+  Tensor raw;
+  if (t && need_x) {
+    auto values=all ? q.unsqueeze(-1) : pack_values(v);
+    // Same-dtype to() may keep the source strides.
+    auto upstream=dy.permute({0,2,1,3})
+        .to(torch::kFloat32, false, false, at::MemoryFormat::Contiguous)
+        .contiguous().view({b*h,t,dv});
+    raw=joint_credit(q,values,upstream,route,d,rows,all);
+  }
+  auto gx=need_x ? torch::empty_like(x) : torch::empty({0},x.options());
+  auto gv=need_v ? torch::empty_like(v) : torch::empty({0},v.options());
+  if (!t) return {gx,gv};
+  if (need_v && t>1) at::globalContext().alertNotDeterministic("rosa_bitflip joint V backward");
+  auto rawv=need_v ? torch::zeros_like(v,v.options().dtype(torch::kFloat32)) : Tensor{};
+  auto stream=at::cuda::getCurrentCUDAStream();
+  DISPATCH_ROSA_FLOAT_TYPES(x.scalar_type(), "joint_finish", [&] {
+    if (need_x)
+      joint_grad<<<(x.numel()+255)/256,256,0,stream>>>(x.data_ptr<scalar_t>(),raw.data_ptr<float>(),
+          gx.data_ptr<scalar_t>(),x.numel(),t,h,d);
+    if (need_v) {
+      scatter<<<(dy.numel()+255)/256,256,0,stream>>>(dy.data_ptr<scalar_t>(),
+          reinterpret_cast<const U*>(route.data_ptr<int64_t>()),rawv.data_ptr<float>(),dy.numel(),t,h,hv,dv);
+      v_grad<<<(v.numel()+255)/256,256,0,stream>>>(v.data_ptr<scalar_t>(),rawv.data_ptr<float>(),
+          gv.data_ptr<scalar_t>(),v.numel());
+    }
+  });
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+  return {gx,gv};
 }
 
 }  // namespace rosa::bitflip

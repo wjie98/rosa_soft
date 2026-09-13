@@ -2,7 +2,7 @@
 
 A PyTorch extension for training and running ROSA, a discrete suffix-based
 retrieval operator. It provides an exact CUDA forward with a choice of dense
-soft or independent-bit backward estimators, and a C++ suffix automaton for
+soft or bitflip backward estimators, and a C++ suffix automaton for
 stateful CPU inference.
 
 - Exact, causal, unlimited-length suffix matching.
@@ -99,6 +99,9 @@ long-context inference.
 from rosa_soft import rosa_bitflip
 
 y = rosa_bitflip(q, k, v, rows=256)
+# Explicit shared-activation edits:
+y = rosa_bitflip(q, q, v, rows=64, tied="qk")
+y = rosa_bitflip(q, q, q, rows=64, tied="qkv")
 ```
 
 Q/K are dense `[B,T,H,D]`, with `1 <= D <= 32`; V is `[B,T,Hv,Dv]`,
@@ -112,7 +115,14 @@ For Q/K, backward evaluates every independent activation-bit output edit,
 contracts its output difference with fixed upstream dY, and applies the
 softsign factor. V gradients follow the hard route only, unlike the dense
 V carrier used by `rosa_soft`. This is not an unbiased derivative of an
-arbitrary nonlinear task loss or a simultaneous shared-parameter edit.
+arbitrary nonlinear task loss or a projection-weight edit.
+
+By default, edits remain independent even when inputs alias. `tied="qk"`
+flips one shared activation bit in Q and K simultaneously. `tied="qkv"`
+also flips its V payload. Bound arguments must be the same Tensor object;
+the library does not infer binding from values or shared projection weights.
+Joint modes require `T < 2**20` and `B*H <= 65535`. These are integer-format
+limits, not suffix windows. Joint edits are not sums of independent edits.
 
 `rows` is an integer in [1,256] limiting the live work band. It controls
 workspace, not suffix length or which edits contribute. Time is quadratic
@@ -124,8 +134,9 @@ is universally faster or guarantees better training.
 Gradients accumulate in FP32 with nondeterministic atomic summation.
 Strict deterministic mode raises; higher derivatives are unsupported.
 The bitflip extension builds separately without fast math. Its current
-optimized kernels are validated on SM75; native BF16 model/Inductor tests
-require SM80 or newer. BF16 operator arithmetic is tested on SM75 as well.
+independent kernels are validated on SM75 and SM86. Joint modes are runtime-tested
+on SM86 and compile-tested on SM75. Native BF16 model/Inductor tests require SM80
+or newer. BF16 operator arithmetic is tested on SM75 as well.
 
 See [the residual-block training example](examples/train_bitflip.py).
 For mixed-precision compiled models, put autocast inside the compiled
@@ -137,6 +148,37 @@ def forward(x):
     with torch.autocast("cuda", dtype=torch.bfloat16):
         return model(x)
 ```
+
+## QKV 4-bit Models
+
+Independent Q/K/V projections with four consecutive channels per symbol use
+`H=C/4` and `D=Dv=4`. Both training estimators support this layout directly;
+use the default independent `rosa_bitflip`, not a tied mode. For width 768,
+the operator inputs are `[B,T,192,4]`.
+
+The source example [Rosa4Bit](examples/rosa_4bit.py) adapts `[B,T,C]` projections
+and retains a trainable `emb` of shape `[1,1,C]`. Install it as the model's
+`rosa_qkv` submodule to preserve that parameter path. It multiplies hard binary
+output by `emb` after retrieval, keeps no-match output zero, and propagates
+gradients through both the amplitude and Q/K/V under AMP. Do not pre-quantize
+the projections, detach `emb`, or put it inside V's sign quantization.
+
+In a source checkout, after the model's Q/K/V projections:
+
+```python
+from examples.rosa_4bit import Rosa4Bit
+from rosa_soft import rosa_bitflip, rosa_soft
+
+layer = Rosa4Bit(768, op=rosa_bitflip).cuda()  # or op=rosa_soft
+y = layer(q, k, v)  # Q/K/V and output: [B,T,768]
+```
+
+This matches the layer structure in
+[RWKV-LM's QKV 4-bit inference example](https://github.com/BlinkDL/RWKV-LM/blob/main/RWKV-v8/260222_rosa4bitLM_L12.py).
+It does not establish the unpublished training estimator or qualify the
+official checkpoint: loading the full model and comparing its logits remain
+separate integration tests. Training tests cover amplitude gradients, two
+checkpointed residual blocks, AMP/compile, and the 192-head, 512-token layout.
 
 ## CPU Inference
 
@@ -181,7 +223,7 @@ python -m pytest -q
 
 Tests compare hard routing with an independent dynamic-programming oracle
 and soft gradients with an independent PyTorch definition. Bitflip tests
-enumerate independent hard output edits, including cancellation-sensitive
+enumerate independent and joint hard output edits, including cancellation-sensitive
 values, and exercise checkpointed residual-block training. Tests cover
 causality, latest-match ties, unbounded suffixes, chunked inference, packed
 sequences, dtypes, gradient masks, dropout, and compilation.

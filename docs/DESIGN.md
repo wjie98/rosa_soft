@@ -262,6 +262,65 @@ The operators own no projection weights and do not retain a cache across calls.
 The caller constructs Q/K/V and explicitly chooses the soft or bitflip estimator;
 switching `model.train()`/`eval()` does not automatically select CPU SAM.
 
+### Independent QKV 4-bit Layers
+
+The source adapter `examples/rosa_4bit.py` reshapes independent `[B,T,C]`
+projections to `[B,T,C/4,4]`, applies either existing training operator, and
+multiplies the flattened binary output by the model's `[1,1,C]` amplitude
+parameter `emb`. The multiplication remains differentiable and outside V
+quantization. Its result is cast to the projection dtype for AMP; the parameter
+may remain FP32. The adapter adds no operator ABI or trainable projection.
+
+For raw hard output `r` and output gradient `g`, the operator receives
+`dY = g * emb` and `dEmb = sum_B,T(g * r)`, subject to the tensor dtype casts.
+This preserves both zero-amplitude learning and zero output on no-match rows.
+The independent V bitflip changes only the sign of values on the original
+route. Its oriented difference, followed by the softsign factor, equals the
+existing hard-route V scatter; no extra V-edit kernel is needed.
+
+The 768-wide layout has 192 heads with `D=Dv=4`. It uses the generic soft VJP,
+not the FP16/Dv64 specialization. Whole-model checkpoint compatibility and
+training quality are separate from these shape and gradient contracts. The
+public RWKV-LM 4-bit inference script does not define its training estimator.
+
+### Joint Activation Edits
+
+`rosa_bitflip(..., tied="qk")` edits Q and K at the same position/bit together;
+`tied="qkv"` includes that V payload coordinate. The default remains independent
+edits even for aliased tensors. Binding is explicit and requires identical
+Tensor objects, not merely equal signs or shared projection weights.
+
+For a shared activation `x[p,b]`, let `Y_edit` be the complete hard output after
+that one simultaneous edit. The returned credit is
+`dot(dY, Y_edit - Y) * (-sign(x[p,b])/2) / (1+abs(x[p,b]))^2`.
+This remains linear in fixed dY. QK-only value gradients follow the hard route;
+QKV payload and routing changes are evaluated together, never added as separate
+counterfactuals. No downstream nonlinear loss is reevaluated.
+
+`cuda/joint.cu` contains two kernels: a diagonal `scan` recording the last three
+mismatches and a query-owner `row` computing replacement priorities and credit.
+For candidate `(i,j)`, editing position p changes only comparisons p and
+`p+i-j` along its diagonal. The last three mismatches therefore suffice for an
+exact closed two-edit repair calculation. Every causal candidate is visited.
+The original winner's two covered intervals bound destructive owners; successful
+repairs outside that union are collected in an exact epoch-tagged list.
+
+Four integer summary fields use CUB prefix max. Summary priorities use 32 bits
+below T=65536 and 64 bits otherwise. Repair epochs remain 64 bits. A per-row
+bit-presence mask avoids reads for provably absent repairs, never discarding a
+nonzero edit. Binary V uses the existing packed format, a four-bit credit table
+and an exact uncached tail above 480 coordinates. Credit subtracts symbols before
+contracting dY, preserving cancellation of unchanged coordinates.
+
+Joint scratch is `O(BH*rows*T*D + BHTDv)`, linear in T for fixed widths and rows.
+The repair buffer alone occupies `8*BH*rows*T*D` bytes. `T<2**20` and `BH<=65535`
+are checked representation/grid limits. There is no suffix truncation or
+content-dependent algorithm selection. Final STE and hard-route V scatter reuse
+the native I/O layer; no research gradient maps or diagnostics are exported.
+Upstream dY conversion and permutation share one copy for half inputs. An
+explicit contiguous fallback handles the same-dtype FP32 no-copy path. Warp
+leaders skip identity atomic OR writes when their repair mask is zero.
+
 ## CPU SAM
 
 `sam.h` contains the automaton and `sam.cpp` contains the PyTorch custom-class
@@ -291,7 +350,7 @@ and the sequence-count contract.
 ```text
 rosa_soft/__init__.py          public exports
 rosa_soft/soft.py              CUDA/autograd wrapper
-rosa_soft/bitflip.py           independent-bit API and autograd registration
+rosa_soft/bitflip.py           explicit bit-edit API and autograd registration
 rosa_soft/sam.py               CPU SAM wrapper and hard gather
 rosa_soft/csrc/export.cpp      two dispatcher schemas
 rosa_soft/csrc/rosa_soft.cpp   validation and dense/packed dispatch
@@ -307,4 +366,5 @@ rosa_soft/csrc/bitflip.cpp     bitflip dispatcher schemas and native entry
 rosa_soft/csrc/cuda/bitflip.cuh bitflip packed fields and private declarations
 rosa_soft/csrc/cuda/bitflip_io.cu bitflip hard forward and gradient conversion
 rosa_soft/csrc/cuda/bitflip.cu  exact independent-bit DP and row credit
+rosa_soft/csrc/cuda/joint.cu    exact joint QK/QKV DP and row credit
 ```

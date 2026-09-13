@@ -28,6 +28,25 @@ std::tuple<Tensor, Tensor, Tensor> backward(const Tensor& q, const Tensor& k,
   return rosa::bitflip::backward(q.contiguous(), k.contiguous(), v.contiguous(),
                                 dy.contiguous(), pq, pk, route, d, rows, mask);
 }
+
+auto joint_forward(const Tensor& x, const Tensor& v, int64_t rows, bool all) {
+  TORCH_CHECK(rows >= 1 && rows <= 256, "rows must be in [1,256]");
+  TORCH_CHECK(x.dim() == 4 && x.size(1) < (1 << 20) && x.size(0)*x.size(2) <= 65535,
+              "joint bitflip index limit exceeded");
+  TORCH_CHECK(!all || (x.sizes() == v.sizes() && x.device() == v.device() &&
+                      x.scalar_type() == v.scalar_type()), "QKV requires matching inputs");
+  auto q = x.contiguous();
+  return rosa::bitflip::forward(q, q, all ? q : v.contiguous());
+}
+
+auto joint_backward(const Tensor& x, const Tensor& v, const Tensor& dy,
+                    const Tensor& q, const Tensor& route, int64_t rows,
+                    bool all, int64_t mask) {
+  TORCH_CHECK(rows >= 1 && rows <= 256 && mask >= 1 && mask <= (all ? 1 : 3),
+              "invalid joint rows/gradient mask");
+  return rosa::bitflip::joint_backward(x.contiguous(), v.contiguous(), dy.contiguous(),
+                                       q, route, rows, all, mask);
+}
 }  // namespace
 
 TORCH_LIBRARY_FRAGMENT(rosa_soft, m) {
@@ -38,9 +57,15 @@ TORCH_LIBRARY_FRAGMENT(rosa_soft, m) {
       "bitflip_backward(Tensor q, Tensor k, Tensor v, Tensor dy,"
       " Tensor pq, Tensor pk, Tensor route, int d, int rows, int mask)"
       " -> (Tensor dq, Tensor dk, Tensor dv)");
+  m.def("joint_forward(Tensor x, Tensor v, int rows, bool all)"
+        " -> (Tensor y, Tensor q, Tensor k, Tensor route)");
+  m.def("joint_backward(Tensor x, Tensor v, Tensor dy, Tensor q, Tensor route,"
+        " int rows, bool all, int mask) -> (Tensor dx, Tensor dv)");
 }
 
 TORCH_LIBRARY_IMPL(rosa_soft, CUDA, m) {
   m.impl("bitflip_forward", &forward);
   m.impl("bitflip_backward", &backward);
+  m.impl("joint_forward", &joint_forward);
+  m.impl("joint_backward", &joint_backward);
 }

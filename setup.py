@@ -60,7 +60,7 @@ if cuda:
     extensions.append(CUDAExtension(
         "rosa_soft._bitflip",
         [str(SRC / "bitflip.cpp"), str(SRC / "cuda" / "bitflip.cu"),
-         str(SRC / "cuda" / "bitflip_io.cu")],
+         str(SRC / "cuda" / "bitflip_io.cu"), str(SRC / "cuda" / "joint.cu")],
         extra_compile_args={"cxx": ["-O3"], "nvcc": ["-O3", "--extended-lambda"]},
     ))
 
@@ -73,5 +73,5 @@ setup(
     cmdclass={"build_ext": BuildExtension},
     install_requires=["torch>=2.11,<2.12"],
     python_requires=">=3.10",
-    extras_require={"test": ["pytest"]},
+    extras_require={"test": ["pytest", "numpy"]},
 )

@@ -22,7 +22,7 @@ def test_public_surface_is_minimal():
         "q", "k", "v", "cu_seqlens", "scale", "dropout_p", "mismatch_scale"
     ]
     assert list(inspect.signature(rosa_soft.rosa_bitflip).parameters) == [
-        "q", "k", "v", "rows"
+        "q", "k", "v", "rows", "tied"
     ]
 
 
@@ -34,7 +34,10 @@ def test_native_surface_is_minimal():
     }
     if not schemas:
         pytest.skip("CPU-only build")
-    assert schemas == {"forward", "backward", "bitflip_forward", "bitflip_backward"}
+    assert schemas == {
+        "forward", "backward", "bitflip_forward", "bitflip_backward",
+        "joint_forward", "joint_backward",
+    }
 
 
 def test_production_sources_do_not_expose_a_suffix_window():

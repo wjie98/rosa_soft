@@ -11,7 +11,10 @@ These rules are part of the operator contract.
 3. `rosa_soft` backward includes every causal candidate and uses the frozen
    dense suffix recurrence. The separate `rosa_bitflip` operator computes
    complete independent activation-bit output differences at fixed dY, with
-   hard-route V gradients. Do not prune nonzero edits, change either estimator,
+   hard-route V gradients. Explicit `tied="qk"`/`tied="qkv"` modes compute a
+   simultaneous edit of the shared bit, including QKV payload effects. Never
+   infer this estimator from tensor aliases or silently replace independent
+   edits with their joint counterpart. Do not prune nonzero edits, change either estimator,
    or switch between them based on data or a hidden schedule.
 4. Public API is only `RosaSam`, `rosa_hard`, `rosa_soft`, and `rosa_bitflip`.
    Dense and packed layouts share `rosa_soft`; `rosa_bitflip` is dense-only.
@@ -37,7 +40,8 @@ These rules are part of the operator contract.
 11. `rosa_bitflip` has no suffix limit; `rows` controls only its live workspace.
     Preserve its separate non-fast-math build and independent bit-edit oracle.
     It is not an unbiased derivative of arbitrary nonlinear task loss or a
-    simultaneous shared-parameter edit. Never route packed documents through
+    shared projection-weight edit. Joint modes edit one shared activation bit,
+    not the projection parameters. Never route packed documents through
     dense matching without isolating their boundaries.
 
 Archive points:
